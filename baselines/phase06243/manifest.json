@@ -1,0 +1,22 @@
+{
+  "phase": "06.2.43",
+  "sha256": "ab897325b31893f6576375d94559a202052815ce7a4610d4a6b3b5a21ce9e317",
+  "source": "user supplied phase06243.zip",
+  "seeds": [
+    12345,
+    12346,
+    12347,
+    12348,
+    12349
+  ],
+  "ticks_per_seed": 50000,
+  "mode": "genetic",
+  "lineage_verification": "5/5 files, no missing parent, no cycles using (index,generation)",
+  "carnivore_survivors": {
+    "12345": 0,
+    "12346": 7,
+    "12347": 0,
+    "12348": 0,
+    "12349": 0
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "crates/sim-core/src/config.rs": "1b973b7c9d5e606194f594074f9ae381faf465068561a397214edc0be7b772ac",
+  "crates/sim-core/src/animals/mod.rs": "69b62a4440886cf9e1e6979496de503937ec19981996e42afac99e59d3fc5058",
+  "crates/sim-core/src/world/herbivore_tick.rs": "b0634e7d8e088abe6da8903ca1f6a88354a8f85a70e144c4652925cf5e613c32",
+  "crates/sim-core/src/world/tick.rs": "15f3635b2dd4ed268f45bc98551d98cfae21df2e409751ac671836960194900f",
+  "crates/sim-core/src/world/carnivore_tick.rs": "30950fcea1f6e82cf4c03feddde1d067145da6b2bacb16033377b81b267b40b2",
+  "crates/sim-core/src/world/state.rs": "ddc8589be1b685719378ce562bf8eb93c5b2bfb0b762abf3e130089dfbd5f966",
+  "config/standard-toxin.json": "ba0c1224aa70668eedd2af283c491c7c9ad89888901c0cdc8607dc9a32d8cfa2"
+}

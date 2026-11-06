@@ -1,0 +1,7 @@
+[workspace]
+members = ["crates/sim-core", "crates/sim-wasm"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
