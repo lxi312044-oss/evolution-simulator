@@ -1,6 +1,113 @@
-use sim_core::{config::ToxinSettings, toxin::{ToxinProfile,ToxinTypeId,TypedToxinState,TypedToxinParameters,advance_typed_toxin,advance_toxin_set,advance_burden}};
-fn param(id:u16)->TypedToxinParameters {let mut profile=ToxinProfile::from_legacy(&ToxinSettings::default());profile.toxin_type=ToxinTypeId(id);TypedToxinParameters{profile,resistance_effectiveness:0.8,resistance_enabled:true}}
-#[test] fn independent_type_resistance() {let mut a=param(0);let mut b=param(1);a.profile.damage_threshold=0.;b.profile.damage_threshold=0.;let states=[TypedToxinState{toxin_type:ToxinTypeId(0),load:10.,resistance:1.},TypedToxinState{toxin_type:ToxinTypeId(1),load:10.,resistance:0.}];let out=advance_toxin_set(&states,&[a,b]).unwrap();assert!(out[0].damage<out[1].damage);assert_eq!(out[0].toxin_type,ToxinTypeId(0));assert_eq!(out[1].toxin_type,ToxinTypeId(1));}
-#[test] fn legacy_type_zero_exact() {let mut t=ToxinSettings::default();t.resistance_enabled=true;for load in [0.,0.5,5.,100.] {let p=param(0);let result=advance_typed_toxin(TypedToxinState{toxin_type:ToxinTypeId(0),load,resistance:0.4},p).unwrap();let legacy=advance_burden(load,0.4,&t);assert_eq!(result.remaining_load.to_bits(),legacy.remaining_load.to_bits());assert_eq!(result.damage.to_bits(),legacy.damage.to_bits());assert_eq!(result.prevented_damage.to_bits(),legacy.prevented_damage.to_bits());}}
-#[test] fn reject_type_mismatch_duplicate_and_unsorted() {let a=TypedToxinState{toxin_type:ToxinTypeId(1),load:2.,resistance:0.5};assert!(advance_typed_toxin(a,param(0)).is_err());assert!(advance_toxin_set(&[a,a],&[param(1),param(1)]).is_err());assert!(advance_toxin_set(&[a,TypedToxinState{toxin_type:ToxinTypeId(0),..a}],&[param(1),param(0)]).is_err());}
-#[test] fn no_cross_resistance() {let mut p=param(1);p.profile.damage_threshold=0.;let a=advance_typed_toxin(TypedToxinState{toxin_type:ToxinTypeId(1),load:8.,resistance:0.},p).unwrap();let b=advance_typed_toxin(TypedToxinState{toxin_type:ToxinTypeId(1),load:8.,resistance:1.},p).unwrap();assert!(b.damage<a.damage);}
+use sim_core::{
+    config::ToxinSettings,
+    toxin::{
+        advance_burden, advance_toxin_set, advance_typed_toxin, ToxinProfile, ToxinTypeId,
+        TypedToxinParameters, TypedToxinState,
+    },
+};
+fn param(id: u16) -> TypedToxinParameters {
+    let mut profile = ToxinProfile::from_legacy(&ToxinSettings::default());
+    profile.toxin_type = ToxinTypeId(id);
+    TypedToxinParameters {
+        profile,
+        resistance_effectiveness: 0.8,
+        resistance_enabled: true,
+    }
+}
+#[test]
+fn independent_type_resistance() {
+    let mut a = param(0);
+    let mut b = param(1);
+    a.profile.damage_threshold = 0.;
+    b.profile.damage_threshold = 0.;
+    let states = [
+        TypedToxinState {
+            toxin_type: ToxinTypeId(0),
+            load: 10.,
+            resistance: 1.,
+        },
+        TypedToxinState {
+            toxin_type: ToxinTypeId(1),
+            load: 10.,
+            resistance: 0.,
+        },
+    ];
+    let out = advance_toxin_set(&states, &[a, b]).unwrap();
+    assert!(out[0].damage < out[1].damage);
+    assert_eq!(out[0].toxin_type, ToxinTypeId(0));
+    assert_eq!(out[1].toxin_type, ToxinTypeId(1));
+}
+#[test]
+fn legacy_type_zero_exact() {
+    let t = ToxinSettings {
+        resistance_enabled: true,
+        ..Default::default()
+    };
+    for load in [0., 0.5, 5., 100.] {
+        let p = param(0);
+        let result = advance_typed_toxin(
+            TypedToxinState {
+                toxin_type: ToxinTypeId(0),
+                load,
+                resistance: 0.4,
+            },
+            p,
+        )
+        .unwrap();
+        let legacy = advance_burden(load, 0.4, &t);
+        assert_eq!(
+            result.remaining_load.to_bits(),
+            legacy.remaining_load.to_bits()
+        );
+        assert_eq!(result.damage.to_bits(), legacy.damage.to_bits());
+        assert_eq!(
+            result.prevented_damage.to_bits(),
+            legacy.prevented_damage.to_bits()
+        );
+    }
+}
+#[test]
+fn reject_type_mismatch_duplicate_and_unsorted() {
+    let a = TypedToxinState {
+        toxin_type: ToxinTypeId(1),
+        load: 2.,
+        resistance: 0.5,
+    };
+    assert!(advance_typed_toxin(a, param(0)).is_err());
+    assert!(advance_toxin_set(&[a, a], &[param(1), param(1)]).is_err());
+    assert!(advance_toxin_set(
+        &[
+            a,
+            TypedToxinState {
+                toxin_type: ToxinTypeId(0),
+                ..a
+            }
+        ],
+        &[param(1), param(0)]
+    )
+    .is_err());
+}
+#[test]
+fn no_cross_resistance() {
+    let mut p = param(1);
+    p.profile.damage_threshold = 0.;
+    let a = advance_typed_toxin(
+        TypedToxinState {
+            toxin_type: ToxinTypeId(1),
+            load: 8.,
+            resistance: 0.,
+        },
+        p,
+    )
+    .unwrap();
+    let b = advance_typed_toxin(
+        TypedToxinState {
+            toxin_type: ToxinTypeId(1),
+            load: 8.,
+            resistance: 1.,
+        },
+        p,
+    )
+    .unwrap();
+    assert!(b.damage < a.damage);
+}

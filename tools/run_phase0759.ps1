@@ -3,7 +3,15 @@ $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
 if ($Ticks -le 0 -or $Interval -le 0) { throw 'Ticks and Interval must be positive' }
 $dir = $OutputDirectory
+if ((Test-Path -LiteralPath $dir) -and (Get-ChildItem -LiteralPath $dir -Force | Select-Object -First 1)) {
+  throw 'Output directory is not empty. Choose a new -OutputDirectory to preserve previous evidence.'
+}
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
+cargo build --locked --release -p sim-core --example toxin_evolution_0758
+if ($LASTEXITCODE -ne 0) { throw 'Observation example build failed' }
+$cargoMetadata = cargo metadata --no-deps --format-version 1 | ConvertFrom-Json
+if ($LASTEXITCODE -ne 0) { throw 'Cargo target directory lookup failed' }
+$binary = Join-Path $cargoMetadata.target_directory 'release/examples/toxin_evolution_0758.exe'
 foreach ($seed in @(12345,12346)) {
   foreach ($condition in @(@('A80',0.8),@('B80',0.2),@('equal',0.5))) {
     foreach ($protection in @(@('on',0.8),@('off',0.0))) {
@@ -20,8 +28,13 @@ foreach ($seed in @(12345,12346)) {
       $run = "seed${seed}_${name}_${status}"
       $cfg = Join-Path $dir "$run.json"
       [System.IO.File]::WriteAllText([System.IO.Path]::GetFullPath($cfg),($json | ConvertTo-Json -Depth 50),(New-Object System.Text.UTF8Encoding($false)))
-      cargo run --release -p sim-core --example toxin_evolution_0758 -- $cfg $Ticks $Interval (Join-Path $dir $run)
+      $metadata = Join-Path $dir "$run.metadata.json"
+      python tools/run_metadata.py begin --config $cfg --binary $binary --output $metadata --ticks $Ticks --interval $Interval
+      if ($LASTEXITCODE -ne 0) { throw "Metadata initialization failed: $run" }
+      & $binary $cfg $Ticks $Interval (Join-Path $dir $run)
       if ($LASTEXITCODE -ne 0) { throw "Experiment failed: $run" }
+      python tools/run_metadata.py complete --config $cfg --binary $binary --output $metadata --ticks $Ticks --interval $Interval
+      if ($LASTEXITCODE -ne 0) { throw "Metadata validation failed: $run" }
     }
   }
 }
