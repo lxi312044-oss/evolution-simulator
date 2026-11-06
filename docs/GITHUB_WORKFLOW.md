@@ -1,38 +1,58 @@
-# GitHub活用案（2026-11-06）
+# GitHub運用（2026-11-06）
 
-この文書は今後の運用案。既存READMEのフェーズ合格条件・課題状態を変更しない。Issue、Projects、ブランチ保護などの設定はまだ追加していない。
+READMEのフェーズ合格条件・課題状態を維持しながら、次の仕組みを実装した。
 
-## 推奨する進め方
+## 変更の流れ
 
-1. 課題ごとにIssueを作り、目的、再現手順、seed、設定、Tick、期待結果、合格条件を記録する。バグ、観測不足、科学的仮説を区別する。
-2. 1課題につき作業ブランチとPRを作る。PRに変更理由、検証コマンド、結果、未検証事項を記載する。小さな解析修正と生態モデル変更を分ける。
-3. 自動検証と必要な実験結果を確認してmainへマージする。フェーズ完了判定はREADMEの科学的条件も満たしたときだけ行う。
-4. 検証済みの節目にタグを付ける。実験結果にはコードのコミットSHA、設定、seed、Tick、観測間隔、ツールチェーン版を記録し、どの版の結果か追跡できるようにする。
+1. Issueテンプレートで目的、分類、状態、再現条件、合格条件を記録する。
+2. 作業ブランチを作り、PRテンプレートで変更・検証・未検証事項を整理する。
+3. CIと必要な実験結果を確認してmainへマージする。CI合格と科学的な進化実証を区別する。
+4. フェーズ合格条件を満たした節目にタグを付ける。現時点は進化実証未達のため、フェーズ完了タグを自動発行しない。
 
-## 自動検証の優先順位
+Issue状態は「未着手・対応中・検証待ち・解決済み・先送り・継続観察」を本文に記録する。解決済みには根拠、先送りには理由と再確認フェーズを残す。
 
-既存 `.github/workflows/ci.yml` はRustの整形、Clippy、テスト、WASMコンパイル確認を定義している。ただし2026-11-06のローカル確認では `cargo fmt --all -- --check` が既存Rustソースで失敗した。後続ステップに到達しない問題を、専用PRで解消するのが先決。Clippyの合格は今回確認していない。
+追跡中: [死亡Tickの観測不足 #1](https://github.com/lxi312044-oss/evolution-simulator/issues/1)、[草食絶滅と耐性進化の診断 #2](https://github.com/lxi312044-oss/evolution-simulator/issues/2)。
 
-次にPython解析テスト `python -m unittest discover -s tools -p test_phase0759.py` を独立したジョブに追加する。Rustの整形エラーがあっても解析の検証結果を見られる構成にする。
+## 自動検証
 
-Windows向けPowerShellの短期12ラン、旧版10,000Tick回帰は別ジョブで実施し、実行時間を確認してからPR必須チェックにする。数万Tick×多数seedの長期実験は手動実行から始め、毎pushで起動しない。Web検証はWASM生成とTypeScript/Viteビルドの手順を別途整備する。
+`.github/workflows/ci.yml` はmainへのpush、PR、手動起動で3ジョブを独立実行する。PRブランチへのpushとPR更新で同じCIを二重起動しない。
 
-## 課題の初期候補
-
-| 優先 | 課題 | 完了の目安 |
+| ジョブ | 検証 | 上限時間 |
 |---|---|---|
-| 1 | CIの整形失敗と後続検証の確認 | 整形・Clippy・Rustテスト・WASM確認が実際に成功 |
-| 2 | Python解析のCI追加 | 不完全入力を拒否する12テストがPRごとに実行される |
-| 3 | 死亡Tick内の計測欠落 | 同Tickの摂取・繁殖・死亡をイベントで検証できる |
-| 4 | 実験の来歴記録 | 各ランにコミットSHA・設定ハッシュ・実行条件を保存 |
-| 5 | 草食絶滅と耐性進化の追加診断 | 死因・曝露・系譜と対照条件から仮説を評価 |
+| rust | 整形、Clippy全ターゲット、Rust全テスト、WASMコンパイル | 20分 |
+| python | tools内の全Pythonテスト | 5分 |
+| windows-regression | 固定10,000Tick回帰、1,000Tick×12条件の介入実験 | 25分 |
 
-Issueの状態はREADMEと同じ「未着手・対応中・検証待ち・解決済み・先送り・継続観察」を使う案とする。未解決の観測課題や科学的仮説は、実装が終わっただけで閉じない。
+既存Rustの整形とClippy警告を修正した。警告の一括無効化はしない。旧ゲートテストはローカル実験結果の存在に依存していたため、専用fixtureで証拠あり・なしの両方を検証するようにした。本体のゲート条件を緩和していない。
 
-## 容量と成果物
+ローカル検証: Clippy合格、Python25件合格、Rust全テスト合格、固定回帰は資源CSVのSHA-256一致・個体履歴の多重集合一致。GitHub側の結果は各PRのChecksを参照。
 
-Gitにはソース・設定・簡潔な検証報告・必要な固定ベースラインを保存する。`target`、`node_modules`、実行ログ、全実験CSV、配布ZIPは通常のコミット対象にしない。現行 `.gitignore` は `results/` とPythonキャッシュを除外していないため、今後ローカルGitを導入するときに見直す。
+## 手動の長期比較
 
-CI成果物は品質JSON・小さな集計・失敗診断を中心にし、保存期間はまず7日を提案する。長期保存する検証報告はリポジトリ内に残す。GitHub側の容量と実行時間も確認し、ローカル25GB上限の運用も継続する。
+Actions → Manual intervention experiment → Run workflowで対象ブランチとTick数を指定する。1,000～50,000Tick、2seed×3環境×防御ON/OFFの12条件、100Tick間隔。毎pushで長期比較を実行しない。最大45分で停止し、途中停止は完了と扱わない。
 
-公式資料: [GitHub Actionsの設定と保存期間](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)。実際の保存期間・権限設定は導入時に確認する。
+結果の品質JSON、設定、実験来歴、集計CSVを7日保存する。全個体CSVをCI成果物に含めない。長期保存が必要な結論はdocsへ簡潔に記録する。科学的な成立判定には別途系譜・曝露等の評価が必要。
+
+## 実験の来歴
+
+`tools/run_phase0759.ps1` は実行前にビルドし、各ランの `.metadata.json` に以下を記録する。
+
+- GitコミットSHA、dirty状態、Git差分対象の一覧。Git管理外の配布フォルダではnullで明示。
+- 設定JSON、実行バイナリ、Rustソース・Cargo設定・実行補助のSHA-256。
+- seed、Tick、間隔、UTC開始/終了日時、Rust/Cargo/Python版。
+- 実行前はrunning、終了後に同じ入力であることを確認してcompleted。
+
+completedは個別プログラムの正常終了であり、12条件の品質合格とは別。全体の終了コードとquality.jsonも確認する。失敗や中断はrunningのまま残る。設定やコードの途中変更を検知した場合は完了にしない。出力フォルダが空でなければ開始前に停止し、前回の証拠を保全する。
+
+```powershell
+python -m unittest discover -s tools -p 'test_*.py'
+powershell.exe -ExecutionPolicy Bypass -File tools/run_phase0759.ps1 -Ticks 1000 -OutputDirectory results/my-new-run
+```
+
+## 保存と今後の設定
+
+Gitにはソース・設定・報告・固定ベースラインを保存する。results、Pythonキャッシュ、ZIPは.gitignoreへ追加済み。ローカル25GB上限を継続し、生ログを旧版へコピーしない。
+
+Webの画面検証・ビルド専用ジョブ、Projectsボード、必須レビューやmain保護は今回の実装対象外。CIジョブの実績を見てから必須チェックを設定する。main保護を設定していないため、PR経由は運用ルールであり強制ではない。
+
+公式資料: [GitHub Actions設定・保存期間](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository)。

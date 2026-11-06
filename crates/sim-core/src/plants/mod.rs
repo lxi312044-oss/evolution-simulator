@@ -1,15 +1,32 @@
 use crate::{entity::EntityId, resources::AccountId};
 #[derive(Debug)]
 pub struct Plant {
-    pub id: EntityId, pub x: f32, pub y: f32, pub cell: usize,
-    pub body: AccountId, pub reserve: AccountId,
-    pub growth: f32, pub age: u32, pub seed_cooldown: u32,
-    pub max_age: u32, pub color: u32,
+    pub id: EntityId,
+    pub x: f32,
+    pub y: f32,
+    pub cell: usize,
+    pub body: AccountId,
+    pub reserve: AccountId,
+    pub growth: f32,
+    pub age: u32,
+    pub seed_cooldown: u32,
+    pub max_age: u32,
+    pub color: u32,
     /// Inherited binary toxin-production phenotype; default configuration is all toxic.
     pub produces_toxin: bool,
     /// Heritable toxin-type identity, independent of whether toxin is produced.
     pub toxin_type: crate::toxin::ToxinTypeId,
 }
 #[derive(Debug, Default)]
-pub struct PlantStore { pub items: Vec<Plant> }
-impl PlantStore { pub fn len(&self) -> usize { self.items.len() } }
+pub struct PlantStore {
+    pub items: Vec<Plant>,
+}
+impl PlantStore {
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.items.len()
+    }
+}

@@ -8,4 +8,6 @@ pub enum ResourceError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TransferReceipt { pub amount: f64 }
+pub struct TransferReceipt {
+    pub amount: f64,
+}

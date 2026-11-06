@@ -1,0 +1,42 @@
+name: Manual intervention experiment
+on:
+  workflow_dispatch:
+    inputs:
+      ticks:
+        description: 'Ticks per run (1000 to 50000, 12 runs)'
+        required: true
+        default: '10000'
+permissions:
+  contents: read
+concurrency:
+  group: manual-intervention
+  cancel-in-progress: false
+jobs:
+  experiment:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14'
+      - name: Run bounded experiment
+        shell: powershell
+        env:
+          EXPERIMENT_TICKS: ${{ inputs.ticks }}
+        run: |
+          $ticks = 0
+          if (-not [int]::TryParse($env:EXPERIMENT_TICKS, [ref]$ticks) -or $ticks -lt 1000 -or $ticks -gt 50000) {
+            throw 'Ticks must be an integer between 1000 and 50000'
+          }
+          ./tools/run_phase0759.ps1 -Ticks $ticks -Interval 100 -OutputDirectory results/manual
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: intervention-summary
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            results/manual/*.json
+            results/manual/paired_*.csv

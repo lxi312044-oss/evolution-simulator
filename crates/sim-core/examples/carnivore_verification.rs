@@ -1,94 +1,327 @@
-use sim_core::{SimulationConfig,World};
-use std::{env,fs::File,io::Write};
-fn main()->Result<(),Box<dyn std::error::Error>>{
- let args:Vec<String>=env::args().collect();
- if args.len()!=5 {return Err("usage: carnivore_verification <config.json> <ticks> <sample_interval> <output.csv>".into());}
- let config:SimulationConfig=serde_json::from_str(&std::fs::read_to_string(&args[1])?)?;
- let ticks:u64=args[2].parse()?;let interval:u64=args[3].parse()?;
- if interval==0{return Err("sample interval must be positive".into());}
- let mut world=World::new(config)?;
- let mut out=File::create(&args[4])?;
- writeln!(out,"tick,plants,herbivores,carnivores,carnivore_hunts,carnivore_births,carnivore_deaths,nutrient_error,energy_error,repro_ready,repro_cooldown_blocked,repro_age_blocked,repro_body_n_blocked,repro_reserve_n_blocked,repro_energy_blocked,repro_capacity_blocked,hunt_nutrients,hunt_energy,carnivore_age_deaths,carnivore_energy_deaths,herbivore_age_deaths,herbivore_hp_deaths,hunt_refuge_blocked,hunt_cooldown_blocked,repro_food_blocked,hunt_attempts,hunt_positive_energy,hunt_zero_energy,energy_basal_spent,energy_movement_spent,energy_reproduction_spent,predator_target_ticks,predator_search_ticks,mean_carnivore_energy,mean_carnivore_reserve_n,repro_trend_blocked,prey_decline_fraction,prey_births_window,prey_deaths_window,prey_visible_out_of_range,prey_in_attack_range,predator_movement_distance,attack_energy_limited,prey_hp_zero_after_attack,predator_death_energy_remaining,predator_death_age_total,predator_death_nearest_prey_distance_total,predator_death_nearest_prey_samples,satiated_predator_ticks,kills_with_meal,meal_bonus_energy,meal_bonus_nutrients,stomach_energy_ingested,stomach_nutrients_ingested,stomach_energy_digested,stomach_nutrients_digested,stomach_feeding_blocked_ticks,stomach_reproduction_blocked,bite_stomach_energy,bite_stomach_nutrients,bite_stomach_capacity_blocked,sustainable_reproduction_blocked,emergency_digestion_ticks,emergency_digestion_energy,predator_death_stomach_energy,predator_death_stomach_nutrients,predator_deaths_with_stomach_energy,predator_low_reserve_with_stomach_ticks,predator_starvation_with_stomach_energy,hunting_hunger_override_ticks,hunting_hunger_override_no_capacity_ticks,hunting_hunger_override_attacks,persistent_search_ticks,remembered_prey_ticks,search_heading_changes,search_wall_turns,repro_disabled_ticks,repro_physical_ready_ticks,repro_all_gates_passed_ticks,mean_carnivore_age,mean_carnivore_stomach_energy,phase17_rest_ticks,phase17_active_search_ticks,phase17_chase_ticks,phase17_repro_cooldown_only_ticks,phase17_repro_age_only_ticks,phase17_repro_resource_ready_ticks,phase19_hp_zero_energy_deaths,phase19_hp_positive_energy_deaths,phase19_plant_births,phase19_plant_age_deaths,phase19_plant_consumed_deaths,phase19_herbivore_births,phase19_herbivore_age_deaths,phase19_herbivore_hp_deaths,phase19_plant_consumed_n,phase19_herbivore_feeding_e,phase19_herbivore_basal_e,phase19_herbivore_movement_e,phase19_plant_uptake_n,phase19_plant_photosynthesis_e,phase20_feeding_no_target_ticks,phase20_feeding_target_out_of_range_ticks,phase20_feeding_in_range_zero_n_ticks,phase20_feeding_in_range_success_ticks,phase20_repro_age_blocked,phase20_repro_cooldown_blocked,phase20_repro_hp_blocked,phase20_repro_energy_gate_blocked,phase20_repro_satiety_blocked,phase20_repro_food_blocked,phase20_repro_body_n_blocked,phase20_repro_reserve_n_blocked,phase20_repro_transfer_e_blocked,phase20_repro_success,phase20_herbivore_death_nearby_plants_total,phase20_herbivore_death_samples,phase20_herbivore_death_reserve_e_total,phase20_herbivore_death_stomach_n_total,phase21_live_samples,phase21_live_reserve_e_total,phase21_live_reserve_n_total,phase21_live_stomach_n_total,phase21_live_zero_e_samples,phase21_live_energy_gate_ready_samples,phase21_basal_e_requested,phase21_basal_e_unpaid,phase21_movement_e_requested,phase21_movement_e_unpaid,phase21_starvation_hp_damage,phase21_starvation_damage_ticks,phase21_feeding_plant_energy_available,phase21_feeding_energy_capacity_blocked,phase21_reproduction_offspring_e_transferred,phase21_reproduction_work_e,phase21_death_reserve_e_total,phase21_death_stomach_n_total,phase21_death_zero_e_count,phase21_death_positive_e_count,phase21_repro_only_energy_blocked,phase21_repro_multiple_gates_blocked,phase24_repro_samples,phase24_repro_ready_all,phase24_repro_age_ready,phase24_repro_cooldown_ready,phase24_repro_hp_ready,phase24_repro_energy_ready,phase24_repro_satiety_ready,phase24_repro_body_n_ready,phase24_repro_reserve_n_ready,phase24_repro_transfer_e_ready,phase24_repro_local_plant_count_total,phase24_repro_local_plant_n_total,phase24_repro_local_plant_e_total,phase24_repro_reserve_e_total,phase24_repro_reserve_n_total,phase24_repro_stomach_n_total,phase25_body_n_repaired,phase25_body_n_repair_ticks,phase25_body_n_deficit_samples,phase25_reserve_n_sufficient_when_body_n_low,phase25_body_n_total,phase25_body_n_samples,phase25_well_fed_ticks_total,phase25_well_fed_samples,phase26_satiety_streak_resets,phase26_satiety_streak_completions,phase26_stomach_below_threshold_samples,phase26_stomach_above_threshold_samples,phase26_feeding_paused_samples,phase26_feeding_active_samples,strategy_ambush_rest_ticks,strategy_roaming_ticks,strategy_hybrid_rest_ticks,herbivore_predator_detected_ticks,herbivore_flee_distance,genetic_herbivores,fear_mean,fear_variance,fear_median,fear_range,aggression_mean,aggression_variance,aggression_median,aggression_range,learned_fear_mean,learned_fear_variance,defense_active,carnivore_ambush_gene_mean,carnivore_ambush_gene_variance,gene_births_bin0,gene_births_bin1,gene_births_bin2,gene_births_bin3,gene_births_bin4,gene_parent_reproductions_bin0,gene_parent_reproductions_bin1,gene_parent_reproductions_bin2,gene_parent_reproductions_bin3,gene_parent_reproductions_bin4,gene_deaths_bin0,gene_deaths_bin1,gene_deaths_bin2,gene_deaths_bin3,gene_deaths_bin4,gene_ambush_choices_bin0,gene_ambush_choices_bin1,gene_ambush_choices_bin2,gene_ambush_choices_bin3,gene_ambush_choices_bin4,gene_search_choices_bin0,gene_search_choices_bin1,gene_search_choices_bin2,gene_search_choices_bin3,gene_search_choices_bin4,gene_mutations_bin0,gene_mutations_bin1,gene_mutations_bin2,gene_mutations_bin3,gene_mutations_bin4,prey_near_but_outside_vision,prey_visible_while_low_energy,prey_near_while_satiated,predator_low_energy_no_visible_prey,herbivore_flee_with_plant_visible,herbivore_threat_near_detection_boundary,gene_mutation_trials,p40_death_prey_visible,p40_death_prey_attack_range,p40_death_prey_absent,p40_death_feeding_paused,p40_death_nearby_prey_twice_vision,p40_death_energy_starvation,p41_visible_samples,p41_approach_samples,p41_retreat_samples,p41_attack_reach_samples,p41_chase_basal_energy,p41_chase_movement_energy,p41_starvation_with_visible_prey,toxin_exposure_events,toxin_exposure_total,toxin_clearance_total,toxin_hp_damage_total,toxin_damage_ticks,toxin_plant_energy_cost_total,toxin_deaths_with_burden,toxin_deaths_with_burden_and_hp_zero")?;
- for tick in 0..=ticks {
-  if tick%interval==0 {
-   let n=world.resources.total_nutrients()-world.baseline.nutrients;
-   let e=world.resources.total_energy()-world.baseline.energy-world.ledger.sunlight_total()+world.ledger.heat_total();
-   write!(out,"{},{},{},{},{},{},{},{:.12},{:.12},{},{},{},{},{},{},{},{:.9},{:.9},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{},{},{:.9},{:.9},{},{:.6},{},{}",world.tick,world.plants.len(),world.animals.items.len(),world.carnivores.len(),world.carnivore_hunts,world.carnivore_births,world.carnivore_deaths,n,e,world.carnivore_debug.reproduction_ready,world.carnivore_debug.reproduction_cooldown_blocked,world.carnivore_debug.reproduction_age_blocked,world.carnivore_debug.reproduction_body_n_blocked,world.carnivore_debug.reproduction_reserve_n_blocked,world.carnivore_debug.reproduction_energy_blocked,world.carnivore_debug.reproduction_capacity_blocked,world.carnivore_debug.hunt_nutrients,world.carnivore_debug.hunt_energy,world.carnivore_debug.carnivore_age_deaths,world.carnivore_debug.carnivore_energy_deaths,world.diagnostics.herbivore_age_deaths,world.diagnostics.herbivore_hp_deaths,world.carnivore_debug.hunt_refuge_blocked,world.carnivore_debug.hunt_cooldown_blocked,world.carnivore_debug.reproduction_food_blocked,world.carnivore_debug.hunt_attempts,world.carnivore_debug.hunt_positive_energy,world.carnivore_debug.hunt_zero_energy,world.carnivore_debug.energy_basal_spent,world.carnivore_debug.energy_movement_spent,world.carnivore_debug.energy_reproduction_spent,world.carnivore_debug.predator_target_ticks,world.carnivore_debug.predator_search_ticks,if world.carnivores.is_empty(){0.0}else{world.carnivores.iter().map(|a|world.resources.energy_balance(a.reserve).unwrap_or(0.)).sum::<f64>()/world.carnivores.len() as f64},if world.carnivores.is_empty(){0.0}else{world.carnivores.iter().map(|a|world.resources.nutrient_balance(a.reserve).unwrap_or(0.)).sum::<f64>()/world.carnivores.len() as f64},world.carnivore_debug.reproduction_trend_blocked,world.prey_trend_snapshot.decline_fraction,world.prey_trend_snapshot.births_in_window,world.prey_trend_snapshot.deaths_in_window)?;
-   write!(out,",{},{},{:.6},{},{},{:.9},{},{:.6},{}",world.carnivore_debug.prey_visible_but_out_of_attack_range,world.carnivore_debug.prey_in_attack_range,world.carnivore_debug.predator_movement_distance,world.carnivore_debug.attack_energy_limited,world.carnivore_debug.prey_hp_zero_after_attack,world.carnivore_debug.predator_death_energy_remaining,world.carnivore_debug.predator_death_age_total,world.carnivore_debug.predator_death_distance_to_nearest_prey_total,world.carnivore_debug.predator_death_nearest_prey_samples)?;
-   write!(out,",{},{},{:.9},{:.9}",world.carnivore_debug.satiated_predator_ticks,world.carnivore_debug.kills_with_meal,world.carnivore_debug.meal_bonus_energy,world.carnivore_debug.meal_bonus_nutrients)?;
-   write!(out,",{:.9},{:.9},{:.9},{:.9},{},{},{:.9},{:.9},{},{}",world.carnivore_debug.stomach_energy_ingested,world.carnivore_debug.stomach_nutrients_ingested,world.carnivore_debug.stomach_energy_digested,world.carnivore_debug.stomach_nutrients_digested,world.carnivore_debug.stomach_feeding_blocked_ticks,world.carnivore_debug.stomach_reproduction_blocked,world.carnivore_debug.bite_stomach_energy,world.carnivore_debug.bite_stomach_nutrients,world.carnivore_debug.bite_stomach_capacity_blocked,world.carnivore_debug.sustainable_reproduction_blocked)?;
-   // Phase 06.2.11 diagnostics: cumulative; resource-neutral observations.
-   write!(out,",{},{:.9},{:.9},{:.9},{},{},{}",world.carnivore_debug.emergency_digestion_ticks,world.carnivore_debug.emergency_digestion_energy,world.carnivore_debug.predator_death_stomach_energy,world.carnivore_debug.predator_death_stomach_nutrients,world.carnivore_debug.predator_deaths_with_stomach_energy,world.carnivore_debug.predator_low_reserve_with_stomach_ticks,world.carnivore_debug.predator_starvation_with_stomach_energy)?;
-   write!(out,",{},{},{},{},{},{},{}",world.carnivore_debug.hunting_hunger_override_ticks,world.carnivore_debug.hunting_hunger_override_no_capacity_ticks,world.carnivore_debug.hunting_hunger_override_attacks,world.carnivore_debug.persistent_search_ticks,world.carnivore_debug.remembered_prey_ticks,world.carnivore_debug.search_heading_changes,world.carnivore_debug.search_wall_turns)?;
-   let mean_age=if world.carnivores.is_empty(){0.0}else{world.carnivores.iter().map(|a|a.age as f64).sum::<f64>()/world.carnivores.len() as f64};
-   let mean_stomach=if world.carnivores.is_empty(){0.0}else{world.carnivores.iter().map(|a|world.resources.energy_balance(a.stomach).unwrap_or(0.)).sum::<f64>()/world.carnivores.len() as f64};
-   write!(out,",{},{},{},{:.6},{:.9}",world.carnivore_debug.reproduction_disabled_ticks,world.carnivore_debug.reproduction_physical_ready_ticks,world.carnivore_debug.reproduction_all_gates_passed_ticks,mean_age,mean_stomach)?;
-   write!(out,",{},{},{},{},{},{}",world.carnivore_debug.phase17_rest_ticks,world.carnivore_debug.phase17_active_search_ticks,world.carnivore_debug.phase17_chase_ticks,world.carnivore_debug.phase17_repro_cooldown_only_ticks,world.carnivore_debug.phase17_repro_age_only_ticks,world.carnivore_debug.phase17_repro_resource_ready_ticks)?;
-   write!(out,",{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9}",world.diagnostics.phase19_hp_zero_energy_deaths,world.diagnostics.phase19_hp_positive_energy_deaths,world.diagnostics.plant_births,world.diagnostics.plant_age_deaths,world.diagnostics.plant_consumed_deaths,world.diagnostics.herbivore_births,world.diagnostics.herbivore_age_deaths,world.diagnostics.herbivore_hp_deaths,world.diagnostics.plant_consumed_n,world.diagnostics.herbivore_feeding_e,world.diagnostics.herbivore_basal_e,world.diagnostics.herbivore_movement_e,world.diagnostics.plant_uptake_n,world.diagnostics.plant_photosynthesis_e)?;
-   write!(out,",{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9}",world.diagnostics.phase20_feeding_no_target_ticks,world.diagnostics.phase20_feeding_target_out_of_range_ticks,world.diagnostics.phase20_feeding_in_range_zero_n_ticks,world.diagnostics.phase20_feeding_in_range_success_ticks,world.diagnostics.phase20_repro_age_blocked,world.diagnostics.phase20_repro_cooldown_blocked,world.diagnostics.phase20_repro_hp_blocked,world.diagnostics.phase20_repro_energy_gate_blocked,world.diagnostics.phase20_repro_satiety_blocked,world.diagnostics.phase20_repro_food_blocked,world.diagnostics.phase20_repro_body_n_blocked,world.diagnostics.phase20_repro_reserve_n_blocked,world.diagnostics.phase20_repro_transfer_e_blocked,world.diagnostics.phase20_repro_success,world.diagnostics.phase20_herbivore_death_nearby_plants_total,world.diagnostics.phase20_herbivore_death_samples,world.diagnostics.phase20_herbivore_death_reserve_e_total,world.diagnostics.phase20_herbivore_death_stomach_n_total)?;
-   write!(out,",{},{:.9},{:.9},{:.9},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{}",world.diagnostics.phase21_live_samples,world.diagnostics.phase21_live_reserve_e_total,world.diagnostics.phase21_live_reserve_n_total,world.diagnostics.phase21_live_stomach_n_total,world.diagnostics.phase21_live_zero_e_samples,world.diagnostics.phase21_live_energy_gate_ready_samples,world.diagnostics.phase21_basal_e_requested,world.diagnostics.phase21_basal_e_unpaid,world.diagnostics.phase21_movement_e_requested,world.diagnostics.phase21_movement_e_unpaid,world.diagnostics.phase21_starvation_hp_damage,world.diagnostics.phase21_starvation_damage_ticks,world.diagnostics.phase21_feeding_plant_energy_available,world.diagnostics.phase21_feeding_energy_capacity_blocked,world.diagnostics.phase21_reproduction_offspring_e_transferred,world.diagnostics.phase21_reproduction_work_e,world.diagnostics.phase21_death_reserve_e_total,world.diagnostics.phase21_death_stomach_n_total,world.diagnostics.phase21_death_zero_e_count,world.diagnostics.phase21_death_positive_e_count,world.diagnostics.phase21_repro_only_energy_blocked,world.diagnostics.phase21_repro_multiple_gates_blocked)?;
-   write!(out,",{},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9}",
-    world.diagnostics.phase24_repro_samples,world.diagnostics.phase24_repro_ready_all,
-    world.diagnostics.phase24_repro_age_ready,world.diagnostics.phase24_repro_cooldown_ready,
-    world.diagnostics.phase24_repro_hp_ready,world.diagnostics.phase24_repro_energy_ready,
-    world.diagnostics.phase24_repro_satiety_ready,world.diagnostics.phase24_repro_body_n_ready,
-    world.diagnostics.phase24_repro_reserve_n_ready,world.diagnostics.phase24_repro_transfer_e_ready,
-    world.diagnostics.phase24_repro_local_plant_count_total,world.diagnostics.phase24_repro_local_plant_n_total,
-    world.diagnostics.phase24_repro_local_plant_e_total,world.diagnostics.phase24_repro_reserve_e_total,
-    world.diagnostics.phase24_repro_reserve_n_total,world.diagnostics.phase24_repro_stomach_n_total)?;
-   // Phase 25 appended as additional columns after the phase 24 diagnostics.
-   write!(out,",{:.9},{},{},{},{:.9},{},{},{}",
-    world.diagnostics.phase25_body_n_repaired,world.diagnostics.phase25_body_n_repair_ticks,
-    world.diagnostics.phase25_body_n_deficit_samples,world.diagnostics.phase25_reserve_n_sufficient_when_body_n_low,
-    world.diagnostics.phase25_body_n_total,world.diagnostics.phase25_body_n_samples,
-    world.diagnostics.phase25_well_fed_ticks_total,world.diagnostics.phase25_well_fed_samples)?;
-   write!(out,",{},{},{},{},{},{}",world.diagnostics.phase26_satiety_streak_resets,world.diagnostics.phase26_satiety_streak_completions,world.diagnostics.phase26_stomach_below_threshold_samples,world.diagnostics.phase26_stomach_above_threshold_samples,world.diagnostics.phase26_feeding_paused_samples,world.diagnostics.phase26_feeding_active_samples)?;
-   write!(out,",{},{},{},{},{:.9}",world.carnivore_debug.strategy_ambush_rest_ticks,world.carnivore_debug.strategy_roaming_ticks,world.carnivore_debug.strategy_hybrid_rest_ticks,world.carnivore_debug.herbivore_predator_detected_ticks,world.carnivore_debug.herbivore_flee_distance)?;
-   let traits=world.behavior_genetics_snapshot();
-   write!(out,",{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{}",
-    traits["herbivores"].as_u64().unwrap_or(0),
-    traits["fear_mean"].as_f64().unwrap_or(0.),traits["fear_variance"].as_f64().unwrap_or(0.),
-    traits["fear_median"].as_f64().unwrap_or(0.),traits["fear_range"].as_f64().unwrap_or(0.),
-    traits["aggression_mean"].as_f64().unwrap_or(0.),traits["aggression_variance"].as_f64().unwrap_or(0.),
-    traits["aggression_median"].as_f64().unwrap_or(0.),traits["aggression_range"].as_f64().unwrap_or(0.),
-    traits["learned_fear_mean"].as_f64().unwrap_or(0.),traits["learned_fear_variance"].as_f64().unwrap_or(0.),
-    traits["defense_active"].as_u64().unwrap_or(0))?;
-   write!(out,",{:.9},{:.9}",
-    traits["carnivore_ambush_gene_mean"].as_f64().unwrap_or(0.),
-    traits["carnivore_ambush_gene_variance"].as_f64().unwrap_or(0.))?;
-   for bins in [&world.carnivore_debug.gene_births,&world.carnivore_debug.gene_parent_reproductions,
-     &world.carnivore_debug.gene_deaths,&world.carnivore_debug.gene_ambush_choices,
-     &world.carnivore_debug.gene_search_choices,&world.carnivore_debug.gene_mutations] {
-     for count in bins {write!(out,",{}",count)?;}
-   }
-   write!(out,",{},{},{},{},{},{},{}",world.carnivore_debug.prey_near_but_outside_vision,
-    world.carnivore_debug.prey_visible_while_low_energy,world.carnivore_debug.prey_near_while_satiated,
-    world.carnivore_debug.predator_low_energy_no_visible_prey,
-    world.carnivore_debug.herbivore_flee_with_plant_visible,
-    world.carnivore_debug.herbivore_threat_near_detection_boundary,
-    world.carnivore_debug.gene_mutation_trials)?;
-   write!(out,",{},{},{},{},{},{}",world.carnivore_debug.p40_death_prey_visible,
-    world.carnivore_debug.p40_death_prey_attack_range,world.carnivore_debug.p40_death_prey_absent,
-    world.carnivore_debug.p40_death_feeding_paused,world.carnivore_debug.p40_death_nearby_prey_twice_vision,
-    world.carnivore_debug.p40_death_energy_starvation)?;
-   write!(out,",{},{},{},{},{:.9},{:.9},{}",world.carnivore_debug.p41_visible_samples,
-    world.carnivore_debug.p41_approach_samples,world.carnivore_debug.p41_retreat_samples,
-    world.carnivore_debug.p41_attack_reach_samples,world.carnivore_debug.p41_chase_basal_energy,
-    world.carnivore_debug.p41_chase_movement_energy,world.carnivore_debug.p41_death_after_visible_target)?;
-   write!(out,",{},{:.9},{:.9},{:.9},{},{:.9},{},{}",
-    world.diagnostics.toxin_exposure_events,world.diagnostics.toxin_exposure_total,
-    world.diagnostics.toxin_clearance_total,world.diagnostics.toxin_hp_damage_total,
-    world.diagnostics.toxin_damage_ticks,world.diagnostics.toxin_plant_energy_cost_total,
-    world.diagnostics.toxin_deaths_with_burden,world.diagnostics.toxin_deaths_with_burden_and_hp_zero)?;
-   writeln!(out)?;
-  }
-  if tick<ticks {world.step(1)?;}
- }
- let sidecar=format!("{}.life.csv",args[4]);
- let mut life=File::create(sidecar)?;
- writeln!(life,"tick,event,id_index,id_generation,age,ambush_gene,reserve_energy,stomach_energy,nearest_prey_distance,visible_prey_count,attack_range_prey_count,feeding_active,ticks_since_last_positive_attack,visible_ticks,approach_ticks,retreat_ticks,attack_range_ticks,attacks,positive_energy_attacks,births_as_parent,basal_spent,movement_spent,digestion_received,bite_energy_received,reproduction_energy_spent,parent_id_index,parent_id_generation,relative_closer,relative_farther,relative_unchanged,longest_no_positive_attack_ticks,low_energy_visible_ticks")?;
- for e in world.p42_life_events.iter().cloned().chain(world.carnivores.iter().map(|a|world.p42_snapshot(a,"alive_at_end"))) {
-  writeln!(life,"{},{},{},{},{},{:.8},{:.9},{:.9},{},{},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{},{},{}",
+use sim_core::{SimulationConfig, World};
+use std::{env, fs::File, io::Write};
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 5 {
+        return Err(
+            "usage: carnivore_verification <config.json> <ticks> <sample_interval> <output.csv>"
+                .into(),
+        );
+    }
+    let config: SimulationConfig = serde_json::from_str(&std::fs::read_to_string(&args[1])?)?;
+    let ticks: u64 = args[2].parse()?;
+    let interval: u64 = args[3].parse()?;
+    if interval == 0 {
+        return Err("sample interval must be positive".into());
+    }
+    let mut world = World::new(config)?;
+    let mut out = File::create(&args[4])?;
+    writeln!(out,"tick,plants,herbivores,carnivores,carnivore_hunts,carnivore_births,carnivore_deaths,nutrient_error,energy_error,repro_ready,repro_cooldown_blocked,repro_age_blocked,repro_body_n_blocked,repro_reserve_n_blocked,repro_energy_blocked,repro_capacity_blocked,hunt_nutrients,hunt_energy,carnivore_age_deaths,carnivore_energy_deaths,herbivore_age_deaths,herbivore_hp_deaths,hunt_refuge_blocked,hunt_cooldown_blocked,repro_food_blocked,hunt_attempts,hunt_positive_energy,hunt_zero_energy,energy_basal_spent,energy_movement_spent,energy_reproduction_spent,predator_target_ticks,predator_search_ticks,mean_carnivore_energy,mean_carnivore_reserve_n,repro_trend_blocked,prey_decline_fraction,prey_births_window,prey_deaths_window,prey_visible_out_of_range,prey_in_attack_range,predator_movement_distance,attack_energy_limited,prey_hp_zero_after_attack,predator_death_energy_remaining,predator_death_age_total,predator_death_nearest_prey_distance_total,predator_death_nearest_prey_samples,satiated_predator_ticks,kills_with_meal,meal_bonus_energy,meal_bonus_nutrients,stomach_energy_ingested,stomach_nutrients_ingested,stomach_energy_digested,stomach_nutrients_digested,stomach_feeding_blocked_ticks,stomach_reproduction_blocked,bite_stomach_energy,bite_stomach_nutrients,bite_stomach_capacity_blocked,sustainable_reproduction_blocked,emergency_digestion_ticks,emergency_digestion_energy,predator_death_stomach_energy,predator_death_stomach_nutrients,predator_deaths_with_stomach_energy,predator_low_reserve_with_stomach_ticks,predator_starvation_with_stomach_energy,hunting_hunger_override_ticks,hunting_hunger_override_no_capacity_ticks,hunting_hunger_override_attacks,persistent_search_ticks,remembered_prey_ticks,search_heading_changes,search_wall_turns,repro_disabled_ticks,repro_physical_ready_ticks,repro_all_gates_passed_ticks,mean_carnivore_age,mean_carnivore_stomach_energy,phase17_rest_ticks,phase17_active_search_ticks,phase17_chase_ticks,phase17_repro_cooldown_only_ticks,phase17_repro_age_only_ticks,phase17_repro_resource_ready_ticks,phase19_hp_zero_energy_deaths,phase19_hp_positive_energy_deaths,phase19_plant_births,phase19_plant_age_deaths,phase19_plant_consumed_deaths,phase19_herbivore_births,phase19_herbivore_age_deaths,phase19_herbivore_hp_deaths,phase19_plant_consumed_n,phase19_herbivore_feeding_e,phase19_herbivore_basal_e,phase19_herbivore_movement_e,phase19_plant_uptake_n,phase19_plant_photosynthesis_e,phase20_feeding_no_target_ticks,phase20_feeding_target_out_of_range_ticks,phase20_feeding_in_range_zero_n_ticks,phase20_feeding_in_range_success_ticks,phase20_repro_age_blocked,phase20_repro_cooldown_blocked,phase20_repro_hp_blocked,phase20_repro_energy_gate_blocked,phase20_repro_satiety_blocked,phase20_repro_food_blocked,phase20_repro_body_n_blocked,phase20_repro_reserve_n_blocked,phase20_repro_transfer_e_blocked,phase20_repro_success,phase20_herbivore_death_nearby_plants_total,phase20_herbivore_death_samples,phase20_herbivore_death_reserve_e_total,phase20_herbivore_death_stomach_n_total,phase21_live_samples,phase21_live_reserve_e_total,phase21_live_reserve_n_total,phase21_live_stomach_n_total,phase21_live_zero_e_samples,phase21_live_energy_gate_ready_samples,phase21_basal_e_requested,phase21_basal_e_unpaid,phase21_movement_e_requested,phase21_movement_e_unpaid,phase21_starvation_hp_damage,phase21_starvation_damage_ticks,phase21_feeding_plant_energy_available,phase21_feeding_energy_capacity_blocked,phase21_reproduction_offspring_e_transferred,phase21_reproduction_work_e,phase21_death_reserve_e_total,phase21_death_stomach_n_total,phase21_death_zero_e_count,phase21_death_positive_e_count,phase21_repro_only_energy_blocked,phase21_repro_multiple_gates_blocked,phase24_repro_samples,phase24_repro_ready_all,phase24_repro_age_ready,phase24_repro_cooldown_ready,phase24_repro_hp_ready,phase24_repro_energy_ready,phase24_repro_satiety_ready,phase24_repro_body_n_ready,phase24_repro_reserve_n_ready,phase24_repro_transfer_e_ready,phase24_repro_local_plant_count_total,phase24_repro_local_plant_n_total,phase24_repro_local_plant_e_total,phase24_repro_reserve_e_total,phase24_repro_reserve_n_total,phase24_repro_stomach_n_total,phase25_body_n_repaired,phase25_body_n_repair_ticks,phase25_body_n_deficit_samples,phase25_reserve_n_sufficient_when_body_n_low,phase25_body_n_total,phase25_body_n_samples,phase25_well_fed_ticks_total,phase25_well_fed_samples,phase26_satiety_streak_resets,phase26_satiety_streak_completions,phase26_stomach_below_threshold_samples,phase26_stomach_above_threshold_samples,phase26_feeding_paused_samples,phase26_feeding_active_samples,strategy_ambush_rest_ticks,strategy_roaming_ticks,strategy_hybrid_rest_ticks,herbivore_predator_detected_ticks,herbivore_flee_distance,genetic_herbivores,fear_mean,fear_variance,fear_median,fear_range,aggression_mean,aggression_variance,aggression_median,aggression_range,learned_fear_mean,learned_fear_variance,defense_active,carnivore_ambush_gene_mean,carnivore_ambush_gene_variance,gene_births_bin0,gene_births_bin1,gene_births_bin2,gene_births_bin3,gene_births_bin4,gene_parent_reproductions_bin0,gene_parent_reproductions_bin1,gene_parent_reproductions_bin2,gene_parent_reproductions_bin3,gene_parent_reproductions_bin4,gene_deaths_bin0,gene_deaths_bin1,gene_deaths_bin2,gene_deaths_bin3,gene_deaths_bin4,gene_ambush_choices_bin0,gene_ambush_choices_bin1,gene_ambush_choices_bin2,gene_ambush_choices_bin3,gene_ambush_choices_bin4,gene_search_choices_bin0,gene_search_choices_bin1,gene_search_choices_bin2,gene_search_choices_bin3,gene_search_choices_bin4,gene_mutations_bin0,gene_mutations_bin1,gene_mutations_bin2,gene_mutations_bin3,gene_mutations_bin4,prey_near_but_outside_vision,prey_visible_while_low_energy,prey_near_while_satiated,predator_low_energy_no_visible_prey,herbivore_flee_with_plant_visible,herbivore_threat_near_detection_boundary,gene_mutation_trials,p40_death_prey_visible,p40_death_prey_attack_range,p40_death_prey_absent,p40_death_feeding_paused,p40_death_nearby_prey_twice_vision,p40_death_energy_starvation,p41_visible_samples,p41_approach_samples,p41_retreat_samples,p41_attack_reach_samples,p41_chase_basal_energy,p41_chase_movement_energy,p41_starvation_with_visible_prey,toxin_exposure_events,toxin_exposure_total,toxin_clearance_total,toxin_hp_damage_total,toxin_damage_ticks,toxin_plant_energy_cost_total,toxin_deaths_with_burden,toxin_deaths_with_burden_and_hp_zero")?;
+    for tick in 0..=ticks {
+        if tick % interval == 0 {
+            let n = world.resources.total_nutrients() - world.baseline.nutrients;
+            let e = world.resources.total_energy()
+                - world.baseline.energy
+                - world.ledger.sunlight_total()
+                + world.ledger.heat_total();
+            write!(out,"{},{},{},{},{},{},{},{:.12},{:.12},{},{},{},{},{},{},{},{:.9},{:.9},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{},{},{:.9},{:.9},{},{:.6},{},{}",world.tick,world.plants.len(),world.animals.items.len(),world.carnivores.len(),world.carnivore_hunts,world.carnivore_births,world.carnivore_deaths,n,e,world.carnivore_debug.reproduction_ready,world.carnivore_debug.reproduction_cooldown_blocked,world.carnivore_debug.reproduction_age_blocked,world.carnivore_debug.reproduction_body_n_blocked,world.carnivore_debug.reproduction_reserve_n_blocked,world.carnivore_debug.reproduction_energy_blocked,world.carnivore_debug.reproduction_capacity_blocked,world.carnivore_debug.hunt_nutrients,world.carnivore_debug.hunt_energy,world.carnivore_debug.carnivore_age_deaths,world.carnivore_debug.carnivore_energy_deaths,world.diagnostics.herbivore_age_deaths,world.diagnostics.herbivore_hp_deaths,world.carnivore_debug.hunt_refuge_blocked,world.carnivore_debug.hunt_cooldown_blocked,world.carnivore_debug.reproduction_food_blocked,world.carnivore_debug.hunt_attempts,world.carnivore_debug.hunt_positive_energy,world.carnivore_debug.hunt_zero_energy,world.carnivore_debug.energy_basal_spent,world.carnivore_debug.energy_movement_spent,world.carnivore_debug.energy_reproduction_spent,world.carnivore_debug.predator_target_ticks,world.carnivore_debug.predator_search_ticks,if world.carnivores.is_empty(){0.0}else{world.carnivores.iter().map(|a|world.resources.energy_balance(a.reserve).unwrap_or(0.)).sum::<f64>()/world.carnivores.len() as f64},if world.carnivores.is_empty(){0.0}else{world.carnivores.iter().map(|a|world.resources.nutrient_balance(a.reserve).unwrap_or(0.)).sum::<f64>()/world.carnivores.len() as f64},world.carnivore_debug.reproduction_trend_blocked,world.prey_trend_snapshot.decline_fraction,world.prey_trend_snapshot.births_in_window,world.prey_trend_snapshot.deaths_in_window)?;
+            write!(
+                out,
+                ",{},{},{:.6},{},{},{:.9},{},{:.6},{}",
+                world.carnivore_debug.prey_visible_but_out_of_attack_range,
+                world.carnivore_debug.prey_in_attack_range,
+                world.carnivore_debug.predator_movement_distance,
+                world.carnivore_debug.attack_energy_limited,
+                world.carnivore_debug.prey_hp_zero_after_attack,
+                world.carnivore_debug.predator_death_energy_remaining,
+                world.carnivore_debug.predator_death_age_total,
+                world
+                    .carnivore_debug
+                    .predator_death_distance_to_nearest_prey_total,
+                world.carnivore_debug.predator_death_nearest_prey_samples
+            )?;
+            write!(
+                out,
+                ",{},{},{:.9},{:.9}",
+                world.carnivore_debug.satiated_predator_ticks,
+                world.carnivore_debug.kills_with_meal,
+                world.carnivore_debug.meal_bonus_energy,
+                world.carnivore_debug.meal_bonus_nutrients
+            )?;
+            write!(
+                out,
+                ",{:.9},{:.9},{:.9},{:.9},{},{},{:.9},{:.9},{},{}",
+                world.carnivore_debug.stomach_energy_ingested,
+                world.carnivore_debug.stomach_nutrients_ingested,
+                world.carnivore_debug.stomach_energy_digested,
+                world.carnivore_debug.stomach_nutrients_digested,
+                world.carnivore_debug.stomach_feeding_blocked_ticks,
+                world.carnivore_debug.stomach_reproduction_blocked,
+                world.carnivore_debug.bite_stomach_energy,
+                world.carnivore_debug.bite_stomach_nutrients,
+                world.carnivore_debug.bite_stomach_capacity_blocked,
+                world.carnivore_debug.sustainable_reproduction_blocked
+            )?;
+            // Phase 06.2.11 diagnostics: cumulative; resource-neutral observations.
+            write!(
+                out,
+                ",{},{:.9},{:.9},{:.9},{},{},{}",
+                world.carnivore_debug.emergency_digestion_ticks,
+                world.carnivore_debug.emergency_digestion_energy,
+                world.carnivore_debug.predator_death_stomach_energy,
+                world.carnivore_debug.predator_death_stomach_nutrients,
+                world.carnivore_debug.predator_deaths_with_stomach_energy,
+                world
+                    .carnivore_debug
+                    .predator_low_reserve_with_stomach_ticks,
+                world
+                    .carnivore_debug
+                    .predator_starvation_with_stomach_energy
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{},{},{}",
+                world.carnivore_debug.hunting_hunger_override_ticks,
+                world
+                    .carnivore_debug
+                    .hunting_hunger_override_no_capacity_ticks,
+                world.carnivore_debug.hunting_hunger_override_attacks,
+                world.carnivore_debug.persistent_search_ticks,
+                world.carnivore_debug.remembered_prey_ticks,
+                world.carnivore_debug.search_heading_changes,
+                world.carnivore_debug.search_wall_turns
+            )?;
+            let mean_age = if world.carnivores.is_empty() {
+                0.0
+            } else {
+                world.carnivores.iter().map(|a| a.age as f64).sum::<f64>()
+                    / world.carnivores.len() as f64
+            };
+            let mean_stomach = if world.carnivores.is_empty() {
+                0.0
+            } else {
+                world
+                    .carnivores
+                    .iter()
+                    .map(|a| world.resources.energy_balance(a.stomach).unwrap_or(0.))
+                    .sum::<f64>()
+                    / world.carnivores.len() as f64
+            };
+            write!(
+                out,
+                ",{},{},{},{:.6},{:.9}",
+                world.carnivore_debug.reproduction_disabled_ticks,
+                world.carnivore_debug.reproduction_physical_ready_ticks,
+                world.carnivore_debug.reproduction_all_gates_passed_ticks,
+                mean_age,
+                mean_stomach
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{},{}",
+                world.carnivore_debug.phase17_rest_ticks,
+                world.carnivore_debug.phase17_active_search_ticks,
+                world.carnivore_debug.phase17_chase_ticks,
+                world.carnivore_debug.phase17_repro_cooldown_only_ticks,
+                world.carnivore_debug.phase17_repro_age_only_ticks,
+                world.carnivore_debug.phase17_repro_resource_ready_ticks
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9}",
+                world.diagnostics.phase19_hp_zero_energy_deaths,
+                world.diagnostics.phase19_hp_positive_energy_deaths,
+                world.diagnostics.plant_births,
+                world.diagnostics.plant_age_deaths,
+                world.diagnostics.plant_consumed_deaths,
+                world.diagnostics.herbivore_births,
+                world.diagnostics.herbivore_age_deaths,
+                world.diagnostics.herbivore_hp_deaths,
+                world.diagnostics.plant_consumed_n,
+                world.diagnostics.herbivore_feeding_e,
+                world.diagnostics.herbivore_basal_e,
+                world.diagnostics.herbivore_movement_e,
+                world.diagnostics.plant_uptake_n,
+                world.diagnostics.plant_photosynthesis_e
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9}",
+                world.diagnostics.phase20_feeding_no_target_ticks,
+                world.diagnostics.phase20_feeding_target_out_of_range_ticks,
+                world.diagnostics.phase20_feeding_in_range_zero_n_ticks,
+                world.diagnostics.phase20_feeding_in_range_success_ticks,
+                world.diagnostics.phase20_repro_age_blocked,
+                world.diagnostics.phase20_repro_cooldown_blocked,
+                world.diagnostics.phase20_repro_hp_blocked,
+                world.diagnostics.phase20_repro_energy_gate_blocked,
+                world.diagnostics.phase20_repro_satiety_blocked,
+                world.diagnostics.phase20_repro_food_blocked,
+                world.diagnostics.phase20_repro_body_n_blocked,
+                world.diagnostics.phase20_repro_reserve_n_blocked,
+                world.diagnostics.phase20_repro_transfer_e_blocked,
+                world.diagnostics.phase20_repro_success,
+                world
+                    .diagnostics
+                    .phase20_herbivore_death_nearby_plants_total,
+                world.diagnostics.phase20_herbivore_death_samples,
+                world.diagnostics.phase20_herbivore_death_reserve_e_total,
+                world.diagnostics.phase20_herbivore_death_stomach_n_total
+            )?;
+            write!(out,",{},{:.9},{:.9},{:.9},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{}",world.diagnostics.phase21_live_samples,world.diagnostics.phase21_live_reserve_e_total,world.diagnostics.phase21_live_reserve_n_total,world.diagnostics.phase21_live_stomach_n_total,world.diagnostics.phase21_live_zero_e_samples,world.diagnostics.phase21_live_energy_gate_ready_samples,world.diagnostics.phase21_basal_e_requested,world.diagnostics.phase21_basal_e_unpaid,world.diagnostics.phase21_movement_e_requested,world.diagnostics.phase21_movement_e_unpaid,world.diagnostics.phase21_starvation_hp_damage,world.diagnostics.phase21_starvation_damage_ticks,world.diagnostics.phase21_feeding_plant_energy_available,world.diagnostics.phase21_feeding_energy_capacity_blocked,world.diagnostics.phase21_reproduction_offspring_e_transferred,world.diagnostics.phase21_reproduction_work_e,world.diagnostics.phase21_death_reserve_e_total,world.diagnostics.phase21_death_stomach_n_total,world.diagnostics.phase21_death_zero_e_count,world.diagnostics.phase21_death_positive_e_count,world.diagnostics.phase21_repro_only_energy_blocked,world.diagnostics.phase21_repro_multiple_gates_blocked)?;
+            write!(
+                out,
+                ",{},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9}",
+                world.diagnostics.phase24_repro_samples,
+                world.diagnostics.phase24_repro_ready_all,
+                world.diagnostics.phase24_repro_age_ready,
+                world.diagnostics.phase24_repro_cooldown_ready,
+                world.diagnostics.phase24_repro_hp_ready,
+                world.diagnostics.phase24_repro_energy_ready,
+                world.diagnostics.phase24_repro_satiety_ready,
+                world.diagnostics.phase24_repro_body_n_ready,
+                world.diagnostics.phase24_repro_reserve_n_ready,
+                world.diagnostics.phase24_repro_transfer_e_ready,
+                world.diagnostics.phase24_repro_local_plant_count_total,
+                world.diagnostics.phase24_repro_local_plant_n_total,
+                world.diagnostics.phase24_repro_local_plant_e_total,
+                world.diagnostics.phase24_repro_reserve_e_total,
+                world.diagnostics.phase24_repro_reserve_n_total,
+                world.diagnostics.phase24_repro_stomach_n_total
+            )?;
+            // Phase 25 appended as additional columns after the phase 24 diagnostics.
+            write!(
+                out,
+                ",{:.9},{},{},{},{:.9},{},{},{}",
+                world.diagnostics.phase25_body_n_repaired,
+                world.diagnostics.phase25_body_n_repair_ticks,
+                world.diagnostics.phase25_body_n_deficit_samples,
+                world
+                    .diagnostics
+                    .phase25_reserve_n_sufficient_when_body_n_low,
+                world.diagnostics.phase25_body_n_total,
+                world.diagnostics.phase25_body_n_samples,
+                world.diagnostics.phase25_well_fed_ticks_total,
+                world.diagnostics.phase25_well_fed_samples
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{},{}",
+                world.diagnostics.phase26_satiety_streak_resets,
+                world.diagnostics.phase26_satiety_streak_completions,
+                world.diagnostics.phase26_stomach_below_threshold_samples,
+                world.diagnostics.phase26_stomach_above_threshold_samples,
+                world.diagnostics.phase26_feeding_paused_samples,
+                world.diagnostics.phase26_feeding_active_samples
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{:.9}",
+                world.carnivore_debug.strategy_ambush_rest_ticks,
+                world.carnivore_debug.strategy_roaming_ticks,
+                world.carnivore_debug.strategy_hybrid_rest_ticks,
+                world.carnivore_debug.herbivore_predator_detected_ticks,
+                world.carnivore_debug.herbivore_flee_distance
+            )?;
+            let traits = world.behavior_genetics_snapshot();
+            write!(
+                out,
+                ",{},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{:.9},{}",
+                traits["herbivores"].as_u64().unwrap_or(0),
+                traits["fear_mean"].as_f64().unwrap_or(0.),
+                traits["fear_variance"].as_f64().unwrap_or(0.),
+                traits["fear_median"].as_f64().unwrap_or(0.),
+                traits["fear_range"].as_f64().unwrap_or(0.),
+                traits["aggression_mean"].as_f64().unwrap_or(0.),
+                traits["aggression_variance"].as_f64().unwrap_or(0.),
+                traits["aggression_median"].as_f64().unwrap_or(0.),
+                traits["aggression_range"].as_f64().unwrap_or(0.),
+                traits["learned_fear_mean"].as_f64().unwrap_or(0.),
+                traits["learned_fear_variance"].as_f64().unwrap_or(0.),
+                traits["defense_active"].as_u64().unwrap_or(0)
+            )?;
+            write!(
+                out,
+                ",{:.9},{:.9}",
+                traits["carnivore_ambush_gene_mean"].as_f64().unwrap_or(0.),
+                traits["carnivore_ambush_gene_variance"]
+                    .as_f64()
+                    .unwrap_or(0.)
+            )?;
+            for bins in [
+                &world.carnivore_debug.gene_births,
+                &world.carnivore_debug.gene_parent_reproductions,
+                &world.carnivore_debug.gene_deaths,
+                &world.carnivore_debug.gene_ambush_choices,
+                &world.carnivore_debug.gene_search_choices,
+                &world.carnivore_debug.gene_mutations,
+            ] {
+                for count in bins {
+                    write!(out, ",{}", count)?;
+                }
+            }
+            write!(
+                out,
+                ",{},{},{},{},{},{},{}",
+                world.carnivore_debug.prey_near_but_outside_vision,
+                world.carnivore_debug.prey_visible_while_low_energy,
+                world.carnivore_debug.prey_near_while_satiated,
+                world.carnivore_debug.predator_low_energy_no_visible_prey,
+                world.carnivore_debug.herbivore_flee_with_plant_visible,
+                world
+                    .carnivore_debug
+                    .herbivore_threat_near_detection_boundary,
+                world.carnivore_debug.gene_mutation_trials
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{},{}",
+                world.carnivore_debug.p40_death_prey_visible,
+                world.carnivore_debug.p40_death_prey_attack_range,
+                world.carnivore_debug.p40_death_prey_absent,
+                world.carnivore_debug.p40_death_feeding_paused,
+                world.carnivore_debug.p40_death_nearby_prey_twice_vision,
+                world.carnivore_debug.p40_death_energy_starvation
+            )?;
+            write!(
+                out,
+                ",{},{},{},{},{:.9},{:.9},{}",
+                world.carnivore_debug.p41_visible_samples,
+                world.carnivore_debug.p41_approach_samples,
+                world.carnivore_debug.p41_retreat_samples,
+                world.carnivore_debug.p41_attack_reach_samples,
+                world.carnivore_debug.p41_chase_basal_energy,
+                world.carnivore_debug.p41_chase_movement_energy,
+                world.carnivore_debug.p41_death_after_visible_target
+            )?;
+            write!(
+                out,
+                ",{},{:.9},{:.9},{:.9},{},{:.9},{},{}",
+                world.diagnostics.toxin_exposure_events,
+                world.diagnostics.toxin_exposure_total,
+                world.diagnostics.toxin_clearance_total,
+                world.diagnostics.toxin_hp_damage_total,
+                world.diagnostics.toxin_damage_ticks,
+                world.diagnostics.toxin_plant_energy_cost_total,
+                world.diagnostics.toxin_deaths_with_burden,
+                world.diagnostics.toxin_deaths_with_burden_and_hp_zero
+            )?;
+            writeln!(out)?;
+        }
+        if tick < ticks {
+            world.step(1)?;
+        }
+    }
+    let sidecar = format!("{}.life.csv", args[4]);
+    let mut life = File::create(sidecar)?;
+    writeln!(life,"tick,event,id_index,id_generation,age,ambush_gene,reserve_energy,stomach_energy,nearest_prey_distance,visible_prey_count,attack_range_prey_count,feeding_active,ticks_since_last_positive_attack,visible_ticks,approach_ticks,retreat_ticks,attack_range_ticks,attacks,positive_energy_attacks,births_as_parent,basal_spent,movement_spent,digestion_received,bite_energy_received,reproduction_energy_spent,parent_id_index,parent_id_generation,relative_closer,relative_farther,relative_unchanged,longest_no_positive_attack_ticks,low_energy_visible_ticks")?;
+    for e in world.p42_life_events.iter().cloned().chain(
+        world
+            .carnivores
+            .iter()
+            .map(|a| world.p42_snapshot(a, "alive_at_end")),
+    ) {
+        writeln!(life,"{},{},{},{},{},{:.8},{:.9},{:.9},{},{},{},{},{},{},{},{},{},{},{},{},{:.9},{:.9},{:.9},{:.9},{:.9},{},{},{},{},{},{},{}",
    e.tick,e.event,e.id_index,e.id_generation,e.age,e.ambush_gene,e.reserve_energy,e.stomach_energy,
    e.nearest_prey_distance.map(|v|v.to_string()).unwrap_or_default(),e.visible_prey_count,e.attack_range_prey_count,
    e.feeding_active,e.ticks_since_last_positive_attack.map(|v|v.to_string()).unwrap_or_default(),
@@ -98,6 +331,6 @@ fn main()->Result<(),Box<dyn std::error::Error>>{
    e.parent_id_generation.map(|v|v.to_string()).unwrap_or_default(),
    e.relative_closer,e.relative_farther,e.relative_unchanged,
    e.longest_no_positive_attack_ticks,e.low_energy_visible_ticks)?;
- }
- Ok(())
+    }
+    Ok(())
 }

@@ -1,6 +1,6 @@
-use sim_core::{SimulationConfig, World};
 use sim_core::entity::EntityAllocator;
-use sim_core::resources::{ResourceBank, ResourceLedger, ConservationBaseline, ResourceError};
+use sim_core::resources::{ConservationBaseline, ResourceBank, ResourceError, ResourceLedger};
+use sim_core::{SimulationConfig, World};
 
 #[test]
 fn generational_ids_reject_stale_references() {
@@ -25,10 +25,17 @@ fn transfer_is_atomic_and_conserves_nutrients() {
     b.transfer_nutrients(soil, plant, 20.0).unwrap();
     assert_eq!(b.nutrient_balance(soil), Some(80.0));
     assert_eq!(b.nutrient_balance(plant), Some(20.0));
-    assert_eq!(b.transfer_nutrients(soil, plant, 90.0), Err(ResourceError::InsufficientBalance));
+    assert_eq!(
+        b.transfer_nutrients(soil, plant, 90.0),
+        Err(ResourceError::InsufficientBalance)
+    );
     assert_eq!(b.nutrient_balance(soil), Some(80.0));
-    assert_eq!(b.transfer_nutrients(soil, plant, f64::NAN), Err(ResourceError::InvalidAmount));
-    base.check(&b, &ResourceLedger::default(), 1e-9, 1e-9).unwrap();
+    assert_eq!(
+        b.transfer_nutrients(soil, plant, f64::NAN),
+        Err(ResourceError::InvalidAmount)
+    );
+    base.check(&b, &ResourceLedger::default(), 1e-9, 1e-9)
+        .unwrap();
 }
 #[test]
 fn energy_ledger_accounts_for_sunlight_and_heat() {
