@@ -1,3 +1,5 @@
+> **運用変更（2026-11-06、ユーザー承認）**：課題・現在状態・実験計画・実施結果・判断・次の対応の正本は [GitHub Issues](https://github.com/lxi312044-oss/evolution-simulator/issues) です。[運用台帳 #4](https://github.com/lxi312044-oss/evolution-simulator/issues/4) と [Phase 07.5.9の結果 #26](https://github.com/lxi312044-oss/evolution-simulator/issues/26) を参照してください。READMEは概要・導入・設計参照を担い、以下の課題表・進捗・旧運用記述は移行前の履歴です。旧記述がREADMEへの進捗記録を指示していても、今後はIssuesを更新します。科学的な合格条件・既存証拠・履歴は維持します。詳細: [GitHub運用](docs/GITHUB_WORKFLOW.md)。
+
 > **Phase 07.5 統合検証・Phase 08移行ゲート（ユーザー指定の暫定名称）**：正式ロードマップの07.5「複数毒と種別耐性」を置き換えません。既存07.5～07.7は未完了、Phase 08は現時点NO-GO。技術検証と移行判定を分離します。設計: [PHASE075_GATE.md](docs/phase07/PHASE075_GATE.md)。実行: `tools/verify_phase075_gate.ps1`。
 
 > **Phase 07.4.6（統合設計案・レビュー待ち）**：草食・肉食の毒生成/耐性/蓄積/食物連鎖への伝播を設計。**この版は動物毒を実装しません。** 正式ロードマップでは動物毒の本実装はPhase 08です。設計: [PHASE0746.md](docs/phase07/PHASE0746.md)。
