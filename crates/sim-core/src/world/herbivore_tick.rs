@@ -345,6 +345,43 @@ impl World {
                 .reproduction_cooldown
                 .saturating_sub(1);
             let (ax, ay) = (self.animals.items[i].x, self.animals.items[i].y);
+            let foraging_observed = self
+                .foraging_trace
+                .as_ref()
+                .is_some_and(|t| t.observes(self.animals.items[i].id, self.tick));
+            let mut feeding_outcome = None;
+            let decision = if foraging_observed {
+                let mut visible = 0_u64;
+                let mut visible_n = 0_u64;
+                let mut visible_ne = 0_u64;
+                for p in &self.plants.items {
+                    if (p.x - x).powi(2) + (p.y - y).powi(2) <= vision * vision {
+                        visible += 1;
+                        let n = self.resources.nutrient_balance(p.body).unwrap_or(0.);
+                        let e = self.resources.energy_balance(p.reserve).unwrap_or(0.);
+                        if n > 0. {
+                            visible_n += 1;
+                            if e > 0. {
+                                visible_ne += 1;
+                            }
+                        }
+                    }
+                }
+                Some(
+                    serde_json::json!({"id":[self.animals.items[i].id.index,self.animals.items[i].id.generation],"tick":self.tick,
+                    "plants":self.plants.len(),"plant_protected":plants_protected,"satiety_blocked":h.satiety_enabled && !self.animals.items[i].feeding_active,
+                    "may_feed":may_feed,"action":format!("{action:?}"),"visible":visible,"visible_n":visible_n,"visible_ne":visible_ne,
+                    "position_before":[x,y],"position_after":[ax,ay],"vision":vision,"range":range,
+                    "desired_step":desired_distance,"affordable_step":step,"movement_energy":energy,
+                    "reserve_e":self.resources.energy_balance(reserve).unwrap_or(0.),
+                    "target":target.map(|j| {let p=&self.plants.items[j];serde_json::json!({"id":[p.id.index,p.id.generation],
+                        "distance_after":((ax-p.x).powi(2)+(ay-p.y).powi(2)).sqrt(),
+                        "in_range":(ax-p.x).powi(2)+(ay-p.y).powi(2) <= range*range,
+                        "n":self.resources.nutrient_balance(p.body).unwrap_or(0.),"e":self.resources.energy_balance(p.reserve).unwrap_or(0.)})})}),
+                )
+            } else {
+                None
+            };
             if let Some(pi) = target {
                 let (px, py) = (self.plants.items[pi].x, self.plants.items[pi].y);
                 let d2 = (ax - px).powi(2) + (ay - py).powi(2);
@@ -455,6 +492,13 @@ impl World {
                             "plant":[self.plants.items[pi].id.index,self.plants.items[pi].id.generation],
                             "available_plant_e":plant_e,"wanted_e":desired}));
                     }
+                    if foraging_observed {
+                        feeding_outcome = Some(
+                            serde_json::json!({"attempted":true,"eaten_n":eaten,"gained_e":gained,
+                            "free_stomach_n":if free_space.is_finite(){Some(free_space)}else{None},"energy_capacity":capacity,
+                            "available_plant_n":available,"available_plant_e":plant_e}),
+                        );
+                    }
                     let dissipated = available_e - gained;
                     if dissipated > 0. {
                         self.ledger
@@ -462,6 +506,12 @@ impl World {
                             .map_err(|e| format!("digestion heat: {e:?}"))?;
                     }
                 }
+            }
+            if let Some(mut event) = decision {
+                event["feeding"] = feeding_outcome.unwrap_or_else(
+                    || serde_json::json!({"attempted":false,"eaten_n":0.,"gained_e":0.}),
+                );
+                self.foraging_trace.as_mut().unwrap().events.push(event);
             }
             // Clearance and physiological damage; HP is a health state, not a resource balance.
             if self.config.toxin.enabled {

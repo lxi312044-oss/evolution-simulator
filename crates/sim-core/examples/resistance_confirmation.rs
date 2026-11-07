@@ -48,6 +48,8 @@ struct HealthSpec {
     window: [u64; 2],
     #[serde(default)]
     energy: bool,
+    #[serde(default)]
+    foraging: Vec<sim_core::world::ForagingWindow>,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -70,6 +72,10 @@ fn execute_with_health(
         if spec.window[0] > spec.window[1] {
             return Err("invalid trace window".into());
         }
+        if spec.foraging.iter().any(|w| w.start > w.end) {
+            return Err("invalid foraging window".into());
+        }
+        w.foraging_trace = Some(sim_core::world::ForagingTrace::new(spec.foraging));
         if spec.energy {
             w.energy_trace = Some(sim_core::world::EnergyTrace::new(spec.watched.iter().map(
                 |id| EntityId {
@@ -115,6 +121,11 @@ fn execute_with_health(
     for tick in 1..=ticks {
         w.step(1)?;
         w.checkpoint_energy();
+        if let Some(trace) = &mut w.foraging_trace {
+            for event in std::mem::take(&mut trace.events) {
+                emit(out, json!({"kind":"foraging","event":event}))?;
+            }
+        }
         if let Some(trace) = &mut w.energy_trace {
             for event in std::mem::take(&mut trace.events) {
                 emit(out, json!({"kind":"energy","event":event}))?;
@@ -344,6 +355,11 @@ mod tests {
                 watched: vec![ident(id)],
                 window: [1, 3000],
                 energy: true,
+                foraging: vec![sim_core::world::ForagingWindow {
+                    id: ident(id),
+                    start: 1,
+                    end: 3000,
+                }],
             }),
         )
         .unwrap();
