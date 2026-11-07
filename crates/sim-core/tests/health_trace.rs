@@ -162,3 +162,99 @@ fn trace_is_off_by_default() {
     let w = World::new(SimulationConfig::default()).unwrap();
     assert!(w.health_trace.is_none());
 }
+
+#[test]
+fn energy_trace_keeps_bite_lethal_meal_and_removal_separate() {
+    let mut w = world(false, true);
+    w.config.carnivores.satiety_enabled = true;
+    w.config.carnivores.kill_bonus_energy = 3.;
+    let id = w.animals.items[0].id;
+    w.energy_trace = Some(sim_core::world::EnergyTrace::new([id]));
+    w.step(1).unwrap();
+    let hp_zero = w
+        .health_trace
+        .as_ref()
+        .unwrap()
+        .events
+        .iter()
+        .find(|e| e["crossed_hp0"] == true)
+        .unwrap()["seq"]
+        .as_u64()
+        .unwrap();
+    let events = &w.energy_trace.as_ref().unwrap().events;
+    let bite = events
+        .iter()
+        .find(|e| e["phase"] == "predation_bite")
+        .unwrap();
+    let meal = events
+        .iter()
+        .find(|e| e["phase"] == "predation_lethal_meal")
+        .unwrap();
+    assert!(bite["delta_e"].as_f64().unwrap() < 0.);
+    assert_eq!(meal["delta_e"], -3.);
+    assert!(bite["health_seq"].as_u64().unwrap() < hp_zero);
+    assert!(meal["health_seq"].as_u64().unwrap() >= hp_zero);
+    w.step(1).unwrap();
+    let events = &w.energy_trace.as_ref().unwrap().events;
+    assert!(events.iter().any(|e| e["phase"] == "removal_heat"));
+    assert_eq!(events.last().unwrap()["phase"], "removal");
+    for e in events {
+        assert!(
+            (e["before_e"].as_f64().unwrap() + e["delta_e"].as_f64().unwrap()
+                - e["after_e"].as_f64().unwrap())
+            .abs()
+                < 1e-10
+        );
+    }
+}
+
+#[test]
+fn energy_trace_records_parent_payments_and_child_allocation() {
+    let mut c = SimulationConfig::default();
+    c.initial_population.plants = 0;
+    c.initial_population.herbivores = 1;
+    c.herbivores.reproduction_min_age = 0;
+    c.herbivores.reproduction_cooldown_ticks = 1;
+    c.herbivores.reproduction_min_energy_fraction = 0.;
+    c.herbivores.reproduction_min_hp_fraction = 0.;
+    c.herbivores.offspring_body_nutrients = 1.;
+    c.herbivores.offspring_reserve_nutrients = 1.;
+    c.herbivores.offspring_energy = 1.;
+    c.herbivores.reproduction_work_energy = 0.5;
+    let mut w = World::new(c).unwrap();
+    let parent = w.animals.items[0].id;
+    w.energy_trace = Some(sim_core::world::EnergyTrace::new([parent]));
+    w.step(1).unwrap();
+    assert_eq!(w.animals.items.len(), 2);
+    let events = &w.energy_trace.as_ref().unwrap().events;
+    assert_eq!(
+        events
+            .iter()
+            .find(|e| e["phase"] == "offspring_transfer")
+            .unwrap()["delta_e"],
+        -1.
+    );
+    assert_eq!(
+        events
+            .iter()
+            .find(|e| e["phase"] == "reproduction_work")
+            .unwrap()["delta_e"],
+        -0.5
+    );
+    // Replay with every possible live entity ID selected, including the not-yet-born child.
+    let ids: Vec<_> = w.animals.items.iter().map(|a| a.id).collect();
+    let mut replay = World::new(w.config.clone()).unwrap();
+    replay.energy_trace = Some(sim_core::world::EnergyTrace::new(ids));
+    replay.step(1).unwrap();
+    let birth = replay
+        .energy_trace
+        .as_ref()
+        .unwrap()
+        .events
+        .iter()
+        .find(|e| e["phase"] == "birth")
+        .unwrap();
+    assert_eq!(birth["before_e"], 0.);
+    assert_eq!(birth["after_e"], 1.);
+    assert_eq!(birth["delta_e"], 1.);
+}

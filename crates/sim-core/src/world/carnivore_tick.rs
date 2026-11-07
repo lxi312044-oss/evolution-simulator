@@ -504,9 +504,17 @@ impl World {
                         self.resources
                             .transfer_nutrients(source, bite_target, n)
                             .map_err(|err| format!("carnivore bite N: {err:?}"))?;
+                        let prey_before = self.resources.energy_balance(prey_energy).unwrap_or(0.);
                         self.resources
                             .transfer_energy(prey_energy, bite_target, e)
                             .map_err(|err| format!("carnivore bite E: {err:?}"))?;
+                        self.record_energy(
+                            self.animals.items[j].id,
+                            "predation_bite",
+                            prey_before,
+                            self.resources.energy_balance(prey_energy).unwrap_or(0.),
+                            -e,
+                        );
                         if c.all_bites_to_stomach {
                             self.carnivore_debug.bite_stomach_energy += e;
                             self.carnivore_debug.bite_stomach_nutrients += n;
@@ -595,9 +603,18 @@ impl World {
                                     .kill_bonus_nutrients
                                     .min(free_n)
                                     .min(self.resources.nutrient_balance(source).unwrap_or(0.));
+                                let prey_before =
+                                    self.resources.energy_balance(prey_energy).unwrap_or(0.);
                                 self.resources
                                     .transfer_energy(prey_energy, target, extra_e)
                                     .map_err(|err| format!("carnivore meal E: {err:?}"))?;
+                                self.record_energy(
+                                    self.animals.items[j].id,
+                                    "predation_lethal_meal",
+                                    prey_before,
+                                    self.resources.energy_balance(prey_energy).unwrap_or(0.),
+                                    -extra_e,
+                                );
                                 self.resources
                                     .transfer_nutrients(source, target, extra_n)
                                     .map_err(|err| format!("carnivore meal N: {err:?}"))?;

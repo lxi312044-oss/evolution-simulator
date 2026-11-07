@@ -21,6 +21,10 @@ impl HealthTrace {
         }
     }
 
+    pub fn sequence(&self) -> u64 {
+        self.sequence
+    }
+
     pub fn record(
         &mut self,
         tick: u64,

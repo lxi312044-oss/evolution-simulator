@@ -5,7 +5,7 @@ use super::{
 use crate::animals::{Herbivore, HerbivoreGenes};
 impl World {
     pub(super) fn update_herbivores(&mut self) -> Result<(), String> {
-        let h = &self.config.herbivores;
+        let h = self.config.herbivores.clone();
         self.plant_grid.rebuild(&self.plants);
         let plants_protected = h.plant_protection_enabled
             && self.plants.len() <= h.plant_protection_threshold as usize;
@@ -139,6 +139,13 @@ impl World {
             self.ledger
                 .dissipate_heat(&mut self.resources, reserve, basal.min(current))
                 .map_err(|e| format!("herbivore metabolism: {e:?}"))?;
+            self.record_energy(
+                self.animals.items[i].id,
+                "basal",
+                current,
+                self.resources.energy_balance(reserve).unwrap_or(0.),
+                -basal.min(current),
+            );
             if health_observed {
                 self.health_trace.as_mut().unwrap().record(self.tick,&self.animals.items[i],&self.resources,
                     "basal",None,serde_json::json!({"requested_e":basal,"paid_e":basal.min(current),"reserve_before":current}));
@@ -286,6 +293,13 @@ impl World {
        self.tick,self.animals.items[i].id,reserve,energy,charge,movement_cost,traveled)
      )?;
                 }
+                self.record_energy(
+                    self.animals.items[i].id,
+                    "movement",
+                    energy,
+                    self.resources.energy_balance(reserve).unwrap_or(0.),
+                    -charge,
+                );
                 self.diagnostics.herbivore_movement_e += charge;
                 if action == Action::Flee {
                     self.carnivore_debug.herbivore_flee_distance += traveled;
@@ -422,11 +436,19 @@ impl World {
                     self.diagnostics.phase21_feeding_energy_capacity_blocked +=
                         (available_e * h.feeding_energy_gain_fraction - capacity).max(0.);
                     self.diagnostics.herbivore_feeding_e += gained;
+                    let feeding_before = self.resources.energy_balance(ares).unwrap_or(0.);
                     if gained > 0. {
                         self.resources
                             .transfer_energy(pres, ares, gained)
                             .map_err(|e| format!("feeding energy: {e:?}"))?;
                     }
+                    self.record_energy(
+                        self.animals.items[i].id,
+                        "feeding",
+                        feeding_before,
+                        self.resources.energy_balance(ares).unwrap_or(0.),
+                        gained,
+                    );
                     if health_observed {
                         self.health_trace.as_mut().unwrap().record(self.tick,&self.animals.items[i],&self.resources,
                             "feeding",None,serde_json::json!({"eaten_n":eaten,"gained_e":gained,
@@ -522,9 +544,17 @@ impl World {
                         .min(self.resources.energy_balance(reserve).unwrap_or(0.));
                 }
                 if cost > 0. {
+                    let energy_before = self.resources.energy_balance(reserve).unwrap_or(0.);
                     self.ledger
                         .dissipate_heat(&mut self.resources, reserve, cost)
                         .map_err(|e| format!("resistance upkeep: {e:?}"))?;
+                    self.record_energy(
+                        self.animals.items[i].id,
+                        "resistance_upkeep",
+                        energy_before,
+                        self.resources.energy_balance(reserve).unwrap_or(0.),
+                        -cost,
+                    );
                     self.diagnostics.resistance_energy_cost_total += cost;
                     self.animals.items[i].lifetime_resistance_cost += cost;
                 }
@@ -679,8 +709,19 @@ impl World {
                     self.ledger
                         .dissipate_heat(&mut self.resources, account, e)
                         .map_err(|e| format!("herbivore death E: {e:?}"))?;
+                    if account == a.reserve {
+                        self.record_energy(
+                            a.id,
+                            "removal_heat",
+                            e,
+                            self.resources.energy_balance(account).unwrap_or(0.),
+                            -e,
+                        );
+                    }
                 }
             }
+            let remaining = self.resources.energy_balance(a.reserve).unwrap_or(0.);
+            self.record_energy(a.id, "removal", 0., remaining, 0.);
             self.entities.despawn(a.id);
             self.deaths += 1;
         }
@@ -986,12 +1027,28 @@ impl World {
             self.diagnostics
                 .phase21_reproduction_offspring_e_transferred += h.offspring_energy;
             self.diagnostics.phase21_reproduction_work_e += h.reproduction_work_energy;
+            let parent_energy_before = self.resources.energy_balance(reserve_src).unwrap_or(0.);
             self.resources
                 .transfer_energy(reserve_src, child_reserve, h.offspring_energy)
                 .map_err(|e| format!("offspring E: {e:?}"))?;
+            let before_work = self.resources.energy_balance(reserve_src).unwrap_or(0.);
+            self.record_energy(
+                parent_id,
+                "offspring_transfer",
+                parent_energy_before,
+                before_work,
+                -h.offspring_energy,
+            );
             self.ledger
                 .dissipate_heat(&mut self.resources, reserve_src, h.reproduction_work_energy)
                 .map_err(|e| format!("reproduction work: {e:?}"))?;
+            self.record_energy(
+                parent_id,
+                "reproduction_work",
+                before_work,
+                self.resources.energy_balance(reserve_src).unwrap_or(0.),
+                -h.reproduction_work_energy,
+            );
             self.animals.items[i].reproduction_cooldown = h.reproduction_cooldown_ticks;
             let id = self.entities.spawn()?;
             let child_max_age = ((max_age as f64) * (0.9 + 0.2 * self.rng.unit() as f64))
@@ -1028,6 +1085,13 @@ impl World {
                 exploration_ticks: 30,
                 target: None,
             });
+            self.record_energy(
+                id,
+                "birth",
+                0.,
+                self.resources.energy_balance(child_reserve).unwrap_or(0.),
+                h.offspring_energy,
+            );
             if let Some(trace) = &mut self.health_trace {
                 trace.record(
                     self.tick,

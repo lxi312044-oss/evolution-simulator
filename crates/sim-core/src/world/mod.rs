@@ -4,7 +4,9 @@ pub use state::{SpontaneousGermination, World};
 
 mod behavior;
 mod carnivore_tick;
+mod energy;
 mod health;
+pub use energy::EnergyTrace;
 mod herbivore_tick;
 pub use health::HealthTrace;
 

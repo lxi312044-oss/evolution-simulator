@@ -46,6 +46,8 @@ fn execute(
 struct HealthSpec {
     watched: Vec<[u32; 2]>,
     window: [u64; 2],
+    #[serde(default)]
+    energy: bool,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -67,6 +69,14 @@ fn execute_with_health(
     if let Some(spec) = health {
         if spec.window[0] > spec.window[1] {
             return Err("invalid trace window".into());
+        }
+        if spec.energy {
+            w.energy_trace = Some(sim_core::world::EnergyTrace::new(spec.watched.iter().map(
+                |id| EntityId {
+                    index: id[0],
+                    generation: id[1],
+                },
+            )));
         }
         w.health_trace = Some(sim_core::world::HealthTrace::new(
             spec.watched.into_iter().map(|id| EntityId {
@@ -104,6 +114,12 @@ fn execute_with_health(
     let mut first_attack_hp0: Option<Value> = None;
     for tick in 1..=ticks {
         w.step(1)?;
+        w.checkpoint_energy();
+        if let Some(trace) = &mut w.energy_trace {
+            for event in std::mem::take(&mut trace.events) {
+                emit(out, json!({"kind":"energy","event":event}))?;
+            }
+        }
         if let Some(trace) = &mut w.health_trace {
             for event in std::mem::take(&mut trace.events) {
                 emit(out, json!({"kind":"health","event":event}))?;
@@ -327,6 +343,7 @@ mod tests {
             Some(HealthSpec {
                 watched: vec![ident(id)],
                 window: [1, 3000],
+                energy: true,
             }),
         )
         .unwrap();
