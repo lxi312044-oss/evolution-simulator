@@ -28,6 +28,7 @@ import p35fixed from "../../config/phase06235-fixed.json";
 import p35ambush from "../../config/phase06235-ambush.json";
 import p35genetic from "../../config/phase06235-genetic.json";
 import "./style.css";
+import { resizeField } from "./field";
 import {drawAnimalSprite,drawPlantSprite} from "./sprites";
 const el=(id:string)=>document.getElementById(id)!;
 const status=el("status");
@@ -142,15 +143,18 @@ function readConfig():Config{
  c.herbivores.reproduction_food_target=numberValue("food-target",1,1000);
  if(!Number.isInteger(c.herbivores.reproduction_food_target))throw new Error("周辺植物数は整数で指定してください");
  c.herbivores.feeding_nutrients_per_tick=numberValue("feeding",0,10);
- c.initial_population.herbivores=numberValue("herbivores",0,500);
+ c.initial_population.herbivores=numberValue("herbivores",0,5000);
  if(!Number.isInteger(c.initial_population.herbivores))throw new Error("初期草食動物数は整数で指定してください");
- return c;
+ const size=(el("field-size") as HTMLSelectElement).value;
+ return resizeField(c,size==="current"?null:Number(size),(el("field-density") as HTMLSelectElement).value==="scale");
 }
 function downloadText(name:string,content:string,mime:string){
  const url=URL.createObjectURL(new Blob([content],{type:mime}));
  const a=document.createElement("a");a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function showConfigInControls(c:Config){
+ (el("field-size") as HTMLSelectElement).value=c.world.land_columns===c.world.land_rows && [20,30,40].includes(c.world.land_columns)?String(c.world.land_columns):"current";
+ (el("field-density") as HTMLSelectElement).value="scale";
  const values:Record<string,number>={growth:c.plants.growth_per_tick,uptake:c.plants.nutrient_uptake_max,seed:c.plants.seed_probability,mineralization:c.plants.mineralization_rate,diffusion:c.plants.soil_diffusion_rate,radius:c.plants.seed_dispersal_radius,cooldown:c.plants.seed_cooldown_ticks,feeding:c.herbivores.feeding_nutrients_per_tick,herbivores:c.initial_population.herbivores,"food-radius":c.herbivores.reproduction_food_radius,"food-target":c.herbivores.reproduction_food_target,"plant-protection-threshold":c.herbivores.plant_protection_threshold,"repro-satiety-threshold":c.herbivores.reproduction_satiety_threshold,"repro-well-fed-ticks":c.herbivores.reproduction_well_fed_ticks,"stomach-capacity":c.herbivores.stomach_capacity_n,"satiety-stop":c.herbivores.feeding_stop_fraction,"satiety-resume":c.herbivores.feeding_resume_fraction,digestion:c.herbivores.digestion_n_per_tick};
  for(const [id,value] of Object.entries(values))(el(id) as HTMLInputElement).value=String(value);
  for(const [id,on] of Object.entries({"plant-protection":c.herbivores.plant_protection_enabled,"satiety-enabled":c.herbivores.satiety_enabled,"satiety-reproduction":c.herbivores.satiety_reproduction_enabled,"resource-reproduction":c.herbivores.resource_dependent_reproduction}))(el(id) as HTMLSelectElement).value=on?"on":"off";
@@ -200,17 +204,21 @@ function render(){
   el("deaths").textContent=String(simulation.deaths());
   const plants=JSON.parse(simulation.plant_snapshot_json()) as [number,number,number,number][];
   ctx.fillStyle="#0d1e20";ctx.fillRect(0,0,canvas.width,canvas.height);
+  const {width,height,land_columns:columns,land_rows:rows}=activeConfig.world;
+  const sx=canvas.width/width,sy=canvas.height/height;
+  el("field-description").textContent=`${columns} × ${rows} 土地セル / ${width} × ${height}`;
   ctx.strokeStyle="rgba(155,190,165,.12)";ctx.lineWidth=1;
-  for(let i=0;i<=20;i++){const x=i*canvas.width/20,y=i*canvas.height/20;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
-  for(const [x,y,r,g] of plants){drawPlantSprite(ctx,x*canvas.width/1000,y*canvas.height/1000,g,Math.max(7,r*canvas.width/1000*2));}
+  for(let i=0;i<=columns;i++){const x=i*canvas.width/columns;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,canvas.height);ctx.stroke();}
+  for(let i=0;i<=rows;i++){const y=i*canvas.height/rows;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(canvas.width,y);ctx.stroke();}
+  for(const [x,y,r,g] of plants){drawPlantSprite(ctx,x*sx,y*sy,g,Math.max(7,r*Math.min(sx,sy)*2));}
   const predators=JSON.parse(simulation.carnivore_snapshot_json()) as [number,number,number,number,number,number,number][];
   for(const [x,y,r,_hp,red,green,blue] of predators){
-    drawAnimalSprite(ctx,"carnivore",x*canvas.width/1000,y*canvas.height/1000,Math.max(16,r*canvas.width/1000*2),false,[red,green,blue]);
+    drawAnimalSprite(ctx,"carnivore",x*sx,y*sy,Math.max(16,r*Math.min(sx,sy)*2),false,[red,green,blue]);
   }
   const animals=JSON.parse(simulation.herbivore_color_snapshot_json()) as [number,number,number,number,number,number,number][];
   for(const [x,y,r,hp,red,green,blue] of animals){
-    const px=x*canvas.width/1000,py=y*canvas.height/1000;
-    drawAnimalSprite(ctx,"herbivore",px,py,Math.max(14,r*canvas.width/1000*2),false,[red,green,blue]);
+    const px=x*sx,py=y*sy;
+    drawAnimalSprite(ctx,"herbivore",px,py,Math.max(14,r*Math.min(sx,sy)*2),false,[red,green,blue]);
     if(hp<0.3){ctx.fillStyle="#f46b6b";ctx.fillRect(Math.round(px)-3,Math.round(py)-13,6,2);}
   }
 }
@@ -317,7 +325,7 @@ async function main(){
   el("apply").onclick=()=>resetWithSettings();
   el("compare").onclick=()=>{setPreset("baseline");resetWithSettings();};
   (el("preset") as HTMLSelectElement).onchange=()=>{const p=(el("preset") as HTMLSelectElement).value;if(p==="baseline"||p==="balanced"||p==="circulation")setPreset(p);};
-  for(const id of ["growth","uptake","seed","mineralization","diffusion","radius","cooldown","feeding","herbivores","food-radius","food-target","plant-protection","plant-protection-threshold","resource-reproduction","satiety-enabled","satiety-reproduction","repro-satiety-threshold","repro-well-fed-ticks","stomach-capacity","satiety-stop","satiety-resume","digestion"])(el(id) as HTMLInputElement).oninput=()=>{(el("preset") as HTMLSelectElement).value="custom";};
+  for(const id of ["field-size","field-density","growth","uptake","seed","mineralization","diffusion","radius","cooldown","feeding","herbivores","food-radius","food-target","plant-protection","plant-protection-threshold","resource-reproduction","satiety-enabled","satiety-reproduction","repro-satiety-threshold","repro-well-fed-ticks","stomach-capacity","satiety-stop","satiety-resume","digestion"])(el(id) as HTMLInputElement).oninput=()=>{(el("preset") as HTMLSelectElement).value="custom";};
   status.textContent=`WASM初期化成功 — Seed ${activeConfig.seed} / 肉食動物初期 ${activeConfig.initial_population.carnivores} / 検証設定`;
   // The preview and the world both render live carnivore sprites.
   const preview=el("carnivore-preview") as HTMLCanvasElement;
