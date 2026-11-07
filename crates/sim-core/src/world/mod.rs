@@ -20,6 +20,51 @@ pub struct ResistanceBirthEvent {
     pub mutation_attempted: bool,
 }
 
+/// Read-only herbivore state immediately before removal and resource return.
+/// The trigger is the removal condition, not a causal attribution to toxin.
+#[derive(Debug, Clone)]
+pub struct HerbivoreTerminalEvent {
+    pub tick: u64,
+    pub id: crate::entity::EntityId,
+    pub resistance: [f32; 16],
+    pub loads: [f64; 16],
+    pub doses: [f64; 16],
+    pub age: u32,
+    pub successful_births: u64,
+    pub hp: f32,
+    pub removal_trigger: &'static str,
+    pub toxin_damage_total: f64,
+    pub prevented_damage_total: f64,
+    pub resistance_cost_total: f64,
+}
+
+impl HerbivoreTerminalEvent {
+    pub fn capture(tick: u64, animal: &crate::animals::Herbivore) -> Self {
+        let mut resistance = animal.genes.typed_resistance;
+        resistance[0] = animal.genes.toxin_resistance;
+        let mut loads = animal.typed_load;
+        loads[0] = animal.toxin_load;
+        Self {
+            tick,
+            id: animal.id,
+            resistance,
+            loads,
+            doses: animal.lifetime_typed_dose,
+            age: animal.age,
+            successful_births: animal.successful_births,
+            hp: animal.hp,
+            removal_trigger: if animal.hp <= 0. {
+                "hp_nonpositive"
+            } else {
+                "age_limit"
+            },
+            toxin_damage_total: animal.lifetime_toxin_damage,
+            prevented_damage_total: animal.lifetime_prevented_damage,
+            resistance_cost_total: animal.lifetime_resistance_cost,
+        }
+    }
+}
+
 /// A successful birth. Mutation flags record RNG decisions, even if clamping
 /// makes the resulting channel equal to the parent value.
 #[derive(Debug, Clone, PartialEq)]
@@ -198,4 +243,26 @@ pub struct CarnivoreDebug {
     pub p41_chase_movement_energy: f64,
     pub p41_chase_basal_energy: f64,
     pub p41_death_after_visible_target: u64,
+}
+
+// Observation-only snapshots at explicit phases, independent of ecology/RNG.
+impl World {
+    pub fn record_focal_state(&mut self, id: crate::entity::EntityId, phase: &str) {
+        if self.focal_trace_id != Some(id) {
+            return;
+        }
+        if let Some(a) = self.animals.items.iter().find(|a| a.id == id) {
+            self.focal_trace.push(serde_json::json!({
+                "phase": phase, "tick": self.tick, "hp": a.hp, "age": a.age,
+                "x": a.x, "y": a.y, "births": a.successful_births,
+                "reserve_e": self.resources.energy_balance(a.reserve).unwrap_or(0.),
+                "reserve_n": self.resources.nutrient_balance(a.reserve).unwrap_or(0.),
+                "body_n": self.resources.nutrient_balance(a.body).unwrap_or(0.),
+                "stomach_e": self.resources.energy_balance(a.stomach).unwrap_or(0.),
+                "stomach_n": self.resources.nutrient_balance(a.stomach).unwrap_or(0.),
+                "damage": a.lifetime_toxin_damage, "cost": a.lifetime_resistance_cost,
+                "cooldown": a.reproduction_cooldown, "well_fed_ticks": a.well_fed_ticks,
+            }));
+        }
+    }
 }

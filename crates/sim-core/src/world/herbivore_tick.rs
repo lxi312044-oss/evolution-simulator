@@ -13,6 +13,15 @@ impl World {
         // The threshold is evaluated once per tick; no N or E is created or destroyed.
         // One deterministic search and movement step per animal. The grid prevents O(animals * plants) scans.
         for i in 0..self.animals.items.len() {
+            let trace_window = self
+                .behavior_trace_window
+                .is_some_and(|(start, end)| (start..=end).contains(&self.tick));
+            let rng_before = trace_window.then(|| format!("{:?}", self.rng));
+            let exploration_before = (
+                self.animals.items[i].exploration_heading,
+                self.animals.items[i].exploration_ticks,
+            );
+
             let (x, y, vision, speed, range, reserve, hp_max) = {
                 let a = &self.animals.items[i];
                 (
@@ -272,6 +281,31 @@ impl World {
                 a.x = nx;
                 a.y = ny;
             }
+            if trace_window
+                && (self.focal_trace_id == Some(self.animals.items[i].id)
+                    || self.behavior_trace_subject == Some(self.animals.items[i].id))
+            {
+                self.focal_trace.push(serde_json::json!({
+                    "phase": "behavior", "tick": self.tick,
+                    "id":[self.animals.items[i].id.index,self.animals.items[i].id.generation],
+                    "position_before": [x,y], "position_after": [self.animals.items[i].x,self.animals.items[i].y],
+                    "action": format!("{action:?}"), "may_feed": may_feed,
+                    "target": target.map(|j| {
+                        let p = &self.plants.items[j];
+                        serde_json::json!({"id":[p.id.index,p.id.generation],"x":p.x,"y":p.y,
+                            "body_n":self.resources.nutrient_balance(p.body).unwrap_or(0.)})
+                    }),
+                    "threat": threat, "predators": self.carnivores.iter().map(|p|
+                        serde_json::json!({"id":[p.id.index,p.id.generation],"x":p.x,"y":p.y})).collect::<Vec<_>>(),
+                    "learned_fear": self.animals.items[i].learned_fear,
+                    "energy_before": reserve_e_before, "movement_energy": energy,
+                    "desired_distance": desired_distance, "actual_step": step,
+                    "exploration_before": exploration_before,
+                    "exploration_after": [self.animals.items[i].exploration_heading,
+                        self.animals.items[i].exploration_ticks as f32],
+                    "rng_before": rng_before, "rng_after": format!("{:?}",self.rng),
+                }));
+            }
             self.animals.items[i].target = plant_id;
             self.animals.items[i].age = self.animals.items[i].age.saturating_add(1);
             self.animals.items[i].reproduction_cooldown = self.animals.items[i]
@@ -458,6 +492,30 @@ impl World {
                     (hp_max * h.starvation_hp_fraction) as f64;
                 self.animals.items[i].hp -= hp_max * h.starvation_hp_fraction;
             }
+            if let Some(before) = rng_before {
+                let after = format!("{:?}", self.rng);
+                if before != after {
+                    let a = &self.animals.items[i];
+                    self.focal_trace.push(serde_json::json!({
+                        "phase":"animal_rng_advance","tick":self.tick,"id":[a.id.index,a.id.generation],
+                        "rng_before":before,"rng_after":after,
+                        "exploration_before":exploration_before,
+                        "exploration_after":[a.exploration_heading,a.exploration_ticks as f32],
+                        "target":a.target.map(|id|[id.index,id.generation])
+                    }));
+                }
+            }
+        }
+        if self
+            .behavior_trace_window
+            .is_some_and(|(start, end)| (start..=end).contains(&self.tick))
+        {
+            self.focal_trace.push(serde_json::json!({
+                "phase": "rng_post_herbivores", "tick": self.tick, "rng": format!("{:?}",self.rng)
+            }));
+        }
+        if let Some(id) = self.focal_trace_id {
+            self.record_focal_state(id, "post_physiology");
         }
         // Remove fully consumed plants only after all feeding requests; return remaining matter and energy.
         let mut j = 0;
@@ -503,6 +561,10 @@ impl World {
                 continue;
             }
             let a = self.animals.items.swap_remove(i);
+            if self.herbivore_terminal_logging {
+                self.herbivore_terminal_events
+                    .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));
+            }
             if self.config.toxin.enabled && a.toxin_load > 0. {
                 self.diagnostics.toxin_deaths_with_burden += 1;
                 if a.hp <= 0. {
@@ -599,6 +661,18 @@ impl World {
             let body_n_ok = body_n_now >= h.offspring_body_nutrients;
             let reserve_n_ok = reserve_n_now >= h.offspring_reserve_nutrients;
             let transfer_e_ok = e >= h.offspring_energy + h.reproduction_work_energy;
+            if self.focal_trace_id == Some(a.id) {
+                self.focal_trace.push(serde_json::json!({
+                    "phase": "reproduction_gates", "tick": self.tick,
+                    "hp": a.hp, "hp_threshold": a.genes.adult_max_hp * h.reproduction_min_hp_fraction,
+                    "reserve_e": e, "energy_threshold": emax * h.reproduction_min_energy_fraction,
+                    "body_n": body_n_now, "reserve_n": reserve_n_now, "stomach_n": stomach_n_now,
+                    "age_ok": age_ok, "cooldown_ok": cooldown_ok, "hp_ok": hp_ok,
+                    "energy_ok": energy_ok, "satiety_ok": satiety_ok, "body_n_ok": body_n_ok,
+                    "reserve_n_ok": reserve_n_ok, "transfer_e_ok": transfer_e_ok,
+                    "births": a.successful_births, "well_fed_ticks": a.well_fed_ticks,
+                }));
+            }
             self.diagnostics.phase25_body_n_total += body_n_now;
             self.diagnostics.phase25_body_n_samples += 1;
             self.diagnostics.phase25_well_fed_ticks_total += a.well_fed_ticks as u64;
@@ -694,6 +768,12 @@ impl World {
                 );
                 let chance = (local_plants as f32 / h.reproduction_food_target as f32).min(1.);
                 if self.rng.unit() >= chance {
+                    if self.focal_trace_id == Some(a.id) {
+                        self.focal_trace.push(serde_json::json!({
+                            "phase": "food_gate_failed", "tick": self.tick,
+                            "local_plants": local_plants, "chance": chance
+                        }));
+                    }
                     self.diagnostics.herbivore_reproduction_food_blocked += 1;
                     self.diagnostics.phase20_repro_food_blocked += 1;
                     continue;

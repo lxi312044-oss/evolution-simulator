@@ -339,6 +339,27 @@ impl World {
             } else {
                 speed
             };
+            if self
+                .behavior_trace_window
+                .is_some_and(|(start, end)| (start..=end).contains(&self.tick))
+            {
+                let a = &self.carnivores[i];
+                self.focal_trace.push(serde_json::json!({
+                    "phase":"predator_behavior", "tick":self.tick,
+                    "id":[a.id.index,a.id.generation], "position_before":[x,y],
+                    "reserve_e":reserve_e,"stomach_e":stomach_e,"stomach_n":stomach_n,
+                    "feeding_active":a.feeding_active, "satiated":satiated,
+                    "hunger_override":hunger_override,"stomach_has_capacity":stomach_has_capacity,
+                    "predicted_need":predicted_need,"resting_without_prey":resting_without_prey,
+                    "decision":format!("{decision:?}"),"angle":angle,"distance":distance,
+                    "prey":nearest.map(|j| {
+                        let prey = &self.animals.items[j];
+                        serde_json::json!({"id":[prey.id.index,prey.id.generation],
+                            "x":prey.x,"y":prey.y,"hp":prey.hp,
+                            "resistance":prey.genes.toxin_resistance})
+                    }),
+                }));
+            }
             let mut nx = (x + angle.cos() * distance).clamp(0., self.config.world.width);
             let mut ny = (y + angle.sin() * distance).clamp(0., self.config.world.height);
             // Reflect the exploration direction at the world boundary rather than
@@ -525,6 +546,15 @@ impl World {
                             5.
                         };
                         self.animals.items[j].hp = (hp_before - damage).max(0.);
+                        if self.focal_trace_id == Some(self.animals.items[j].id) {
+                            self.focal_trace.push(serde_json::json!({
+                                "phase": "attack", "tick": self.tick,
+                                "predator": [self.carnivores[i].id.index, self.carnivores[i].id.generation],
+                                "hp_before": hp_before, "hp_after": self.animals.items[j].hp,
+                                "damage": damage, "nutrients_taken": n, "energy_taken": e,
+                                "defense_active": self.animals.items[j].defense_active,
+                            }));
+                        }
                         if hp_before > 0. && self.animals.items[j].hp <= 0. {
                             self.carnivore_debug.prey_hp_zero_after_attack += 1;
                             if c.satiety_enabled || c.digestion_enabled {
