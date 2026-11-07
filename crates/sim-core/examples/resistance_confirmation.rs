@@ -29,10 +29,53 @@ fn execute(
     interval: u64,
     out: &mut dyn Write,
 ) -> Result<World, String> {
+    execute_with_health(
+        config,
+        environment,
+        ty,
+        resistance,
+        defense,
+        ticks,
+        interval,
+        out,
+        None,
+    )
+}
+
+#[derive(serde::Deserialize)]
+struct HealthSpec {
+    watched: Vec<[u32; 2]>,
+    window: [u64; 2],
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_with_health(
+    config: SimulationConfig,
+    environment: &str,
+    ty: usize,
+    resistance: f32,
+    defense: f64,
+    ticks: u64,
+    interval: u64,
+    out: &mut dyn Write,
+    health: Option<HealthSpec>,
+) -> Result<World, String> {
     if ticks == 0 || interval == 0 {
         return Err("positive horizon/interval required".into());
     }
     let (mut w, focal, background) = pilot::prepare(config, environment, ty, resistance, defense)?;
+    if let Some(spec) = health {
+        if spec.window[0] > spec.window[1] {
+            return Err("invalid trace window".into());
+        }
+        w.health_trace = Some(sim_core::world::HealthTrace::new(
+            spec.watched.into_iter().map(|id| EntityId {
+                index: id[0],
+                generation: id[1],
+            }),
+            (spec.window[0], spec.window[1]),
+        ));
+    }
     w.resistance_event_logging = true;
     w.focal_trace_id = Some(focal);
     let initial = pilot::observe(&w, focal).ok_or("missing focal")?;
@@ -61,6 +104,11 @@ fn execute(
     let mut first_attack_hp0: Option<Value> = None;
     for tick in 1..=ticks {
         w.step(1)?;
+        if let Some(trace) = &mut w.health_trace {
+            for event in std::mem::take(&mut trace.events) {
+                emit(out, json!({"kind":"health","event":event}))?;
+            }
+        }
         for event in std::mem::take(&mut w.resistance_birth_events) {
             let child = w
                 .animals
@@ -216,14 +264,27 @@ fn execute(
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 8 {
+    if args.len() != 8 && args.len() != 9 {
         return Err(
             "usage: resistance_confirmation config env type resistance defense ticks interval"
                 .into(),
         );
     }
     let config = serde_json::from_str(&fs::read_to_string(&args[1])?)?;
-    execute(
+    if args.len() == 8 {
+        execute(
+            config,
+            &args[2],
+            args[3].parse()?,
+            args[4].parse()?,
+            args[5].parse()?,
+            args[6].parse()?,
+            args[7].parse()?,
+            &mut BufWriter::new(io::stdout().lock()),
+        )?;
+        return Ok(());
+    }
+    execute_with_health(
         config,
         &args[2],
         args[3].parse()?,
@@ -232,6 +293,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         args[6].parse()?,
         args[7].parse()?,
         &mut BufWriter::new(io::stdout().lock()),
+        if args.len() == 9 {
+            Some(serde_json::from_str(&fs::read_to_string(&args[8])?)?)
+        } else {
+            None
+        },
     )?;
     Ok(())
 }
@@ -249,7 +315,21 @@ mod tests {
         let (mut plain, id, _) = pilot::prepare(config.clone(), "B", 1, 0.8, 0.8).unwrap();
         plain.herbivore_terminal_logging = false;
         let mut bytes = Vec::new();
-        let logged = execute(config, "B", 1, 0.8, 0.8, 3000, 100, &mut bytes).unwrap();
+        let logged = execute_with_health(
+            config,
+            "B",
+            1,
+            0.8,
+            0.8,
+            3000,
+            100,
+            &mut bytes,
+            Some(HealthSpec {
+                watched: vec![ident(id)],
+                window: [1, 3000],
+            }),
+        )
+        .unwrap();
         for _ in 0..3000 {
             plain.step(1).unwrap();
         }

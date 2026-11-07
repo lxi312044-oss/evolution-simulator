@@ -546,6 +546,13 @@ impl World {
                             5.
                         };
                         self.animals.items[j].hp = (hp_before - damage).max(0.);
+                        if let Some(trace) = &mut self.health_trace {
+                            if trace.watched.contains(&self.animals.items[j].id) {
+                                trace.record(self.tick,&self.animals.items[j],&self.resources,"predation",Some(hp_before),
+                                    serde_json::json!({"damage":damage,"predator":[self.carnivores[i].id.index,self.carnivores[i].id.generation],
+                                        "nutrients_taken":n,"energy_taken":e,"defense_active":self.animals.items[j].defense_active}));
+                            }
+                        }
                         if self.focal_trace_id == Some(self.animals.items[j].id) {
                             self.focal_trace.push(serde_json::json!({
                                 "phase": "attack", "tick": self.tick,

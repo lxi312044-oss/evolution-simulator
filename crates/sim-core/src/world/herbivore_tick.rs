@@ -13,6 +13,21 @@ impl World {
         // The threshold is evaluated once per tick; no N or E is created or destroyed.
         // One deterministic search and movement step per animal. The grid prevents O(animals * plants) scans.
         for i in 0..self.animals.items.len() {
+            let health_observed = self
+                .health_trace
+                .as_ref()
+                .is_some_and(|t| t.watched.contains(&self.animals.items[i].id));
+            if health_observed {
+                self.health_trace.as_mut().unwrap().record(
+                    self.tick,
+                    &self.animals.items[i],
+                    &self.resources,
+                    "begin_herbivore",
+                    None,
+                    serde_json::Value::Null,
+                );
+            }
+
             let trace_window = self
                 .behavior_trace_window
                 .is_some_and(|(start, end)| (start..=end).contains(&self.tick));
@@ -124,6 +139,10 @@ impl World {
             self.ledger
                 .dissipate_heat(&mut self.resources, reserve, basal.min(current))
                 .map_err(|e| format!("herbivore metabolism: {e:?}"))?;
+            if health_observed {
+                self.health_trace.as_mut().unwrap().record(self.tick,&self.animals.items[i],&self.resources,
+                    "basal",None,serde_json::json!({"requested_e":basal,"paid_e":basal.min(current),"reserve_before":current}));
+            }
             self.diagnostics.herbivore_basal_e += basal.min(current);
             self.diagnostics.phase21_basal_e_requested += basal;
             self.diagnostics.phase21_basal_e_unpaid += (basal - current).max(0.);
@@ -408,6 +427,12 @@ impl World {
                             .transfer_energy(pres, ares, gained)
                             .map_err(|e| format!("feeding energy: {e:?}"))?;
                     }
+                    if health_observed {
+                        self.health_trace.as_mut().unwrap().record(self.tick,&self.animals.items[i],&self.resources,
+                            "feeding",None,serde_json::json!({"eaten_n":eaten,"gained_e":gained,
+                            "plant":[self.plants.items[pi].id.index,self.plants.items[pi].id.generation],
+                            "available_plant_e":plant_e,"wanted_e":desired}));
+                    }
                     let dissipated = available_e - gained;
                     if dissipated > 0. {
                         self.ledger
@@ -440,7 +465,12 @@ impl World {
                             self.diagnostics.toxin_damage_ticks += 1;
                             self.diagnostics.toxin_hp_damage_total += step.damage as f64;
                         }
+                        let hp_before = animal.hp;
                         animal.hp -= step.damage;
+                        if health_observed {
+                            self.health_trace.as_mut().unwrap().record(self.tick,animal,&self.resources,
+                                "toxin",Some(hp_before),serde_json::json!({"type":toxin_type,"damage":step.damage,"load_before":load}));
+                        }
                     }
                 }
                 self.diagnostics.toxin_clearance_total += result.cleared;
@@ -451,8 +481,23 @@ impl World {
                     self.diagnostics.toxin_damage_ticks += 1;
                     self.diagnostics.toxin_hp_damage_total += result.damage as f64;
                 }
+                let hp_before = animal.hp;
                 animal.hp -= result.damage;
+                if health_observed {
+                    self.health_trace.as_mut().unwrap().record(
+                        self.tick,
+                        animal,
+                        &self.resources,
+                        "toxin",
+                        Some(hp_before),
+                        serde_json::json!({"type":0,"damage":result.damage}),
+                    );
+                }
             }
+            let upkeep_before =
+                health_observed.then(|| self.resources.energy_balance(reserve).unwrap_or(0.));
+            let paid_before =
+                health_observed.then_some(self.animals.items[i].lifetime_resistance_cost);
             if self.config.toxin.resistance_enabled {
                 let resistance = self.animals.items[i].genes.toxin_resistance as f64;
                 let mut cost = crate::toxin::resistance_upkeep(
@@ -484,13 +529,29 @@ impl World {
                     self.animals.items[i].lifetime_resistance_cost += cost;
                 }
             }
+            if health_observed {
+                self.health_trace.as_mut().unwrap().record(
+                    self.tick,
+                    &self.animals.items[i],
+                    &self.resources,
+                    "resistance_upkeep",
+                    None,
+                    serde_json::json!({"reserve_before":upkeep_before,
+                    "paid_e":self.animals.items[i].lifetime_resistance_cost-paid_before.unwrap()}),
+                );
+            }
             let energy = self.resources.energy_balance(reserve).unwrap_or(0.);
             if energy <= 1e-9 {
                 self.diagnostics.herbivore_zero_energy_ticks += 1;
                 self.diagnostics.phase21_starvation_damage_ticks += 1;
                 self.diagnostics.phase21_starvation_hp_damage +=
                     (hp_max * h.starvation_hp_fraction) as f64;
+                let hp_before = self.animals.items[i].hp;
                 self.animals.items[i].hp -= hp_max * h.starvation_hp_fraction;
+                if health_observed {
+                    self.health_trace.as_mut().unwrap().record(self.tick,&self.animals.items[i],&self.resources,
+                        "starvation",Some(hp_before),serde_json::json!({"damage":hp_max*h.starvation_hp_fraction,"reserve_e":energy}));
+                }
             }
             if let Some(before) = rng_before {
                 let after = format!("{:?}", self.rng);
@@ -559,6 +620,10 @@ impl World {
             {
                 i += 1;
                 continue;
+            }
+            if let Some(trace) = &mut self.health_trace {
+                trace.record(self.tick,&self.animals.items[i],&self.resources,
+                    "pre_removal",None,serde_json::json!({"trigger":if self.animals.items[i].hp<=0. {"hp_nonpositive"} else {"age_limit"}}));
             }
             let a = self.animals.items.swap_remove(i);
             if self.herbivore_terminal_logging {
@@ -963,6 +1028,16 @@ impl World {
                 exploration_ticks: 30,
                 target: None,
             });
+            if let Some(trace) = &mut self.health_trace {
+                trace.record(
+                    self.tick,
+                    self.animals.items.last().unwrap(),
+                    &self.resources,
+                    "birth",
+                    None,
+                    serde_json::json!({"parent":[parent_id.index,parent_id.generation]}),
+                );
+            }
             if self.resistance_event_logging {
                 self.resistance_birth_events
                     .push(super::ResistanceBirthEvent {
