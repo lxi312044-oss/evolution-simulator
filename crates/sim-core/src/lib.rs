@@ -11,3 +11,5 @@ pub use world::World;
 
 pub mod animals;
 pub mod spatial;
+
+pub mod lineage;
