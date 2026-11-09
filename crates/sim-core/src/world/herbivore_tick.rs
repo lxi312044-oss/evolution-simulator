@@ -707,6 +707,20 @@ impl World {
                 trace.record(self.tick,&self.animals.items[i],&self.resources,
                     "pre_removal",None,serde_json::json!({"trigger":if self.animals.items[i].hp<=0. {"hp_nonpositive"} else {"age_limit"}}));
             }
+            let last_index = self.animals.items.len() - 1;
+            if i != last_index {
+                let moved = self.animals.items[last_index].id;
+                if let Some(trace) = &mut self.health_trace {
+                    if trace.watches_reproduction(self.tick, moved) {
+                        trace.record_reproduction(
+                            self.tick,
+                            moved,
+                            "swap_remove_move",
+                            serde_json::json!({"from":last_index,"to":i}),
+                        );
+                    }
+                }
+            }
             let a = self.animals.items.swap_remove(i);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
@@ -795,30 +809,28 @@ impl World {
                 animal.reproduction_age_reached = true;
             }
         }
+        let capacity = self.config.world.max_living_entities as usize;
+        let plants = self.plants.items.len();
+        let mut cutoff = None;
         for i in 0..parents {
-            if self.plants.items.len() + self.animals.items.len()
-                >= self.config.world.max_living_entities as usize
-            {
+            if cutoff.is_none() && plants + self.animals.items.len() >= capacity {
                 self.diagnostics.herbivore_reproduction_capacity_blocked += 1;
-                if let Some(trace) = &mut self.health_trace {
-                    if trace.observe_reproduction
+                if !self.health_trace.as_ref().is_some_and(|trace| {
+                    trace.observe_reproduction
                         && (trace.window.0..=trace.window.1).contains(&self.tick)
-                    {
-                        for animal in &self.animals.items[i..parents] {
-                            if trace.watched.contains(&animal.id) {
-                                trace.record_reproduction(
-                                    self.tick,
-                                    animal.id,
-                                    "capacity_blocked",
-                                    serde_json::Value::Null,
-                                );
-                            }
-                        }
-                    }
+                }) {
+                    break;
                 }
-                break;
+                cutoff = Some(i);
             }
             let a = &self.animals.items[i];
+            let watched = self
+                .health_trace
+                .as_ref()
+                .is_some_and(|trace| trace.watches_reproduction(self.tick, a.id));
+            if cutoff.is_some() && !watched {
+                continue;
+            }
             let e = self.resources.energy_balance(a.reserve).unwrap_or(0.);
             let emax = a.genes.adult_max_hp as f64 * h.max_energy_per_hp;
             // Phase 24: non-invasive, independent reproduction-gate observations.
@@ -835,10 +847,21 @@ impl World {
             let body_n_ok = body_n_now >= h.offspring_body_nutrients;
             let reserve_n_ok = reserve_n_now >= h.offspring_reserve_nutrients;
             let transfer_e_ok = e >= h.offspring_energy + h.reproduction_work_energy;
-            let watched = self
-                .health_trace
-                .as_ref()
-                .is_some_and(|trace| trace.watches_reproduction(self.tick, a.id));
+            if let Some(first_unprocessed) = cutoff {
+                self.health_trace.as_mut().unwrap().record_reproduction(
+                    self.tick, a.id, "capacity_blocked", serde_json::json!({
+                        "age_ok":age_ok,"cooldown_ok":cooldown_ok,"hp_ok":hp_ok,
+                        "energy_ok":energy_ok,"satiety_ok":satiety_ok,"body_n_ok":body_n_ok,
+                        "reserve_n_ok":reserve_n_ok,"transfer_e_ok":transfer_e_ok,
+                        "index":i,"first_unprocessed":first_unprocessed,
+                        "plants":plants,"herbivores":self.animals.items.len(),
+                        "carnivores":self.carnivores.len(),"capacity":capacity,
+                        "entry_herbivores":parents,"earlier_births":self.animals.items.len()-parents,
+                        "food_evaluated":false
+                    }),
+                );
+                continue;
+            }
             if self.focal_trace_id == Some(a.id) || watched {
                 let gates = serde_json::json!({
                     "phase": "reproduction_gates", "tick": self.tick,
@@ -849,6 +872,7 @@ impl World {
                     "energy_ok": energy_ok, "satiety_ok": satiety_ok, "body_n_ok": body_n_ok,
                     "reserve_n_ok": reserve_n_ok, "transfer_e_ok": transfer_e_ok,
                     "births": a.successful_births, "well_fed_ticks": a.well_fed_ticks,
+                    "index":i, "entry_herbivores":parents,
                 });
                 if self.focal_trace_id == Some(a.id) {
                     self.focal_trace.push(gates.clone());
