@@ -1,8 +1,10 @@
 """Audit the paired 7000-tick toxic-founder-fraction experiment."""
 import argparse
 import json
+import random
 import re
 from pathlib import Path
+from statistics import mean
 
 from run_confirmation import require
 from run_metadata import sha256
@@ -41,7 +43,15 @@ def summarize(path, config):
     state["plants"] = re.sub(r"produces_toxin: (true|false)", "produces_toxin: masked", state["plants"])
     first_zero = next((r["tick"] for r in probes
                        if r["focal"] and r["focal"]["reserve_e"] <= 1e-9), None)
+    focal = tuple(receipt["id"])
+    lineage = {focal}
+    for child, parent in audit.parents.items():
+        if parent in lineage:
+            lineage.add(child)
     result = dict(terminal=terminal, feeding_e=feeding, last_feeding=last_feeding,
+                  direct_births=terminal["births"], descendant_births=len(lineage) - 1,
+                  removal_or_end_tick=terminal["tick"],
+                  censored=terminal["kind"] == "survivor",
                   first_zero=first_zero, initial_plants=probes[0]["plants"],
                   initial_toxic_plants=probes[0]["toxic_plants"],
                   plant_counts=[{k: row[k] for k in ("tick", "plants", "toxic_plants")}
@@ -52,9 +62,37 @@ def summarize(path, config):
     return result, state
 
 
+def paired_contrasts(results, plan):
+    report = {}
+    for metric in plan["metrics"]:
+        differences = {name: [] for name in plan["contrasts"]}
+        for seed in plan["seeds"]:
+            low, high, exempt, low_rich, high_rich = (
+                results[f"{seed}_{fraction}_{resistance}_{mode}"][metric]
+                for fraction, resistance, mode in (
+                    (0.1, 0.2, "paid"), (0.1, 0.8, "paid"), (0.1, 0.8, "exempt"),
+                    (0.9, 0.2, "paid"), (0.9, 0.8, "paid")
+                )
+            )
+            differences["low_high_minus_low"].append(high - low)
+            differences["high_high_minus_low"].append(high_rich - low_rich)
+            differences["low_exempt_minus_paid_high"].append(exempt - high)
+            differences["interaction"].append((high_rich - low_rich) - (high - low))
+        report[metric] = {}
+        for name, values in differences.items():
+            rng = random.Random(plan["bootstrap_seed"])
+            draws = sorted(mean(rng.choices(values, k=len(values))) for _ in range(4000))
+            report[metric][name] = dict(mean=mean(values), ci95=[draws[99], draws[3899]],
+                                        by_seed=dict(zip(plan["seeds"], values)))
+    return report
+
+
 def main(directory):
+    plan_path = directory / "plan.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8")) if plan_path.exists() else None
+    seeds = plan["seeds"] if plan else (12350, 12351)
     results = {}
-    for seed in (12350, 12351):
+    for seed in seeds:
         baseline_state = None
         for fraction in (0.1, 0.9):
             for resistance, mode in ((0.2, "paid"), (0.8, "paid"), (0.8, "exempt")):
@@ -63,6 +101,8 @@ def main(directory):
                 name = f"{seed}_{fraction}_{resistance}_{mode}"
                 config = json.loads((directory / f"{name}.input.json").read_text(encoding="utf-8"))
                 result, state = summarize(directory / f"{name}.jsonl", config)
+                require(config["seed"] == seed and config["toxin"]["initial_toxic_plant_fraction"] == fraction,
+                        f"Input mismatch: {name}")
                 if baseline_state is None:
                     baseline_state = state
                 require(state == baseline_state, f"Initial state mismatch: {name}")
@@ -73,6 +113,10 @@ def main(directory):
                 results[name] = result
     with (directory / "assessment.json").open("x", encoding="utf-8") as stream:
         json.dump(results, stream, indent=2)
+    if plan:
+        report = paired_contrasts(results, plan)
+        with (directory / "contrasts.json").open("x", encoding="utf-8") as stream:
+            json.dump(report, stream, indent=2)
     for name, result in results.items():
         end = result["terminal"]
         print(name, result["initial_toxic_plants"], end["tick"], end["kind"],
