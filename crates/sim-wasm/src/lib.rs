@@ -180,6 +180,50 @@ impl Simulation {
         serde_json::to_string(&events.unwrap_or_default()).unwrap()
     }
 
+    /// Observe intake and reserve transactions for the existing health cohort after the trough.
+    pub fn enable_cohort_foraging_observation(&mut self) -> Result<(), JsValue> {
+        let Some(trace) = &self.world.health_trace else {
+            return Err(JsValue::from_str("health cohort is required"));
+        };
+        if self.world.tick != trace.window.0
+            || self.world.foraging_trace.is_some()
+            || self.world.energy_trace.is_some()
+        {
+            return Err(JsValue::from_str(
+                "foraging observation must start once at the cohort boundary",
+            ));
+        }
+        self.world.foraging_trace = Some(sim_core::world::ForagingTrace::new(
+            trace
+                .watched
+                .iter()
+                .map(|id| sim_core::world::ForagingWindow {
+                    id: [id.index, id.generation],
+                    start: trace.window.0 + 1,
+                    end: trace.window.1,
+                })
+                .collect(),
+        ));
+        self.world.energy_trace = Some(sim_core::world::EnergyTrace::new(
+            trace.watched.iter().copied(),
+        ));
+        Ok(())
+    }
+
+    pub fn take_cohort_foraging_json(&mut self) -> String {
+        let decisions = self
+            .world
+            .foraging_trace
+            .as_mut()
+            .map(|t| std::mem::take(&mut t.events));
+        let energy = self
+            .world
+            .energy_trace
+            .as_mut()
+            .map(|t| std::mem::take(&mut t.events));
+        serde_json::json!({"decisions":decisions.unwrap_or_default(),"energy":energy.unwrap_or_default()}).to_string()
+    }
+
     pub fn health_observation_status_json(&self) -> String {
         let mut rows = Vec::new();
         if let Some(trace) = &self.world.health_trace {
@@ -250,6 +294,9 @@ impl Simulation {
                 o.before_step(&self.world)
                     .map_err(|e| JsValue::from_str(&e))?;
                 self.world.step(1).map_err(|e| JsValue::from_str(&e))?;
+                if self.world.foraging_trace.is_some() {
+                    self.world.checkpoint_energy();
+                }
                 o.after_step(&mut self.world)
                     .map_err(|e| JsValue::from_str(&e))?;
             }

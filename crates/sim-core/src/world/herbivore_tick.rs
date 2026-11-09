@@ -13,6 +13,21 @@ impl World {
         // The threshold is evaluated once per tick; no N or E is created or destroyed.
         // One deterministic search and movement step per animal. The grid prevents O(animals * plants) scans.
         for i in 0..self.animals.items.len() {
+            let animal = &self.animals.items[i];
+            let foraging_observed = self
+                .foraging_trace
+                .as_ref()
+                .is_some_and(|t| t.observes(animal.id, self.tick));
+            let before_feeding = foraging_observed.then(|| {
+                (
+                    self.resources
+                        .nutrient_balance(animal.stomach)
+                        .unwrap_or(0.),
+                    self.resources.energy_balance(animal.reserve).unwrap_or(0.),
+                    animal.feeding_active,
+                )
+            });
+            let mut digested_n = 0.;
             let health_observed = self
                 .health_trace
                 .as_ref()
@@ -54,6 +69,7 @@ impl World {
                 let stomach = self.animals.items[i].stomach;
                 let n = self.resources.nutrient_balance(stomach).unwrap_or(0.);
                 let digest = n.min(h.digestion_n_per_tick);
+                digested_n = digest;
                 if digest > 0. {
                     self.resources
                         .transfer_nutrients(stomach, reserve, digest)
@@ -345,12 +361,10 @@ impl World {
                 .reproduction_cooldown
                 .saturating_sub(1);
             let (ax, ay) = (self.animals.items[i].x, self.animals.items[i].y);
-            let foraging_observed = self
-                .foraging_trace
-                .as_ref()
-                .is_some_and(|t| t.observes(self.animals.items[i].id, self.tick));
             let mut feeding_outcome = None;
-            let decision = if foraging_observed {
+            let decision = if let Some((stomach_before, reserve_before, feeding_before)) =
+                before_feeding
+            {
                 let mut visible = 0_u64;
                 let mut visible_n = 0_u64;
                 let mut visible_ne = 0_u64;
@@ -374,6 +388,12 @@ impl World {
                     "position_before":[x,y],"position_after":[ax,ay],"vision":vision,"range":range,
                     "desired_step":desired_distance,"affordable_step":step,"movement_energy":energy,
                     "reserve_e":self.resources.energy_balance(reserve).unwrap_or(0.),
+                    "stomach_n_before_digest":stomach_before,"digested_n":digested_n,
+                    "stomach_n_before_feeding":self.resources.nutrient_balance(self.animals.items[i].stomach).unwrap_or(0.),
+                    "reserve_e_before_tick":reserve_before,
+                    "energy_threshold":f64::from(hp_max)*h.max_energy_per_hp*h.reproduction_min_energy_fraction,
+                    "feeding_active_before":feeding_before,"feeding_active":self.animals.items[i].feeding_active,
+                    "streak_before":prior_streak,"streak_after":self.animals.items[i].well_fed_ticks,
                     "target":target.map(|j| {let p=&self.plants.items[j];serde_json::json!({"id":[p.id.index,p.id.generation],
                         "distance_after":((ax-p.x).powi(2)+(ay-p.y).powi(2)).sqrt(),
                         "in_range":(ax-p.x).powi(2)+(ay-p.y).powi(2) <= range*range,
@@ -496,7 +516,8 @@ impl World {
                         feeding_outcome = Some(
                             serde_json::json!({"attempted":true,"eaten_n":eaten,"gained_e":gained,
                             "free_stomach_n":if free_space.is_finite(){Some(free_space)}else{None},"energy_capacity":capacity,
-                            "available_plant_n":available,"available_plant_e":plant_e}),
+                                "available_plant_n":available,"available_plant_e":plant_e,
+                                "absorbed_n":absorbed,"waste_n":waste}),
                         );
                     }
                     let dissipated = available_e - gained;

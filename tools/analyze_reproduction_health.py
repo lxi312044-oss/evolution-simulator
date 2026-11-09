@@ -1,5 +1,6 @@
 """Audit health traces and separate recorded reproduction blocks from untested gates."""
 import argparse
+import gzip
 import json
 from collections import Counter
 from itertools import zip_longest
@@ -23,7 +24,8 @@ def comparable(rows, end):
 
 
 def read_rows(path):
-    with path.open(encoding="utf-8") as stream:
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as stream:
         for line in stream:
             yield json.loads(line)
 
@@ -47,7 +49,7 @@ def audit_run(path, source, config, case):
             start_status = row["individuals"]
         elif kind == "shadow_checks":
             checked = row["count"]
-        elif kind != "population":
+        elif kind not in {"population", "foraging", "energy"}:
             audit.accept(row)
             if kind == "birth":
                 births.append(row)
