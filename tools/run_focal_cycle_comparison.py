@@ -41,19 +41,24 @@ def audit(directory):
         results[name] = result
     metrics = ("direct_births", "descendant_births", "first_cycle_present",
                "second_cycle_births", "final_present")
-    seeds = sorted({case[0] for case in plan["cases"]})
+    seeds_by_fraction = {
+        fraction: sorted({case[0] for case in plan["cases"] if case[1] == fraction})
+        for fraction in sorted({case[1] for case in plan["cases"]})
+    }
     report = {}
     for metric in metrics:
         paired = {
             fraction: [results[f"{seed}_{fraction}_0.8"][metric] -
                        results[f"{seed}_{fraction}_0.2"][metric] for seed in seeds]
-            for fraction in (0.1, 0.9)
+            for fraction, seeds in seeds_by_fraction.items()
         }
-        report[metric] = {str(fraction): dict(**interval(values), by_seed=dict(zip(seeds, values)))
+        report[metric] = {str(fraction): dict(**interval(values),
+                                              by_seed=dict(zip(seeds_by_fraction[fraction], values)))
                           for fraction, values in paired.items()}
-        interaction = [rich - poor for poor, rich in zip(paired[0.1], paired[0.9])]
-        report[metric]["interaction"] = dict(**interval(interaction),
-                                              by_seed=dict(zip(seeds, interaction)))
+        if 0.1 in paired and 0.9 in paired and seeds_by_fraction[0.1] == seeds_by_fraction[0.9]:
+            interaction = [rich - poor for poor, rich in zip(paired[0.1], paired[0.9])]
+            report[metric]["interaction"] = dict(**interval(interaction),
+                                                  by_seed=dict(zip(seeds_by_fraction[0.1], interaction)))
     assessment = directory / "assessment.json"
     contents = json.dumps(dict(runs=results, contrasts=report), indent=2)
     if assessment.exists():
@@ -70,12 +75,15 @@ def run(directory, baseline, runtime):
     require(sha256(runtime / "sim_wasm_bg.wasm") == plan["wasm_sha256"], "WASM mismatch")
     directory.mkdir()
     cases = []
+    unresolved = []
     for seed, fraction in plan["cases"]:
         name = f"{seed}_{fraction}"
         require(sha256(baseline / f"{name}.jsonl") == windows[name]["log_sha256"],
                 f"Baseline log changed: {name}")
         cycles = windows[name]["cycles"]
-        require(len(cycles) == 2, f"Unresolved baseline: {name}")
+        if len(cycles) != 2:
+            unresolved.append((seed, fraction))
+            continue
         first, second = [c["end_tick"] for c in cycles]
         require(0 < first < second <= plan["cap"], "Invalid baseline boundaries")
         for resistance in (0.2, 0.8):
@@ -84,10 +92,11 @@ def run(directory, baseline, runtime):
                 (baseline / f"{name}.input.json").read_bytes()
             )
     with (directory / "plan.json").open("x", encoding="utf-8") as stream:
-        json.dump(dict(cases=cases, primary="descendant_births",
+        json.dump(dict(cases=cases, unresolved=unresolved, primary="descendant_births",
                        baseline_sha256=sha256(baseline / "assessment.json"),
                        wasm_sha256=plan["wasm_sha256"],
                        worker_sha256=sha256(WORKER)), stream, indent=2)
+    require(cases, "No baseline completed two cycles")
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda case: run_case(directory, runtime, case), cases))
     audit(directory)

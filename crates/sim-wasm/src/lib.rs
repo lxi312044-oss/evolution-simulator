@@ -120,6 +120,32 @@ impl Simulation {
         .to_string()
     }
 
+    /// Resistance distribution among herbivores with positive HP.
+    pub fn living_resistance_distribution_json(&self) -> String {
+        let mut counts = [0u32; 3];
+        let mut sum = 0.0;
+        for animal in self.world.animals.items.iter().filter(|a| a.hp > 0.0) {
+            let resistance = animal.genes.toxin_resistance;
+            let bin = if resistance <= 0.4 {
+                0
+            } else if resistance >= 0.6 {
+                2
+            } else {
+                1
+            };
+            counts[bin] += 1;
+            sum += f64::from(resistance);
+        }
+        let living = counts.iter().sum::<u32>();
+        serde_json::json!({
+            "living": living,
+            "counts": counts,
+            "mean": (living > 0).then(|| sum / f64::from(living)),
+            "plants": self.world.plants.items.len()
+        })
+        .to_string()
+    }
+
     pub fn resistance_mean(&self) -> f64 {
         let a = &self.world.animals.items;
         if a.is_empty() {
