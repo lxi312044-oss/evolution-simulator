@@ -104,6 +104,32 @@ impl Simulation {
         Ok(())
     }
 
+    /// Start a single recovery-phase probe on an existing high-resistance herbivore.
+    pub fn configure_recovery_upkeep_probe(
+        &mut self,
+        index: u32,
+        generation: u32,
+        exempt: bool,
+    ) -> Result<(), JsValue> {
+        let id = sim_core::entity::EntityId { index, generation };
+        if self.world.tick == 0
+            || self.world.energy_trace.is_some()
+            || self.world.focal_trace_id.is_some()
+            || !self
+                .world
+                .animals
+                .items
+                .iter()
+                .any(|a| a.id == id && a.hp > 0.0 && a.genes.toxin_resistance >= 0.6)
+        {
+            return Err(JsValue::from_str("recovery probe requires an untraced living high-resistance individual after Tick 0"));
+        }
+        self.world.energy_trace = Some(sim_core::world::EnergyTrace::new([id]));
+        self.world.focal_trace_id = Some(id);
+        self.world.resistance_upkeep_exempt = exempt.then_some(id);
+        Ok(())
+    }
+
     pub fn take_upkeep_probe_json(&mut self) -> String {
         let Some(trace) = self.world.energy_trace.as_mut() else {
             return "null".into();
@@ -114,7 +140,8 @@ impl Simulation {
                 "dose":a.lifetime_typed_dose[0],"damage":a.lifetime_toxin_damage,
                 "upkeep":a.lifetime_resistance_cost,"births":a.successful_births})
         });
-        serde_json::json!({"tick":self.world.tick,"focal":focal,"energy":events,
+        let focal_trace = std::mem::take(&mut self.world.focal_trace);
+        serde_json::json!({"tick":self.world.tick,"focal":focal,"energy":events,"trace":focal_trace,
             "plants":self.world.plants.items.len(),
             "toxic_plants":self.world.plants.items.iter().filter(|p| p.produces_toxin).count()})
         .to_string()
