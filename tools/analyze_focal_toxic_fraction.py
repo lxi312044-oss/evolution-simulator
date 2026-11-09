@@ -11,8 +11,8 @@ from run_metadata import sha256
 from run_wasm_lineage import FitnessAudit
 
 
-def summarize(path, config):
-    audit = FitnessAudit(config, 7000)
+def summarize(path, config, horizon=7000, first_cycle_end=None):
+    audit = FitnessAudit(config, horizon)
     probes = []
     receipt = None
     terminal = None
@@ -35,7 +35,7 @@ def summarize(path, config):
                 if kind in ("removal", "survivor") and row["id"] == receipt["id"]:
                     terminal = row
     audit.finish()
-    require([r["tick"] for r in probes] == list(range(7001)), "Incomplete probes")
+    require([r["tick"] for r in probes] == list(range(horizon + 1)), "Incomplete probes")
     require(terminal is not None, "Missing focal terminal record")
     state = audit.initial["initial_state"].copy()
     require(state["animals"].count(receipt["after"]) == 1, "Missing focal state")
@@ -59,6 +59,15 @@ def summarize(path, config):
                   birth_ticks=audit.life[tuple(receipt["id"])]["children"],
                   log_sha256=sha256(path), max_n_error=audit.complete["max_n_error"],
                   max_e_error=audit.complete["max_e_error"])
+    if first_cycle_end is not None:
+        descendants = [audit.life[ident] for ident in lineage - {focal}]
+        result.update(
+            first_cycle_present=sum(life["birth"] <= first_cycle_end
+                                    and (life["end"] is None or life["end"] > first_cycle_end)
+                                    for life in descendants),
+            second_cycle_births=sum(life["birth"] > first_cycle_end for life in descendants),
+            final_present=len((lineage - {focal}) & audit.live),
+        )
     return result, state
 
 
