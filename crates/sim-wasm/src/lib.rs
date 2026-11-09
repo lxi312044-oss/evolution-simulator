@@ -5,6 +5,7 @@ use wasm_bindgen::prelude::*;
 pub struct Simulation {
     world: World,
     lineage: Option<sim_core::lineage::LineageObservation>,
+    focal_intervention_applied: bool,
 }
 #[wasm_bindgen]
 impl Simulation {
@@ -16,6 +17,7 @@ impl Simulation {
         Ok(Self {
             world,
             lineage: None,
+            focal_intervention_applied: false,
         })
     }
     /// Same soil-driven germination as the Phase 07.2.25 batch (p50, threshold 20, p=0.005, interval 20, max 20).
@@ -34,6 +36,51 @@ impl Simulation {
         settings.validate().map_err(|e| JsValue::from_str(&e))?;
         self.world.spontaneous_germination = Some(settings);
         Ok(())
+    }
+    /// Stable founder IDs, including generation to reject recycled IDs.
+    pub fn intervention_candidates_json(&self) -> String {
+        let mut ids: Vec<_> = self.world.animals.items.iter().map(|a| a.id).collect();
+        ids.sort();
+        serde_json::to_string(
+            &ids.iter()
+                .map(|id| [id.index, id.generation])
+                .collect::<Vec<_>>(),
+        )
+        .unwrap()
+    }
+    /// Research-only, once at Tick 0, before observation. Changes one scalar gene.
+    pub fn intervene_focal_resistance(
+        &mut self,
+        index: u32,
+        generation: u32,
+        value: f32,
+    ) -> Result<String, JsValue> {
+        if self.world.tick != 0 || self.lineage.is_some() || self.focal_intervention_applied {
+            return Err(JsValue::from_str(
+                "intervention requires Tick 0 before observation, once",
+            ));
+        }
+        if !value.is_finite()
+            || !(0.0..=1.0).contains(&value)
+            || self.world.config.toxin.herbivore_multi_toxin_enabled
+        {
+            return Err(JsValue::from_str(
+                "intervention requires finite [0,1] resistance and single-toxin mode",
+            ));
+        }
+        let a = self
+            .world
+            .animals
+            .items
+            .iter_mut()
+            .find(|a| a.id.index == index && a.id.generation == generation)
+            .ok_or_else(|| JsValue::from_str("focal herbivore ID not found"))?;
+        let before = format!("{a:?}");
+        let old = a.genes.toxin_resistance;
+        a.genes.toxin_resistance = value;
+        let after = format!("{a:?}");
+        self.focal_intervention_applied = true;
+        Ok(serde_json::json!({"id":[index,generation],"old":old,"value":value,"before":before,"after":after,"age":a.age,"max_age":a.max_age}).to_string())
     }
     pub fn resistance_mean(&self) -> f64 {
         let a = &self.world.animals.items;
