@@ -874,6 +874,10 @@ impl World {
                         "age_ok":age_ok,"cooldown_ok":cooldown_ok,"hp_ok":hp_ok,
                         "energy_ok":energy_ok,"satiety_ok":satiety_ok,"body_n_ok":body_n_ok,
                         "reserve_n_ok":reserve_n_ok,"transfer_e_ok":transfer_e_ok,
+                        "hp":a.hp,"hp_threshold":a.genes.adult_max_hp*h.reproduction_min_hp_fraction,
+                        "age":a.age,"cooldown":a.reproduction_cooldown,"well_fed_ticks":a.well_fed_ticks,
+                        "reserve_e":e,"energy_threshold":emax*h.reproduction_min_energy_fraction,
+                        "body_n":body_n_now,"reserve_n":reserve_n_now,"stomach_n":stomach_n_now,
                         "index":i,"first_unprocessed":first_unprocessed,
                         "plants":plants,"herbivores":self.animals.items.len(),
                         "carnivores":self.carnivores.len(),"capacity":capacity,
@@ -893,6 +897,7 @@ impl World {
                     "energy_ok": energy_ok, "satiety_ok": satiety_ok, "body_n_ok": body_n_ok,
                     "reserve_n_ok": reserve_n_ok, "transfer_e_ok": transfer_e_ok,
                     "births": a.successful_births, "well_fed_ticks": a.well_fed_ticks,
+                    "age":a.age,"cooldown":a.reproduction_cooldown,
                     "index":i, "entry_herbivores":parents,
                 });
                 if self.focal_trace_id == Some(a.id) {
