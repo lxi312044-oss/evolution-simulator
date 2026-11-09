@@ -82,6 +82,44 @@ impl Simulation {
         self.focal_intervention_applied = true;
         Ok(serde_json::json!({"id":[index,generation],"old":old,"value":value,"before":before,"after":after,"age":a.age,"max_age":a.max_age}).to_string())
     }
+    /// Configure the focal reserve trace and optional upkeep exemption at Tick 0.
+    pub fn configure_upkeep_probe(
+        &mut self,
+        index: u32,
+        generation: u32,
+        exempt: bool,
+    ) -> Result<(), JsValue> {
+        let id = sim_core::entity::EntityId { index, generation };
+        if self.world.tick != 0
+            || self.lineage.is_some()
+            || self.world.energy_trace.is_some()
+            || !self.world.animals.items.iter().any(|a| a.id == id)
+        {
+            return Err(JsValue::from_str(
+                "upkeep probe requires a live founder at Tick 0 before observation, once",
+            ));
+        }
+        self.world.energy_trace = Some(sim_core::world::EnergyTrace::new([id]));
+        self.world.resistance_upkeep_exempt = exempt.then_some(id);
+        Ok(())
+    }
+
+    pub fn take_upkeep_probe_json(&mut self) -> String {
+        let Some(trace) = self.world.energy_trace.as_mut() else {
+            return "null".into();
+        };
+        let events = std::mem::take(&mut trace.events);
+        let focal = self.world.animals.items.iter().find(|a| trace.watched.contains(&a.id)).map(|a| {
+            serde_json::json!({"hp":a.hp,"reserve_e":self.world.resources.energy_balance(a.reserve).unwrap_or(0.),
+                "dose":a.lifetime_typed_dose[0],"damage":a.lifetime_toxin_damage,
+                "upkeep":a.lifetime_resistance_cost,"births":a.successful_births})
+        });
+        serde_json::json!({"tick":self.world.tick,"focal":focal,"energy":events,
+            "plants":self.world.plants.items.len(),
+            "toxic_plants":self.world.plants.items.iter().filter(|p| p.produces_toxin).count()})
+        .to_string()
+    }
+
     pub fn resistance_mean(&self) -> f64 {
         let a = &self.world.animals.items;
         if a.is_empty() {

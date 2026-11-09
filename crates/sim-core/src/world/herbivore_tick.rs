@@ -570,7 +570,9 @@ impl World {
                 health_observed.then(|| self.resources.energy_balance(reserve).unwrap_or(0.));
             let paid_before =
                 health_observed.then_some(self.animals.items[i].lifetime_resistance_cost);
-            if self.config.toxin.resistance_enabled {
+            if self.config.toxin.resistance_enabled
+                && self.resistance_upkeep_exempt != Some(self.animals.items[i].id)
+            {
                 let resistance = self.animals.items[i].genes.toxin_resistance as f64;
                 let mut cost = crate::toxin::resistance_upkeep(
                     resistance,
