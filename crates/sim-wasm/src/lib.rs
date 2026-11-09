@@ -147,6 +147,53 @@ impl Simulation {
         .to_string()
     }
 
+    /// Observe fixed IDs, including future births, without changing their state.
+    pub fn configure_health_observation(
+        &mut self,
+        ids_json: &str,
+        start: u64,
+        end: u64,
+    ) -> Result<(), JsValue> {
+        if self.world.tick != 0 || self.world.health_trace.is_some() || start > end {
+            return Err(JsValue::from_str(
+                "health observation requires Tick 0, once, and a valid window",
+            ));
+        }
+        let ids: Vec<[u32; 2]> =
+            serde_json::from_str(ids_json).map_err(|e| JsValue::from_str(&e.to_string()))?;
+        let mut trace = sim_core::world::HealthTrace::new(
+            ids.into_iter()
+                .map(|[index, generation]| sim_core::entity::EntityId { index, generation }),
+            (start, end),
+        );
+        trace.observe_reproduction = true;
+        self.world.health_trace = Some(trace);
+        Ok(())
+    }
+
+    pub fn take_health_observation_json(&mut self) -> String {
+        let events = self
+            .world
+            .health_trace
+            .as_mut()
+            .map(|trace| std::mem::take(&mut trace.events));
+        serde_json::to_string(&events.unwrap_or_default()).unwrap()
+    }
+
+    pub fn health_observation_status_json(&self) -> String {
+        let mut rows = Vec::new();
+        if let Some(trace) = &self.world.health_trace {
+            for animal in &self.world.animals.items {
+                if trace.watched.contains(&animal.id) {
+                    rows.push(serde_json::json!({"id":[animal.id.index,animal.id.generation],
+                        "hp":animal.hp,"age":animal.age,"resistance":animal.genes.toxin_resistance,
+                        "hp_threshold":animal.genes.adult_max_hp * self.world.config.herbivores.reproduction_min_hp_fraction}));
+                }
+            }
+        }
+        serde_json::to_string(&rows).unwrap()
+    }
+
     /// Resistance distribution among herbivores with positive HP.
     pub fn living_resistance_distribution_json(&self) -> String {
         let mut counts = [0u32; 3];

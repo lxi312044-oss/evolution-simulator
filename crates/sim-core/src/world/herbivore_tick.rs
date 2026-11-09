@@ -800,6 +800,22 @@ impl World {
                 >= self.config.world.max_living_entities as usize
             {
                 self.diagnostics.herbivore_reproduction_capacity_blocked += 1;
+                if let Some(trace) = &mut self.health_trace {
+                    if trace.observe_reproduction
+                        && (trace.window.0..=trace.window.1).contains(&self.tick)
+                    {
+                        for animal in &self.animals.items[i..parents] {
+                            if trace.watched.contains(&animal.id) {
+                                trace.record_reproduction(
+                                    self.tick,
+                                    animal.id,
+                                    "capacity_blocked",
+                                    serde_json::Value::Null,
+                                );
+                            }
+                        }
+                    }
+                }
                 break;
             }
             let a = &self.animals.items[i];
@@ -819,8 +835,12 @@ impl World {
             let body_n_ok = body_n_now >= h.offspring_body_nutrients;
             let reserve_n_ok = reserve_n_now >= h.offspring_reserve_nutrients;
             let transfer_e_ok = e >= h.offspring_energy + h.reproduction_work_energy;
-            if self.focal_trace_id == Some(a.id) {
-                self.focal_trace.push(serde_json::json!({
+            let watched = self
+                .health_trace
+                .as_ref()
+                .is_some_and(|trace| trace.watches_reproduction(self.tick, a.id));
+            if self.focal_trace_id == Some(a.id) || watched {
+                let gates = serde_json::json!({
                     "phase": "reproduction_gates", "tick": self.tick,
                     "hp": a.hp, "hp_threshold": a.genes.adult_max_hp * h.reproduction_min_hp_fraction,
                     "reserve_e": e, "energy_threshold": emax * h.reproduction_min_energy_fraction,
@@ -829,7 +849,18 @@ impl World {
                     "energy_ok": energy_ok, "satiety_ok": satiety_ok, "body_n_ok": body_n_ok,
                     "reserve_n_ok": reserve_n_ok, "transfer_e_ok": transfer_e_ok,
                     "births": a.successful_births, "well_fed_ticks": a.well_fed_ticks,
-                }));
+                });
+                if self.focal_trace_id == Some(a.id) {
+                    self.focal_trace.push(gates.clone());
+                }
+                if watched {
+                    self.health_trace.as_mut().unwrap().record_reproduction(
+                        self.tick,
+                        a.id,
+                        "reproduction_gates",
+                        gates,
+                    );
+                }
             }
             self.diagnostics.phase25_body_n_total += body_n_now;
             self.diagnostics.phase25_body_n_samples += 1;
@@ -925,7 +956,14 @@ impl World {
                     h.reproduction_food_radius,
                 );
                 let chance = (local_plants as f32 / h.reproduction_food_target as f32).min(1.);
-                if self.rng.unit() >= chance {
+                let failed = self.rng.unit() >= chance;
+                if watched {
+                    self.health_trace.as_mut().unwrap().record_reproduction(
+                        self.tick, a.id, "food_gate",
+                        serde_json::json!({"passed":!failed,"local_plants":local_plants,"chance":chance}),
+                    );
+                }
+                if failed {
                     if self.focal_trace_id == Some(a.id) {
                         self.focal_trace.push(serde_json::json!({
                             "phase": "food_gate_failed", "tick": self.tick,

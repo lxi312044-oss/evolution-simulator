@@ -8,6 +8,7 @@ pub struct HealthTrace {
     pub watched: BTreeSet<EntityId>,
     pub window: (u64, u64),
     pub events: Vec<Value>,
+    pub observe_reproduction: bool,
     sequence: u64,
 }
 
@@ -17,12 +18,27 @@ impl HealthTrace {
             watched: ids.into_iter().collect(),
             window,
             events: Vec::new(),
+            observe_reproduction: false,
             sequence: 0,
         }
     }
 
     pub fn sequence(&self) -> u64 {
         self.sequence
+    }
+
+    pub fn watches_reproduction(&self, tick: u64, id: EntityId) -> bool {
+        self.observe_reproduction
+            && (self.window.0..=self.window.1).contains(&tick)
+            && self.watched.contains(&id)
+    }
+
+    pub fn record_reproduction(&mut self, tick: u64, id: EntityId, phase: &str, details: Value) {
+        self.sequence += 1;
+        self.events.push(
+            json!({"seq":self.sequence,"tick":tick,"id":[id.index,id.generation],
+            "phase":phase,"details":details}),
+        );
     }
 
     pub fn record(
@@ -52,7 +68,8 @@ impl HealthTrace {
             "id":[animal.id.index,animal.id.generation],"hp_before":hp_before,"hp_after":animal.hp,
             "crossed_hp0":hp_before.is_some_and(|hp|hp>0. && animal.hp<=0.),
             "recovered_positive":hp_before.is_some_and(|hp|hp<=0. && animal.hp>0.),
-            "age":animal.age,"max_age":animal.max_age,"position":[animal.x,animal.y],
+            "age":animal.age,"max_age":animal.max_age,"adult_max_hp":animal.genes.adult_max_hp,
+            "position":[animal.x,animal.y],
             "reserve_e":resources.energy_balance(animal.reserve).unwrap_or(0.),
             "reserve_n":resources.nutrient_balance(animal.reserve).unwrap_or(0.),
             "stomach_e":resources.energy_balance(animal.stomach).unwrap_or(0.),
