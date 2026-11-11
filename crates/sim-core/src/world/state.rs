@@ -38,6 +38,7 @@ pub struct World {
     pub herbivore_terminal_events: Vec<super::HerbivoreTerminalEvent>,
     /// Optional focal-only diagnostic trace; never consumes random numbers.
     pub focal_trace_id: Option<crate::entity::EntityId>,
+    pub focal_upkeep_override: Option<(crate::entity::EntityId, f32)>,
     pub resistance_upkeep_exempt: Option<crate::entity::EntityId>,
     pub focal_trace: Vec<serde_json::Value>,
     pub behavior_trace_window: Option<(u64, u64)>,
@@ -120,6 +121,7 @@ impl World {
             herbivore_terminal_logging: false,
             herbivore_terminal_events: Vec::new(),
             focal_trace_id: None,
+            focal_upkeep_override: None,
             resistance_upkeep_exempt: None,
             focal_trace: Vec::new(),
             behavior_trace_window: None,

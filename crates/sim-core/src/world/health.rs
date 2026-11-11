@@ -59,7 +59,17 @@ impl HealthTrace {
             || (phase == "feeding" && details["eaten_n"].as_f64().is_some_and(|v| v > 0.))
             || (phase == "resistance_upkeep"
                 && resources.energy_balance(animal.reserve).unwrap_or(0.) <= 1e-9);
-        if !changed && !periodic && !significant && !["birth", "pre_removal"].contains(&phase) {
+        if !changed
+            && !periodic
+            && !significant
+            && ![
+                "birth",
+                "pre_removal",
+                "parent_before_birth",
+                "parent_after_birth",
+            ]
+            .contains(&phase)
+        {
             return;
         }
         self.sequence += 1;
@@ -79,7 +89,7 @@ impl HealthTrace {
             "loads":[animal.toxin_load,animal.typed_load[1]],
             "toxin_damage":animal.lifetime_toxin_damage,"upkeep_paid":animal.lifetime_resistance_cost,
             "feeding_active":animal.feeding_active,"well_fed_ticks":animal.well_fed_ticks,
-            "births":animal.successful_births,"details":details
+            "births":animal.successful_births,"cooldown":animal.reproduction_cooldown,"details":details
         }));
     }
 }

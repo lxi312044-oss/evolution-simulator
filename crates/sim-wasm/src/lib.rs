@@ -48,6 +48,31 @@ impl Simulation {
         )
         .unwrap()
     }
+    /// Initial founder attributes for selection based only on pre-intervention state.
+    pub fn founder_metadata_json(&self) -> Result<String, JsValue> {
+        if self.world.tick != 0 {
+            return Err(JsValue::from_str("founder metadata requires Tick 0"));
+        }
+        let resources = &self.world.resources;
+        let rows: Vec<_> = self
+            .world
+            .animals
+            .items
+            .iter()
+            .map(|a| {
+                let account = |id| {
+                    serde_json::json!({
+                        "n":resources.nutrient_balance(id), "e":resources.energy_balance(id)
+                    })
+                };
+                serde_json::json!({"id":[a.id.index,a.id.generation],"age":a.age,"hp":a.hp,
+                "x":a.x,"y":a.y,"genes":format!("{:?}",a.genes),
+                "body":account(a.body),"reserve":account(a.reserve),"stomach":account(a.stomach)})
+            })
+            .collect();
+        Ok(serde_json::to_string(&rows).unwrap())
+    }
+
     /// Research-only, once at Tick 0, before observation. Changes one scalar gene.
     pub fn intervene_focal_resistance(
         &mut self,
@@ -82,6 +107,29 @@ impl Simulation {
         self.focal_intervention_applied = true;
         Ok(serde_json::json!({"id":[index,generation],"old":old,"value":value,"before":before,"after":after,"age":a.age,"max_age":a.max_age}).to_string())
     }
+    /// Research-only override of one founder's upkeep input, independent of defense.
+    pub fn override_focal_upkeep(
+        &mut self,
+        index: u32,
+        generation: u32,
+        value: f32,
+    ) -> Result<(), JsValue> {
+        let id = sim_core::entity::EntityId { index, generation };
+        if self.world.tick != 0
+            || self.lineage.is_some()
+            || self.world.energy_trace.is_some()
+            || self.world.health_trace.is_some()
+            || self.world.focal_upkeep_override.is_some()
+            || self.world.config.toxin.herbivore_multi_toxin_enabled
+            || !self.world.animals.items.iter().any(|a| a.id == id)
+            || !(0.0..=1.0).contains(&value)
+        {
+            return Err(JsValue::from_str("upkeep override requires a live founder at Tick 0 before observation, once, with a finite single-toxin resistance in [0,1]"));
+        }
+        self.world.focal_upkeep_override = Some((id, value));
+        Ok(())
+    }
+
     /// Configure the focal reserve trace and optional upkeep exemption at Tick 0.
     pub fn configure_upkeep_probe(
         &mut self,

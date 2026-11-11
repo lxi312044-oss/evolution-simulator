@@ -95,6 +95,7 @@ pub struct WorldConfig {
     pub height: f32,
     pub land_columns: u32,
     pub land_rows: u32,
+    /// Shared cap across registered plants, herbivores, and carnivores.
     pub max_living_entities: u32,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]

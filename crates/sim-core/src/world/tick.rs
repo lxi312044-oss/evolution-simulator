@@ -173,7 +173,10 @@ impl World {
         // 5. Seed dispersal: asexual, immediate germination, all matter/energy from parent.
         let mut offspring = Vec::new();
         for i in 0..self.plants.len() {
-            if self.plants.len() + self.animals.items.len() + offspring.len()
+            if self.plants.len()
+                + self.animals.items.len()
+                + self.carnivores.len()
+                + offspring.len()
                 >= self.config.world.max_living_entities as usize
             {
                 self.diagnostics.seed_capacity_blocked += 1;

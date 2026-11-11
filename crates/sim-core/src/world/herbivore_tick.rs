@@ -594,7 +594,12 @@ impl World {
             if self.config.toxin.resistance_enabled
                 && self.resistance_upkeep_exempt != Some(self.animals.items[i].id)
             {
-                let resistance = self.animals.items[i].genes.toxin_resistance as f64;
+                let animal = &self.animals.items[i];
+                let resistance = self
+                    .focal_upkeep_override
+                    .filter(|(id, _)| *id == animal.id)
+                    .map_or(animal.genes.toxin_resistance, |(_, value)| value)
+                    as f64;
                 let mut cost = crate::toxin::resistance_upkeep(
                     resistance,
                     self.resources.energy_balance(reserve).unwrap_or(0.),
@@ -834,7 +839,9 @@ impl World {
         let plants = self.plants.items.len();
         let mut cutoff = None;
         for i in 0..parents {
-            if cutoff.is_none() && plants + self.animals.items.len() >= capacity {
+            if cutoff.is_none()
+                && plants + self.animals.items.len() + self.carnivores.len() >= capacity
+            {
                 self.diagnostics.herbivore_reproduction_capacity_blocked += 1;
                 if !self.health_trace.as_ref().is_some_and(|trace| {
                     trace.observe_reproduction
@@ -1158,6 +1165,18 @@ impl World {
                 .resources
                 .open(0., 0.)
                 .map_err(|e| format!("offspring stomach: {e:?}"))?;
+            if let Some(trace) = &mut self.health_trace {
+                if trace.watches_reproduction(self.tick, parent_id) {
+                    trace.record(
+                        self.tick,
+                        &self.animals.items[i],
+                        &self.resources,
+                        "parent_before_birth",
+                        None,
+                        serde_json::Value::Null,
+                    );
+                }
+            }
             self.resources
                 .transfer_nutrients(body_src, child_body, h.offspring_body_nutrients)
                 .map_err(|e| format!("offspring body N: {e:?}"))?;
@@ -1254,6 +1273,18 @@ impl World {
                     });
             }
             self.animals.items[i].successful_births += 1;
+            if let Some(trace) = &mut self.health_trace {
+                if trace.watches_reproduction(self.tick, parent_id) {
+                    trace.record(
+                        self.tick,
+                        &self.animals.items[i],
+                        &self.resources,
+                        "parent_after_birth",
+                        None,
+                        serde_json::Value::Null,
+                    );
+                }
+            }
             self.births += 1;
             self.diagnostics.herbivore_births += 1;
             self.diagnostics.phase20_repro_success += 1;
