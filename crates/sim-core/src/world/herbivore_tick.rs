@@ -466,6 +466,9 @@ impl World {
                             0
                         };
                         self.animals.items[i].lifetime_typed_dose[exposure_type] += dose;
+                        if self.config.animal_toxin.enabled {
+                            self.animal_toxins.plant_intake[exposure_type] += dose;
+                        }
                         if h.color_learning_enabled && dose > 0. {
                             self.plant_color_learning
                                 .entry(self.animals.items[i].id)
@@ -568,12 +571,18 @@ impl World {
                     t,
                 );
                 animal.toxin_load = result.remaining_load;
+                if self.config.animal_toxin.enabled {
+                    self.animal_toxins.cleared[0] += result.cleared;
+                }
                 if t.herbivore_multi_toxin_enabled {
                     for toxin_type in 1..t.plant_toxin_type_count as usize {
                         let load = animal.typed_load[toxin_type];
                         let resistance = animal.genes.typed_resistance[toxin_type];
                         let step = crate::toxin::advance_burden(load, resistance, t);
                         animal.typed_load[toxin_type] = step.remaining_load;
+                        if self.config.animal_toxin.enabled {
+                            self.animal_toxins.cleared[toxin_type] += step.cleared;
+                        }
                         if let Some(memory) = memory.as_deref_mut() {
                             memory.observe_damage(
                                 toxin_type,
@@ -783,6 +792,9 @@ impl World {
                 }
             }
             let a = self.animals.items.swap_remove(i);
+            if self.config.animal_toxin.enabled {
+                self.animal_toxins.remove_herbivore(&a);
+            }
             self.plant_color_learning.remove(&a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
@@ -1250,6 +1262,9 @@ impl World {
                 .round()
                 .max(1.) as u32;
             let exploration_heading = self.rng.unit() * std::f32::consts::TAU;
+            if self.config.animal_toxin.enabled {
+                self.inherit_herbivore_production(parent_id, id);
+            }
             self.animals.items.push(Herbivore {
                 id,
                 x,

@@ -162,15 +162,24 @@ impl World {
             }
             let mut nearest = None;
             let mut dist = vision * vision;
+            let predator_id = self.carnivores[i].id;
+            let mut color_skips = 0;
             for (j, h) in self.animals.items.iter().enumerate() {
                 if satiated {
                     break;
                 }
                 let d = (h.x - x).powi(2) + (h.y - y).powi(2);
                 if d < dist {
+                    if !self.carnivore_allows_color(predator_id, h.genes.body_color, reserve_e) {
+                        color_skips += 1;
+                        continue;
+                    }
                     dist = d;
                     nearest = Some(j);
                 }
+            }
+            for _ in 0..color_skips {
+                self.record_carnivore_color_skip();
             }
             // Phase 39: count prey within twice the vision radius even when no target is acquired.
             // These are diagnostic samples, not alternate target selection.
@@ -439,7 +448,13 @@ impl World {
                 let h = &self.animals.items[j];
                 if (h.x - nx).powi(2) + (h.y - ny).powi(2) <= c.attack_range * c.attack_range {
                     self.carnivore_debug.prey_in_attack_range += 1;
-                    if c.prey_refuge_enabled
+                    if !self.carnivore_allows_color(
+                        predator_id,
+                        h.genes.body_color,
+                        self.resources.energy_balance(reserve).unwrap_or(0.),
+                    ) {
+                        self.record_carnivore_color_skip();
+                    } else if c.prey_refuge_enabled
                         && self.animals.items.len() <= c.prey_refuge_threshold as usize
                     {
                         self.carnivore_debug.hunt_refuge_blocked += 1;
@@ -488,10 +503,8 @@ impl World {
                         } else {
                             f64::INFINITY
                         };
-                        let n = c
-                            .bite_nutrients
-                            .min(free_n)
-                            .min(self.resources.nutrient_balance(source).unwrap_or(0.));
+                        let body_n = self.resources.nutrient_balance(source).unwrap_or(0.);
+                        let n = c.bite_nutrients.min(free_n).min(body_n);
                         let e = c
                             .bite_energy
                             .min(free_e)
@@ -508,6 +521,9 @@ impl World {
                         self.resources
                             .transfer_energy(prey_energy, bite_target, e)
                             .map_err(|err| format!("carnivore bite E: {err:?}"))?;
+                        if self.config.animal_toxin.enabled {
+                            self.transfer_animal_toxin(j, i, body_n, n);
+                        }
                         self.record_energy(
                             self.animals.items[j].id,
                             "predation_bite",
@@ -599,10 +615,8 @@ impl World {
                                     .kill_bonus_energy
                                     .min(free_e)
                                     .min(self.resources.energy_balance(prey_energy).unwrap_or(0.));
-                                let extra_n = c
-                                    .kill_bonus_nutrients
-                                    .min(free_n)
-                                    .min(self.resources.nutrient_balance(source).unwrap_or(0.));
+                                let body_n = self.resources.nutrient_balance(source).unwrap_or(0.);
+                                let extra_n = c.kill_bonus_nutrients.min(free_n).min(body_n);
                                 let prey_before =
                                     self.resources.energy_balance(prey_energy).unwrap_or(0.);
                                 self.resources
@@ -618,6 +632,9 @@ impl World {
                                 self.resources
                                     .transfer_nutrients(source, target, extra_n)
                                     .map_err(|err| format!("carnivore meal N: {err:?}"))?;
+                                if self.config.animal_toxin.enabled {
+                                    self.transfer_animal_toxin(j, i, body_n, extra_n);
+                                }
                                 if c.digestion_enabled {
                                     self.carnivore_debug.stomach_energy_ingested += extra_e;
                                     self.carnivore_debug.stomach_nutrients_ingested += extra_n;
@@ -649,8 +666,9 @@ impl World {
                     }
                 }
             }
+            let toxin_dead = self.config.animal_toxin.enabled && self.advance_carnivore_toxin(i)?;
             // Resource-conservative asexual reproduction. No food or energy created.
-            let ready = {
+            let ready = !toxin_dead && {
                 let a = &self.carnivores[i];
                 c.reproduction_enabled
                     && a.cooldown == 0
@@ -836,6 +854,9 @@ impl World {
                     c.mutation_scale,
                 );
                 let stomach = self.resources.open(0., 0.).map_err(|e| format!("{e:?}"))?;
+                if self.config.animal_toxin.enabled {
+                    self.inherit_carnivore_toxin(parent_id, id);
+                }
                 self.carnivores.push(Carnivore {
                     id,
                     x: (px + 5.).min(self.config.world.width),
@@ -872,7 +893,9 @@ impl World {
             }
             let dead = {
                 let a = &self.carnivores[i];
-                a.age >= a.max_age || self.resources.energy_balance(a.reserve).unwrap_or(0.) <= 1e-9
+                toxin_dead
+                    || a.age >= a.max_age
+                    || self.resources.energy_balance(a.reserve).unwrap_or(0.) <= 1e-9
             };
             if dead {
                 let death_event = self.p42_snapshot(&self.carnivores[i], "death");
@@ -943,7 +966,9 @@ impl World {
                         .predator_death_distance_to_nearest_prey_total += d as f64;
                     self.carnivore_debug.predator_death_nearest_prey_samples += 1;
                 }
-                if self.carnivores[i].age >= self.carnivores[i].max_age {
+                if toxin_dead {
+                    self.animal_toxins.toxin_deaths += 1;
+                } else if self.carnivores[i].age >= self.carnivores[i].max_age {
                     self.carnivore_debug.carnivore_age_deaths += 1;
                 } else {
                     self.carnivore_debug.carnivore_energy_deaths += 1;
@@ -951,6 +976,9 @@ impl World {
                 let bin = ambush_bin(self.carnivores[i].ambush_gene);
                 self.carnivore_debug.gene_deaths[bin] += 1;
                 let a = self.carnivores.swap_remove(i);
+                if self.config.animal_toxin.enabled {
+                    self.animal_toxins.remove_carnivore(a.id);
+                }
                 let cell = self.land.cell_index(
                     a.x,
                     a.y,

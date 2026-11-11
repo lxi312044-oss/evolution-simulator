@@ -2,6 +2,7 @@ mod state;
 mod tick;
 pub use state::{SpontaneousGermination, World};
 
+mod animal_toxin;
 mod behavior;
 mod carnivore_tick;
 mod energy;

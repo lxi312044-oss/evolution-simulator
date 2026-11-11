@@ -11,7 +11,22 @@ pub struct SimulationConfig {
     pub herbivores: HerbivoreSettings,
     pub carnivores: CarnivoreSettings,
     pub toxin: ToxinSettings,
+    #[serde(skip_serializing_if = "AnimalToxinSettings::is_off")]
+    pub animal_toxin: AnimalToxinSettings,
 }
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AnimalToxinSettings {
+    pub enabled: bool,
+    pub color_learning_enabled: bool,
+}
+
+impl AnimalToxinSettings {
+    fn is_off(&self) -> bool {
+        !self.enabled && !self.color_learning_enabled
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ToxinSettings {
@@ -428,6 +443,7 @@ impl Default for SimulationConfig {
             herbivores: HerbivoreSettings::default(),
             carnivores: CarnivoreSettings::default(),
             toxin: ToxinSettings::default(),
+            animal_toxin: AnimalToxinSettings::default(),
         }
     }
 }
@@ -457,6 +473,9 @@ impl SimulationConfig {
         }
         if self.simulation.decision_interval_ticks == 0 || self.simulation.max_steps_per_call == 0 {
             return Err("invalid tick settings".into());
+        }
+        if self.animal_toxin.color_learning_enabled && !self.animal_toxin.enabled {
+            return Err("carnivore color learning requires animal toxin".into());
         }
         let t = &self.toxin;
         if [

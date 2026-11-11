@@ -409,6 +409,9 @@ impl World {
         }
         // Phase 04: herbivore movement, feeding, starvation and death.
         self.update_herbivores()?;
+        if self.config.animal_toxin.enabled {
+            self.produce_herbivore_toxins()?;
+        }
         if self.config.carnivores.enabled {
             self.update_carnivores()?;
         }

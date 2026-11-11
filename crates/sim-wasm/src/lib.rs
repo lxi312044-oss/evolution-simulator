@@ -388,7 +388,13 @@ impl Simulation {
             state["plant_color_learning"] =
                 serde_json::json!(format!("{:?}", self.world.plant_color_learning));
         }
+        if self.world.config.animal_toxin.enabled {
+            state["animal_toxin"] = serde_json::json!(self.world.animal_toxin_observation_state());
+        }
         state.to_string()
+    }
+    pub fn animal_toxin_snapshot_json(&self) -> String {
+        self.world.animal_toxin_snapshot_json()
     }
     pub fn tick_count(&self) -> u64 {
         self.world.tick
