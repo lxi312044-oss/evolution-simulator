@@ -1,5 +1,6 @@
 //! Heritable sRGB body color. Visual genes do not own N/E accounts.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct BodyColor {
     pub r: f32,
     pub g: f32,

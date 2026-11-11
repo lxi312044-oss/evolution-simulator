@@ -396,6 +396,15 @@ impl Simulation {
     pub fn animal_toxin_snapshot_json(&self) -> String {
         self.world.animal_toxin_snapshot_json()
     }
+    /// Test-only snapshot. The observer's output queues are not simulation inputs.
+    #[cfg(feature = "state-audit")]
+    pub fn audit_state(&self, legacy: bool, section: Option<u32>) -> Vec<u8> {
+        let mut state = self.world.audit_state(legacy, section);
+        if section.is_none() || section == Some(30) {
+            state.push(u8::from(self.focal_intervention_applied));
+        }
+        state
+    }
     pub fn tick_count(&self) -> u64 {
         self.world.tick
     }

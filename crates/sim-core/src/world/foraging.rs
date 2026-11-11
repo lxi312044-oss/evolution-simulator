@@ -2,12 +2,14 @@
 use crate::entity::EntityId;
 use serde_json::Value;
 #[derive(Debug, serde::Deserialize)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ForagingWindow {
     pub id: [u32; 2],
     pub start: u64,
     pub end: u64,
 }
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ForagingTrace {
     pub windows: Vec<ForagingWindow>,
     pub events: Vec<Value>,

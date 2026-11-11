@@ -1,6 +1,7 @@
 //! Rebuilt once per tick after plant births/deaths. Deterministic bucket ordering.
 use crate::plants::PlantStore;
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct PlantGrid {
     pub columns: usize,
     pub rows: usize,

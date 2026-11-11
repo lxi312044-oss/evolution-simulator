@@ -14,12 +14,14 @@ const ENERGY_PER_UNIT: f64 = 1.;
 const INITIAL_HP: f64 = 100.;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 struct Production {
     ability: [f64; TYPES],
     stock: [f64; TYPES],
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 struct PredatorToxin {
     production: Production,
     load: [f64; TYPES],
@@ -29,6 +31,7 @@ struct PredatorToxin {
 }
 
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub(super) struct AnimalToxins {
     herbivores: BTreeMap<EntityId, Production>,
     predators: BTreeMap<EntityId, PredatorToxin>,

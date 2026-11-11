@@ -1,5 +1,6 @@
 use crate::{entity::EntityId, resources::AccountId};
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct Plant {
     pub id: EntityId,
     pub x: f32,
@@ -18,6 +19,7 @@ pub struct Plant {
     pub toxin_type: crate::toxin::ToxinTypeId,
 }
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct PlantStore {
     pub items: Vec<Plant>,
 }

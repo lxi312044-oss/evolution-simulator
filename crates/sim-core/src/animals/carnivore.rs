@@ -1,5 +1,6 @@
 use crate::{animals::color::BodyColor, entity::EntityId, resources::AccountId};
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct Carnivore {
     pub id: EntityId,
     pub x: f32,
@@ -29,6 +30,7 @@ pub struct Carnivore {
 }
 
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct CarnivoreTrace {
     pub visible_ticks: u64,
     pub approach_ticks: u64,

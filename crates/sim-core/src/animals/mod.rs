@@ -3,6 +3,7 @@ pub mod carnivore;
 pub mod color;
 use color::BodyColor;
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct HerbivoreGenes {
     pub adult_max_hp: f32,
     pub speed: f32,
@@ -15,6 +16,7 @@ pub struct HerbivoreGenes {
     pub typed_resistance: [f32; 16],
 }
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct Herbivore {
     pub id: EntityId,
     pub x: f32,
@@ -46,6 +48,7 @@ pub struct Herbivore {
     pub target: Option<EntityId>,
 }
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct AnimalStore {
     pub items: Vec<Herbivore>,
 }

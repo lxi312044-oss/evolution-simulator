@@ -1,10 +1,12 @@
 /// A bounded record of ingested doses and the damage experienced with each color.
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct PlantColorMemory {
     experiences: Vec<Experience>,
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 struct Experience {
     color: u32,
     loads: [f64; 16],

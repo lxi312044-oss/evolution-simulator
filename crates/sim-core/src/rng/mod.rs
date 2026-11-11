@@ -1,4 +1,5 @@
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct SimulationRng {
     state: u64,
 }

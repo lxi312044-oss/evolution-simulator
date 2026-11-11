@@ -57,6 +57,7 @@ pub struct World {
 }
 /// Phase 07.2.19 opt-in experimental soil-driven germination.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct SpontaneousGermination {
     pub soil_threshold: f64,
     pub probability_per_cell: f64,

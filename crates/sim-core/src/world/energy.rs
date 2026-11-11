@@ -4,6 +4,7 @@ use crate::entity::EntityId;
 use serde_json::{json, Value};
 use std::collections::BTreeSet;
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct EnergyTrace {
     pub watched: BTreeSet<EntityId>,
     pub events: Vec<Value>,

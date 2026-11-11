@@ -1,3 +1,5 @@
+#[cfg(feature = "state-audit")]
+mod state_audit;
 mod state;
 mod tick;
 pub use state::{SpontaneousGermination, World};
@@ -76,6 +78,7 @@ impl HerbivoreTerminalEvent {
 /// A successful birth. Mutation flags record RNG decisions, even if clamping
 /// makes the resulting channel equal to the parent value.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ColorBirthEvent {
     pub tick: u64,
     pub parent_id: crate::entity::EntityId,
@@ -132,6 +135,7 @@ pub struct CarnivoreLifeEvent {
 }
 /// Rolling herbivore population and demographic sample; no resource accounts are modified.
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct PreyTrendSnapshot {
     pub tick: u64,
     pub population: usize,

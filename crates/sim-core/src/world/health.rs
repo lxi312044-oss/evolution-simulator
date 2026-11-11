@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 use std::collections::BTreeSet;
 
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct HealthTrace {
     pub watched: BTreeSet<EntityId>,
     pub window: (u64, u64),

@@ -1,10 +1,12 @@
 use crate::resources::AccountId;
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct LandCell {
     pub soil: AccountId,
     pub detritus: AccountId,
 }
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct LandGrid {
     pub columns: u32,
     pub rows: u32,
