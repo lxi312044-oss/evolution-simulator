@@ -139,6 +139,8 @@ pub struct PlantSettings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HerbivoreSettings {
+    /// Let herbivores use visible plant colors and learned adverse experiences.
+    pub color_learning_enabled: bool,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -346,6 +348,7 @@ impl Default for HerbivoreSettings {
             reproduction_food_target: 8,
             reproduction_enabled: true,
             reproduction_cooldown_ticks: 600,
+            color_learning_enabled: false,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,

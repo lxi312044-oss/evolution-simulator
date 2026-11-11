@@ -11,6 +11,10 @@ use crate::{
 #[derive(Debug)]
 pub struct World {
     pub tick: u64,
+    pub plant_color_learning: std::collections::BTreeMap<
+        crate::entity::EntityId,
+        super::plant_color_learning::PlantColorMemory,
+    >,
     pub config: SimulationConfig,
     pub spontaneous_germination: Option<SpontaneousGermination>,
     pub spontaneous_births: u64,
@@ -88,6 +92,7 @@ impl World {
         }
         let mut world = Self {
             tick: 0,
+            plant_color_learning: Default::default(),
             rng: SimulationRng::new(config.seed),
             config,
             spontaneous_germination: None,

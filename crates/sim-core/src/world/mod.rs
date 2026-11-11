@@ -7,6 +7,7 @@ mod carnivore_tick;
 mod energy;
 mod foraging;
 mod health;
+mod plant_color_learning;
 pub use energy::EnergyTrace;
 pub use foraging::{ForagingTrace, ForagingWindow};
 mod herbivore_tick;

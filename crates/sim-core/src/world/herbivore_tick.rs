@@ -178,10 +178,22 @@ impl World {
             if h.satiety_enabled && !may_feed {
                 self.diagnostics.herbivore_satiety_blocked_ticks += 1;
             }
-            let target = if may_feed {
-                self.plant_grid.nearest(&self.plants, x, y, vision)
+            let color_memory = if h.color_learning_enabled {
+                self.plant_color_learning.get(&self.animals.items[i].id)
             } else {
                 None
+            };
+            let target = if !may_feed {
+                None
+            } else if let Some(memory) = color_memory {
+                let reserve_fraction = self.resources.energy_balance(reserve).unwrap_or(0.)
+                    / (f64::from(hp_max) * h.max_energy_per_hp);
+                self.plant_grid
+                    .nearest_allowed(&self.plants, x, y, vision, |color| {
+                        memory.allows(color, reserve_fraction)
+                    })
+            } else {
+                self.plant_grid.nearest(&self.plants, x, y, vision)
             };
             if target.is_some() {
                 self.diagnostics.herbivore_target_ticks += 1;
@@ -454,6 +466,12 @@ impl World {
                             0
                         };
                         self.animals.items[i].lifetime_typed_dose[exposure_type] += dose;
+                        if h.color_learning_enabled && dose > 0. {
+                            self.plant_color_learning
+                                .entry(self.animals.items[i].id)
+                                .or_default()
+                                .ingest(self.plants.items[pi].color, exposure_type, dose);
+                        }
                         self.diagnostics.toxin_exposure_events += 1;
                         self.diagnostics.toxin_exposure_total += dose;
                     }
@@ -538,6 +556,12 @@ impl World {
             if self.config.toxin.enabled {
                 let t = &self.config.toxin;
                 let animal = &mut self.animals.items[i];
+                let mut memory = if h.color_learning_enabled {
+                    self.plant_color_learning.get_mut(&animal.id)
+                } else {
+                    None
+                };
+                let load_zero = animal.toxin_load;
                 let result = crate::toxin::advance_burden(
                     animal.toxin_load,
                     animal.genes.toxin_resistance,
@@ -550,6 +574,14 @@ impl World {
                         let resistance = animal.genes.typed_resistance[toxin_type];
                         let step = crate::toxin::advance_burden(load, resistance, t);
                         animal.typed_load[toxin_type] = step.remaining_load;
+                        if let Some(memory) = memory.as_deref_mut() {
+                            memory.observe_damage(
+                                toxin_type,
+                                load,
+                                step.remaining_load,
+                                step.damage,
+                            );
+                        }
                         self.diagnostics.toxin_clearance_total += step.cleared;
                         self.diagnostics.resistance_prevented_damage_total += step.prevented_damage;
                         animal.lifetime_prevented_damage += step.prevented_damage;
@@ -565,6 +597,9 @@ impl World {
                                 "toxin",Some(hp_before),serde_json::json!({"type":toxin_type,"damage":step.damage,"load_before":load}));
                         }
                     }
+                }
+                if let Some(memory) = memory {
+                    memory.observe_damage(0, load_zero, result.remaining_load, result.damage);
                 }
                 self.diagnostics.toxin_clearance_total += result.cleared;
                 self.diagnostics.resistance_prevented_damage_total += result.prevented_damage;
@@ -748,6 +783,7 @@ impl World {
                 }
             }
             let a = self.animals.items.swap_remove(i);
+            self.plant_color_learning.remove(&a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
                     .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));

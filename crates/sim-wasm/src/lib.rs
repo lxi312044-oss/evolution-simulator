@@ -383,7 +383,12 @@ impl Simulation {
     }
     /// Exact state on the same target for observation ON/OFF verification.
     pub fn observation_state_json(&self) -> String {
-        serde_json::json!({"tick":self.world.tick,"plants":format!("{:?}",self.world.plants),"animals":format!("{:?}",self.world.animals),"carnivores":format!("{:?}",self.world.carnivores),"resources":format!("{:?}",self.world.resources),"ledger":format!("{:?}",self.world.ledger),"entities":format!("{:?}",self.world.entities),"land":format!("{:?}",self.world.land),"diagnostics":self.world.diagnostics,"carnivore_debug":self.world.carnivore_debug,"rng":format!("{:?}",self.world.rng)}).to_string()
+        let mut state = serde_json::json!({"tick":self.world.tick,"plants":format!("{:?}",self.world.plants),"animals":format!("{:?}",self.world.animals),"carnivores":format!("{:?}",self.world.carnivores),"resources":format!("{:?}",self.world.resources),"ledger":format!("{:?}",self.world.ledger),"entities":format!("{:?}",self.world.entities),"land":format!("{:?}",self.world.land),"diagnostics":self.world.diagnostics,"carnivore_debug":self.world.carnivore_debug,"rng":format!("{:?}",self.world.rng)});
+        if self.world.config.herbivores.color_learning_enabled {
+            state["plant_color_learning"] =
+                serde_json::json!(format!("{:?}", self.world.plant_color_learning));
+        }
+        state.to_string()
     }
     pub fn tick_count(&self) -> u64 {
         self.world.tick
