@@ -150,7 +150,7 @@ impl World {
             let y = world.rng.unit() * world.config.world.height;
             world.create_initial_plant(x, y)?;
         }
-        if world.config.toxin.experimental_plant_toxicity_colors {
+        if world.config.toxin.experimental_plant_toxicity_colors || world.config.toxin.experimental_inherited_plant_colors {
             let mut order: Vec<_> = (0..world.plants.items.len()).collect();
             order.sort_by(|&a, &b| {
                 let a = &world.plants.items[a];
@@ -161,14 +161,37 @@ impl World {
                     .then_with(|| a.y.total_cmp(&b.y))
                     .then_with(|| a.id.cmp(&b.id))
             });
-            for (pair, indices) in order.chunks_exact(2).enumerate() {
-                let first_toxic =
-                    crate::toxin::plant_trait_draw(world.config.seed, pair as u64, 0x53543443)
-                        < 0.5;
-                for (side, &index) in indices.iter().enumerate() {
-                    let p = &mut world.plants.items[index];
-                    p.produces_toxin = first_toxic ^ (side == 1);
-                    p.color = crate::plants::visible_color(true, p.produces_toxin);
+            if world.config.toxin.experimental_inherited_plant_colors {
+                let mut next_type = [0, 0];
+                for (block, indices) in order.chunks_exact_mut(10).enumerate() {
+                    indices.sort_by(|&a, &b| {
+                        let draw = |index| crate::toxin::plant_trait_draw(
+                            world.config.seed, index as u64, 0x53543500 + block as u64,
+                        );
+                        draw(a).total_cmp(&draw(b)).then(a.cmp(&b))
+                    });
+                    for (slot, &index) in indices.iter().enumerate() {
+                        let purple = slot < 5;
+                        let plant = &mut world.plants.items[index];
+                        plant.color = if purple { 0xb86be3ff } else { 0x4ecb70ff };
+                        plant.produces_toxin = slot < 4 || slot == 5;
+                        if plant.produces_toxin {
+                            let color = usize::from(purple);
+                            plant.toxin_type = crate::toxin::ToxinTypeId(next_type[color]);
+                            next_type[color] ^= 1;
+                        }
+                    }
+                }
+            } else {
+                for (pair, indices) in order.chunks_exact(2).enumerate() {
+                    let first_toxic =
+                        crate::toxin::plant_trait_draw(world.config.seed, pair as u64, 0x53543443)
+                            < 0.5;
+                    for (side, &index) in indices.iter().enumerate() {
+                        let p = &mut world.plants.items[index];
+                        p.produces_toxin = first_toxic ^ (side == 1);
+                        p.color = crate::plants::visible_color(true, p.produces_toxin);
+                    }
                 }
             }
         }

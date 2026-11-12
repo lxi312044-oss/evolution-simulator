@@ -275,6 +275,14 @@ impl World {
                 self.config.toxin.plant_toxin_type_count,
                 self.config.toxin.plant_toxin_type_mutation_probability,
             );
+            if self.config.toxin.experimental_inherited_plant_colors {
+                if let Some(trace) = &mut self.foraging_trace {
+                    let parent = &self.plants.items[i];
+                    trace.events.push(serde_json::json!({"plant_event":"birth","color":parent.color,
+                        "toxic":produces_toxin,"type":toxin_type.0,"parent_toxic":parent.produces_toxin,
+                        "parent_type":parent.toxin_type.0}));
+                }
+            }
             self.plants.items.push(Plant {
                 id,
                 x,
@@ -286,7 +294,11 @@ impl World {
                 age: 0,
                 seed_cooldown: p.seed_cooldown_ticks,
                 max_age: p.max_age_ticks,
-                color: crate::plants::visible_color(self.config.toxin.experimental_plant_toxicity_colors, produces_toxin),
+                color: if self.config.toxin.experimental_inherited_plant_colors {
+                    self.plants.items[i].color
+                } else {
+                    crate::plants::visible_color(self.config.toxin.experimental_plant_toxicity_colors, produces_toxin)
+                },
                 produces_toxin,
                 toxin_type,
             });
@@ -295,7 +307,7 @@ impl World {
         }
         // Phase 07.2.19: optional soil-funded spontaneous germination.
         // Use a separate deterministic hash, leaving the baseline RNG stream unchanged.
-        if let Some(g) = self.spontaneous_germination {
+        if let Some(g) = self.spontaneous_germination.filter(|_| !self.config.toxin.experimental_inherited_plant_colors) {
             if self.tick.is_multiple_of(g.check_interval) {
                 let needed = self.config.plants.initial_body_nutrients;
                 let initial_energy = self.config.plants.initial_energy;
@@ -388,6 +400,11 @@ impl World {
                 continue;
             }
             let plant = self.plants.items.swap_remove(i);
+            if self.config.toxin.experimental_inherited_plant_colors {
+                if let Some(trace) = &mut self.foraging_trace {
+                    trace.events.push(serde_json::json!({"plant_event":"age","color":plant.color,"toxic":plant.produces_toxin}));
+                }
+            }
             let detritus = self.land.cells[plant.cell].detritus;
             for account in [plant.body, plant.reserve] {
                 let n = self.resources.nutrient_balance(account).unwrap_or(0.);

@@ -426,6 +426,13 @@ impl World {
                 let mut visible_ne = 0_u64;
                 let mut color_rejected_n = 0_u64;
                 let mixed_observation = self.config.toxin.experimental_plant_toxicity_colors;
+                let inherited = self.config.toxin.experimental_inherited_plant_colors;
+                let mut color_visible = [0_u64; 2];
+                let mut color_in_range = [0_u64; 2];
+                let mut color_rejected = [0_u64; 2];
+                let stomach_n = self.resources.nutrient_balance(self.animals.items[i].stomach).unwrap_or(0.);
+                let can_ingest = h.feeding_nutrients_per_tick > 0.
+                    && (!h.satiety_enabled || h.feeding_nutrient_absorption == 0. || stomach_n < h.stomach_capacity_n);
                 let mut visible_by_toxicity = [0_u64; 2];
                 let mut rejected_by_toxicity = [0_u64; 2];
                 let mut in_range_by_toxicity = [0_u64; 2];
@@ -445,6 +452,16 @@ impl World {
                         let e = self.resources.energy_balance(p.reserve).unwrap_or(0.);
                         if n > 0. {
                             visible_n += 1;
+                            if inherited {
+                                let color = usize::from(p.color == 0xb86be3ff);
+                                color_visible[color] += 1;
+                                if can_ingest && may_feed && (p.x-x).powi(2) + (p.y-y).powi(2) <= range*range {
+                                    color_in_range[color] += 1;
+                                }
+                                if memory.is_some_and(|m| !m.allows(p.color, observed_reserve_fraction.unwrap())) {
+                                    color_rejected[color] += 1;
+                                }
+                            }
                             if mixed_observation {
                                 visible_by_toxicity[usize::from(p.produces_toxin)] += 1;
                             }
@@ -466,8 +483,20 @@ impl World {
                         "n":self.resources.nutrient_balance(p.body).unwrap_or(0.),"e":self.resources.energy_balance(p.reserve).unwrap_or(0.)})});
                 let mixed = serde_json::json!({"visible":visible_by_toxicity,"rejected":rejected_by_toxicity,
                     "in_range":in_range_by_toxicity,"target_toxic":target.map(|j| self.plants.items[j].produces_toxin)});
-                Some(
-                    serde_json::json!({"id":[self.animals.items[i].id.index,self.animals.items[i].id.generation],"tick":self.tick,
+                let inherited_choice = inherited.then(|| {
+                    let mut remembered = [false; 2];
+                    if let Some(memory) = memory {
+                        for (color, _) in memory.harm_scores() {
+                            if color == 0x4ecb7000 { remembered[0] = true; }
+                            if color == 0xb86be300 { remembered[1] = true; }
+                        }
+                    }
+                    serde_json::json!({"visible":color_visible,"in_range":color_in_range,
+                        "rejected":color_rejected,"both_remembered":remembered.iter().all(|&v| v),
+                        "target":target.map(|j| usize::from(self.plants.items[j].color == 0xb86be3ff)),
+                        "target_toxic":target.map(|j| self.plants.items[j].produces_toxin)})
+                });
+                let mut event = serde_json::json!({"id":[self.animals.items[i].id.index,self.animals.items[i].id.generation],"tick":self.tick,
                     "plants":self.plants.len(),"plant_protected":plants_protected,"satiety_blocked":h.satiety_enabled && !self.animals.items[i].feeding_active,
                     "may_feed":may_feed,"action":format!("{action:?}"),"visible":visible,"visible_n":visible_n,"visible_ne":visible_ne,"color_rejected_visible_n":color_rejected_n,
                     "position_before":[x,y],"position_after":[ax,ay],"vision":vision,"range":range,
@@ -484,8 +513,11 @@ impl World {
                     "energy_threshold":f64::from(hp_max)*h.max_energy_per_hp*h.reproduction_min_energy_fraction,
                     "feeding_active_before":feeding_before,"feeding_active":self.animals.items[i].feeding_active,
                     "streak_before":prior_streak,"streak_after":self.animals.items[i].well_fed_ticks,
-                    "target": observed_target}),
-                )
+                    "target": observed_target});
+                if let Some(choice) = inherited_choice {
+                    event["inherited_choice"] = choice;
+                }
+                Some(event)
             } else {
                 None
             };
@@ -815,6 +847,11 @@ impl World {
                 continue;
             }
             let p = self.plants.items.swap_remove(j);
+            if self.config.toxin.experimental_inherited_plant_colors {
+                if let Some(trace) = &mut self.foraging_trace {
+                    trace.events.push(serde_json::json!({"plant_event":"consumed","color":p.color,"toxic":p.produces_toxin}));
+                }
+            }
             let detritus = self.land.cells[p.cell].detritus;
             for a in [p.body, p.reserve] {
                 let n = self.resources.nutrient_balance(a).unwrap_or(0.);

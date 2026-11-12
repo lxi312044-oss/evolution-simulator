@@ -50,6 +50,9 @@ pub struct ToxinSettings {
     /// Experiment only: pair founders 50/50 and display the resolved toxicity as color.
     #[serde(skip_serializing_if = "is_false")]
     pub experimental_plant_toxicity_colors: bool,
+    /// Fixed Stage 4 founder mix with independently inherited visible color.
+    #[serde(skip_serializing_if = "is_false")]
+    pub experimental_inherited_plant_colors: bool,
     /// Fraction of initially created / spontaneously germinated plants that are toxic.
     pub initial_toxic_plant_fraction: f64,
     /// Probability that a seed flips its parent's toxic phenotype.
@@ -92,6 +95,7 @@ impl Default for ToxinSettings {
             plant_energy_cost_per_tick: 0.002,
             plant_variation_enabled: false,
             experimental_plant_toxicity_colors: false,
+            experimental_inherited_plant_colors: false,
             initial_toxic_plant_fraction: 1.0,
             plant_toxic_mutation_probability: 0.0,
             plant_toxin_type_variation_enabled: false,
@@ -500,6 +504,14 @@ impl SimulationConfig {
             return Err("invalid carnivore toxin damage threshold".into());
         }
         let t = &self.toxin;
+        if t.experimental_inherited_plant_colors
+            && (t.experimental_plant_toxicity_colors || !t.enabled || !t.plant_variation_enabled
+                || !t.plant_toxin_type_variation_enabled || t.plant_toxin_type_count != 2
+                || t.plant_toxic_mutation_probability != 0. || t.plant_toxin_type_mutation_probability != 0.
+                || self.initial_population.plants != 300)
+        {
+            return Err("inherited plant colors require the fixed 300-founder, two-type, zero-mutation profile".into());
+        }
         if t.experimental_plant_toxicity_colors
             && (!t.enabled || !t.plant_variation_enabled || self.initial_population.plants % 2 != 0)
         {

@@ -7,6 +7,7 @@ use sim_core::{
 };
 use std::{
     collections::BTreeMap,
+    collections::BTreeSet,
     time::{Duration, Instant},
 };
 
@@ -221,11 +222,90 @@ fn audit(world: &mut World, shadow: &World) {
     let observer = world.foraging_trace.take();
     world.herbivore_terminal_logging = false;
     assert_eq!(
-        world.audit_state(false, None),
+        world.audit_without_carnivore_trace(),
         shadow.audit_state(false, None)
     );
     world.herbivore_terminal_logging = true;
     world.foraging_trace = observer;
+}
+
+#[derive(Default, Serialize)]
+struct InheritedChoice {
+    ticks: u64,
+    both_visible: u64,
+    both_in_range: u64,
+    no_plant_in_range: u64,
+    all_visible_rejected: u64,
+    both_visible_all_rejected: u64,
+    both_in_range_all_rejected: u64,
+    selected: [u64; 2],
+    approached: [u64; 2],
+    selected_in_range: [u64; 2],
+    fed_visible: [u64; 4],
+    fed_in_range: [u64; 4],
+    remembered_ticks: u64,
+    remembered_both_visible: u64,
+    remembered_both_in_range: u64,
+    remembered_selected: [u64; 2],
+    remembered_fed: [u64; 4],
+    remembered_all_rejected: u64,
+    remembered_both_visible_all_rejected: u64,
+    remembered_both_in_range_all_rejected: u64,
+    remembered_individuals: BTreeSet<[u32; 2]>,
+    remembered_feeding_individuals: BTreeSet<[u32; 2]>,
+    remembered_excluded_individuals: BTreeSet<[u32; 2]>,
+}
+
+impl InheritedChoice {
+    fn observe(&mut self, row: &Value, id: [u32; 2]) {
+        self.ticks += 1;
+        let data = &row["inherited_choice"];
+        let visible = data["visible"].as_array().unwrap();
+        let range = data["in_range"].as_array().unwrap();
+        let both_visible = visible.iter().all(|n| n.as_u64().unwrap() > 0);
+        let both_in_range = range.iter().all(|n| n.as_u64().unwrap() > 0);
+        let may_feed = row["may_feed"] == true;
+        let excluded = may_feed
+            && visible.iter().any(|n| n.as_u64().unwrap() > 0)
+            && data["visible"] == data["rejected"]
+            && data["target"].is_null();
+        let remembered = data["both_remembered"] == true;
+        self.both_visible += u64::from(both_visible);
+        self.both_in_range += u64::from(both_in_range);
+        self.no_plant_in_range += u64::from(may_feed && range.iter().all(|n| n == &json!(0)));
+        self.all_visible_rejected += u64::from(excluded);
+        self.both_visible_all_rejected += u64::from(both_visible && excluded);
+        self.both_in_range_all_rejected += u64::from(both_in_range && excluded);
+        if remembered {
+            self.remembered_ticks += 1;
+            self.remembered_individuals.insert(id);
+            self.remembered_both_visible += u64::from(both_visible);
+            self.remembered_both_in_range += u64::from(both_in_range);
+            self.remembered_all_rejected += u64::from(excluded);
+            self.remembered_both_visible_all_rejected += u64::from(both_visible && excluded);
+            self.remembered_both_in_range_all_rejected += u64::from(both_in_range && excluded);
+            if excluded {
+                self.remembered_excluded_individuals.insert(id);
+            }
+        }
+        if let Some(color) = data["target"].as_u64() {
+            let color = color as usize;
+            self.selected[color] += u64::from(both_visible);
+            self.approached[color] +=
+                u64::from(both_visible && row["position_before"] != row["position_after"]);
+            self.selected_in_range[color] += u64::from(both_in_range);
+            self.remembered_selected[color] += u64::from(remembered);
+            if row["feeding"]["eaten_n"].as_f64().unwrap() > 0. {
+                let class = color * 2 + usize::from(data["target_toxic"] == true);
+                self.fed_visible[class] += u64::from(both_visible);
+                self.fed_in_range[class] += u64::from(both_in_range);
+                self.remembered_fed[class] += u64::from(remembered);
+                if remembered {
+                    self.remembered_feeding_individuals.insert(id);
+                }
+            }
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -233,13 +313,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
     let seed: u64 = args[1].parse()?;
     assert!((12345..=12347).contains(&seed));
+    let inherited = args[2].starts_with("inherited-");
+    let mut inherited_choices = BTreeMap::<u64, InheritedChoice>::new();
+    let mut inherited_total = InheritedChoice::default();
+    let mut plant_flows = [[0_u64; 4]; 3];
+    let mut predator_events = BTreeMap::<String, u64>::new();
     let learning = match args[2].as_str() {
-        "on" | "rescue" | "recovery" | "mixed-on" => true,
-        "off" | "mixed-off" => false,
+        "on" | "rescue" | "recovery" | "mixed-on" | "inherited-on" => true,
+        "off" | "mixed-off" | "inherited-off" => false,
         _ => return Err("expected on or off".into()),
     };
     let mixed = args[2].starts_with("mixed-");
-    let mut config: SimulationConfig = serde_json::from_str(if mixed {
+    let mut config: SimulationConfig = serde_json::from_str(if inherited {
+        include_str!("../../../config/stage4-inherited-plant-colors.json")
+    } else if mixed {
         include_str!("../../../config/stage4-mixed-plant-colors.json")
     } else {
         include_str!("../../../config/stage4-carnivore-threshold-050.json")
@@ -251,7 +338,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.herbivores.hungry_color_recovery_enabled = hysteresis;
     let mut shadow = World::new(config.clone())?;
     let mut world = World::new(config.clone())?;
-    if mixed {
+    if mixed || inherited {
         let mut opposite = config.clone();
         opposite.herbivores.color_learning_enabled = !learning;
         let mut other = World::new(opposite)?;
@@ -260,7 +347,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             world.audit_state(false, None),
             other.audit_state(false, None)
         );
-
+    }
+    if mixed {
         let mut plain = config;
         plain.toxin.experimental_plant_toxicity_colors = false;
         let mut without_colors = World::new(plain)?;
@@ -314,8 +402,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect(),
     ));
     world.herbivore_terminal_logging = true;
+    if inherited {
+        world.enable_carnivore_opportunity_trace();
+    }
     let mut samples = Vec::new();
     let mut capacity_ticks = 0;
+    let mut herbivore_end_tick_population_sum = 0;
+    let mut removed_herbivore_damage = 0.;
+    let mut removed_herbivore_dose = 0.;
     let mut max_population = 0;
     let mut max_toxin_error: f64 = 0.;
     let mut n_error: f64 = 0.;
@@ -330,12 +424,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             world.step(1)?;
             shadow.step(1)?;
         }
+        if inherited {
+            for event in world.take_carnivore_toxin_trace() {
+                let kind = event["event"].as_str().unwrap();
+                *predator_events.entry(kind.to_owned()).or_default() += 1;
+                if kind == "opportunity"
+                    && event["same_colors"]
+                        .as_object()
+                        .is_some_and(|m| !m.is_empty())
+                {
+                    *predator_events
+                        .entry("learned_color_visible".into())
+                        .or_default() += 1;
+                }
+                if kind == "decision" && !event["skipped"].is_null() {
+                    *predator_events.entry("color_skip".into()).or_default() += 1;
+                }
+            }
+        }
         let counts = [
             world.plants.len(),
             world.animals.items.len(),
             world.carnivores.len(),
         ];
         let total: usize = counts.iter().sum();
+        if tick > 0 {
+            herbivore_end_tick_population_sum += counts[1];
+        }
         let mut plants_by_toxicity = [0; 2];
         if mixed {
             for p in &world.plants.items {
@@ -367,13 +482,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let de = world.resources.total_energy() - e0 - world.ledger.sunlight_total()
             + world.ledger.heat_total();
         assert!(dn.is_finite() && de.is_finite());
+        if inherited {
+            assert!(dn.abs() < 0.001 && de.abs() < 0.001);
+            let shadow_n = shadow.resources.total_nutrients() - n0;
+            let shadow_e = shadow.resources.total_energy() - e0 - shadow.ledger.sunlight_total()
+                + shadow.ledger.heat_total();
+            assert!(shadow_n.abs() < 0.001 && shadow_e.abs() < 0.001);
+        }
         n_error = n_error.max(dn.abs());
         e_error = e_error.max(de.abs());
         for row in std::mem::take(&mut world.foraging_trace.as_mut().unwrap().events) {
+            if let Some(kind) = row["plant_event"].as_str() {
+                let color = usize::from(row["color"] == json!(0xb86be3ff_u32));
+                let class = color * 2 + usize::from(row["toxic"] == true);
+                let flow = match kind {
+                    "birth" => {
+                        assert_eq!(row["toxic"], row["parent_toxic"]);
+                        assert_eq!(row["type"], row["parent_type"]);
+                        0
+                    }
+                    "age" => 1,
+                    "consumed" => 2,
+                    _ => unreachable!(),
+                };
+                plant_flows[flow][class] += 1;
+                continue;
+            }
             let id: [u32; 2] = serde_json::from_value(row["id"].clone())?;
+            if inherited {
+                inherited_choices
+                    .entry((tick - 1) / 500)
+                    .or_default()
+                    .observe(&row, id);
+                inherited_total.observe(&row, id);
+            }
             founders.get_mut(&id).unwrap().observe(&row, hysteresis);
         }
         for event in std::mem::take(&mut world.herbivore_terminal_events) {
+            removed_herbivore_damage += event.toxin_damage_total;
+            removed_herbivore_dose += event.doses.iter().sum::<f64>();
             if let Some(f) = founders.get_mut(&[event.id.index, event.id.generation]) {
                 f.dose = event.doses.iter().sum();
                 f.damage = event.toxin_damage_total;
@@ -410,8 +557,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .iter()
                 .filter(|a| founders.contains_key(&[a.id.index, a.id.generation]))
                 .count();
+            let mut classes = [[0.; 3]; 4];
+            let mut plant_types = [[0; 2]; 2];
+            if inherited {
+                assert_eq!(world.spontaneous_births, 0);
+                for p in &world.plants.items {
+                    let color = usize::from(p.color == 0xb86be3ff);
+                    assert!(p.color == 0xb86be3ff || p.color == 0x4ecb70ff);
+                    let group = &mut classes[color * 2 + usize::from(p.produces_toxin)];
+                    group[0] += 1.;
+                    group[1] += world.resources.nutrient_balance(p.body).unwrap();
+                    group[2] += world.resources.energy_balance(p.reserve).unwrap();
+                    if p.produces_toxin {
+                        plant_types[color][p.toxin_type.0 as usize] += 1;
+                    }
+                }
+                for (class, initial) in [120, 30, 30, 120].into_iter().enumerate() {
+                    assert_eq!(
+                        classes[class][0] as u64 + plant_flows[1][class] + plant_flows[2][class],
+                        initial + plant_flows[0][class]
+                    );
+                }
+                if tick == 0 {
+                    assert_eq!(plant_types, [[15, 15], [60, 60]]);
+                }
+            }
             samples.push(
-                json!({"tick":tick,"counts":counts,"living_founders":living_founders,
+                json!({"tick":tick,"plant_classes":classes,"plant_types":plant_types,"plant_flows":plant_flows,
+                "toxin": if inherited { Some(&toxin) } else { None },
+                "herbivore_end_tick_population_sum":herbivore_end_tick_population_sum,
+                "herbivore_damage_total":removed_herbivore_damage + world.animals.items.iter().map(|a| a.lifetime_toxin_damage).sum::<f64>(),
+                "herbivore_dose_total":removed_herbivore_dose + world.animals.items.iter().map(|a| a.lifetime_toxin_dose).sum::<f64>(),"counts":counts,"living_founders":living_founders,
                 "plants_by_toxicity":plants_by_toxicity,"plant_body_n":plant_n,"plant_reserve_e":plant_e,"diagnostics":world.diagnostics,
                 "carnivore":world.carnivore_debug,"rng":format!("{:?}",world.rng)}),
             );
@@ -435,7 +611,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"seed":seed,"learning":learning,"rescue":args[2]=="rescue" || hysteresis,"recovery":hysteresis,"ticks":6000,
         "seconds":start.elapsed().as_secs_f64(),"coexistence_ticks":coexistence_ticks,"first_absent":first_absent,"capacity_ticks":capacity_ticks,
         "max_population":max_population,"max_toxin_error":max_toxin_error,
-        "max_n_error":n_error,"max_e_error":e_error,"samples":samples,"founders":rows})
+        "max_n_error":n_error,"max_e_error":e_error,"samples":samples,"founders":rows,
+        "predator_events":predator_events,"inherited_choices":inherited_choices,"inherited_total":inherited.then_some(inherited_total)})
     );
     Ok(())
 }
