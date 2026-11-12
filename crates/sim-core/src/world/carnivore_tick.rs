@@ -181,6 +181,9 @@ impl World {
                 }
             }
 
+            let opportunity =
+                self.carnivore_opportunity_snapshot(i, nearest, satiated, hunger_override);
+            let opportunity_n_before = self.carnivore_debug.hunt_nutrients;
             // Phase 39: count prey within twice the vision radius even when no target is acquired.
             // These are diagnostic samples, not alternate target selection.
             let nearby_prey = self.animals.items.iter().any(|h| {
@@ -680,6 +683,18 @@ impl World {
                     }
                 }
             }
+            if let Some(mut row) = opportunity {
+                row["attacked"] =
+                    serde_json::json!(self.carnivore_debug.hunt_attempts != attacks_before);
+                row["eaten_n"] =
+                    serde_json::json!(self.carnivore_debug.hunt_nutrients - opportunity_n_before);
+                row["moved"] = serde_json::json!(moved);
+                row["distance_after"] = serde_json::json!(nearest.map(|j| {
+                    let p = &self.animals.items[j];
+                    (p.x - nx).hypot(p.y - ny)
+                }));
+                self.record_carnivore_opportunity(row);
+            }
             if let Some(prey) = last_color_skip {
                 self.record_carnivore_color_skips(predator_id, prey, color_skips);
             }
@@ -1004,6 +1019,7 @@ impl World {
                 self.carnivore_debug.gene_deaths[bin] += 1;
                 let a = self.carnivores.swap_remove(i);
                 if self.config.animal_toxin.enabled {
+                    self.trace_carnivore_toxin_removal(a.id);
                     self.animal_toxins.remove_carnivore(a.id);
                 }
                 let cell = self.land.cell_index(

@@ -65,6 +65,8 @@ pub(super) struct AnimalToxins {
 struct CarnivoreToxinTrace {
     events: Vec<serde_json::Value>,
     next_decision: std::collections::BTreeSet<EntityId>,
+    opportunities: bool,
+    first_prey_by_color: BTreeMap<(EntityId, u32), EntityId>,
 }
 
 fn trace_id(id: EntityId) -> [u32; 2] {
@@ -279,6 +281,12 @@ impl World {
             predator.load[kind] += dose;
             if dose > 0. {
                 if let Some(trace) = &mut book.trace {
+                    if trace.opportunities {
+                        trace
+                            .first_prey_by_color
+                            .entry((id, color))
+                            .or_insert(prey.id);
+                    }
                     trace
                         .events
                         .push(serde_json::json!({"event":"transfer","tick":self.tick,
@@ -341,6 +349,12 @@ impl World {
                     "prevented":step.prevented_damage,"hp_before":(predator.hp - damage).max(0.),
                     "hp_after":(predator.hp - damage - f64::from(step.damage)).max(0.),
                     "memory_before":memory_before,"memory_after":memory_after}));
+            }
+            if let Some(trace) = book.trace.as_mut().filter(|trace| trace.opportunities) {
+                if before > 0. {
+                    trace.events.push(serde_json::json!({"event":"clearance","tick":self.tick,
+                        "id":trace_id(animal.id),"type":kind,"before":before,"after":step.remaining_load}));
+                }
             }
             damage += f64::from(step.damage);
         }
@@ -459,6 +473,133 @@ impl World {
 
     pub fn set_carnivore_toxin_trace(&mut self, enabled: bool) {
         self.animal_toxins.trace = enabled.then(CarnivoreToxinTrace::default);
+    }
+
+    #[cfg(feature = "state-audit")]
+    pub fn audit_without_carnivore_trace(&mut self) -> Vec<u8> {
+        let trace = self.animal_toxins.trace.take();
+        let bytes = self.audit_state(false, None);
+        self.animal_toxins.trace = trace;
+        bytes
+    }
+
+    pub fn enable_carnivore_opportunity_trace(&mut self) {
+        self.set_carnivore_toxin_trace(true);
+        self.animal_toxins.trace.as_mut().unwrap().opportunities = true;
+    }
+
+    pub(super) fn carnivore_opportunity_snapshot(
+        &self,
+        index: usize,
+        selected: Option<usize>,
+        satiated: bool,
+        hunger_override: bool,
+    ) -> Option<serde_json::Value> {
+        if !self
+            .animal_toxins
+            .trace
+            .as_ref()
+            .is_some_and(|t| t.opportunities)
+        {
+            return None;
+        }
+        let pred = &self.carnivores[index];
+        let c = &self.config.carnivores;
+        let e = self.resources.energy_balance(pred.reserve).unwrap_or(0.);
+        let stomach_n = self.resources.nutrient_balance(pred.stomach).unwrap_or(0.);
+        let stomach_e = self.resources.energy_balance(pred.stomach).unwrap_or(0.);
+        let full = c.all_bites_to_stomach
+            && (stomach_e >= c.stomach_capacity_energy - 1e-9
+                || stomach_n >= c.stomach_capacity_nutrients - 1e-9);
+        let refuge =
+            c.prey_refuge_enabled && self.animals.items.len() <= c.prey_refuge_threshold as usize;
+        let ready = !satiated && !full && !refuge && pred.attack_cooldown == 0;
+        let scores = self
+            .animal_toxins
+            .predators
+            .get(&pred.id)
+            .map_or_else(Vec::new, |p| p.memory.harm_scores());
+        let mut visible = [0_u64; 3]; // plant-derived, produced, either
+        let mut same_colors = BTreeMap::<u32, [u64; 5]>::new();
+        let mut same_color_distance = BTreeMap::<u32, f32>::new();
+        let mut closest = None;
+        let mut closest_d2 = pred.vision * pred.vision;
+        for prey in &self.animals.items {
+            let d2 = (prey.x - pred.x).powi(2) + (prey.y - pred.y).powi(2);
+            if prey.hp <= 0.
+                || d2 >= pred.vision * pred.vision
+                || self.resources.nutrient_balance(prey.body).unwrap_or(0.) <= 0.
+            {
+                continue;
+            }
+            let plant = prey.toxin_load > 0. || prey.typed_load.iter().any(|v| *v > 0.);
+            let produced = self
+                .animal_toxins
+                .herbivores
+                .get(&prey.id)
+                .is_some_and(|p| p.stock.iter().any(|v| *v > 0.));
+            visible[0] += u64::from(plant);
+            visible[1] += u64::from(produced);
+            visible[2] += u64::from(plant || produced);
+            if d2 < closest_d2 {
+                closest_d2 = d2;
+                closest = Some(prey.id);
+            }
+            let color = visible_color(prey.genes.body_color);
+            if scores.iter().any(|&(key, _)| key == color) {
+                same_color_distance
+                    .entry(color)
+                    .and_modify(|d| *d = d.min(d2.sqrt()))
+                    .or_insert_with(|| d2.sqrt());
+                let row = same_colors.entry(color).or_default();
+                row[0] += 1;
+                row[4] += u64::from(
+                    self.animal_toxins
+                        .trace
+                        .as_ref()
+                        .unwrap()
+                        .first_prey_by_color
+                        .get(&(pred.id, color))
+                        == Some(&prey.id),
+                );
+                let attackable = ready && d2 <= c.attack_range * c.attack_range;
+                row[1] += u64::from(attackable);
+                let rejected = !self.carnivore_allows_color(pred.id, prey.genes.body_color, e);
+                row[2] += u64::from(rejected);
+                row[3] += u64::from(attackable && rejected);
+            }
+        }
+        let target = selected.map(|j| {
+            let p = &self.animals.items[j];
+            serde_json::json!({"id":trace_id(p.id),"color":visible_color(p.genes.body_color),
+                "distance_before":(p.x-pred.x).hypot(p.y-pred.y)})
+        });
+        Some(
+            serde_json::json!({"event":"opportunity","tick":self.tick,"id":trace_id(pred.id),
+            "visible":visible,"same_colors":same_colors,"same_color_distance":same_color_distance,"target":target,
+            "closest_edible_without_color":closest.map(trace_id),"reserve_e":e,"vision":pred.vision,
+            "attack_range":c.attack_range,"cooldown":pred.attack_cooldown,"satiated":satiated,
+            "hunger_override":hunger_override,"stomach_full":full,"refuge":refuge}),
+        )
+    }
+
+    pub(super) fn record_carnivore_opportunity(&mut self, row: serde_json::Value) {
+        self.animal_toxins.trace.as_mut().unwrap().events.push(row);
+    }
+
+    pub(super) fn trace_carnivore_toxin_removal(&mut self, id: EntityId) {
+        let book = &mut self.animal_toxins;
+        if let Some(trace) = book.trace.as_mut().filter(|t| t.opportunities) {
+            let load = book
+                .predators
+                .get(&id)
+                .map(|p| p.load)
+                .unwrap_or([0.; TYPES]);
+            trace
+                .events
+                .push(serde_json::json!({"event":"removal","tick":self.tick,
+                "id":trace_id(id),"load":load}));
+        }
     }
 
     pub fn take_carnivore_toxin_trace(&mut self) -> Vec<serde_json::Value> {
@@ -760,3 +901,7 @@ mod tests {
         assert!(!w.carnivore_allows_color(id, blue, 60.));
     }
 }
+
+#[cfg(all(test, feature = "state-audit"))]
+#[path = "animal_toxin_encounter_test.rs"]
+mod encounter_test;
