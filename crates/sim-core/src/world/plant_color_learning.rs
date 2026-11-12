@@ -57,6 +57,20 @@ impl PlantColorMemory {
         }
     }
 
+    pub(super) fn harm_scores(&self) -> Vec<(u32, f64)> {
+        self.experiences
+            .iter()
+            .filter(|entry| entry.damage > 0.)
+            .map(|entry| (entry.color, entry.damage))
+            .collect()
+    }
+
+    pub(super) fn has_harm_for_color(&self, color: u32) -> bool {
+        self.experiences
+            .iter()
+            .any(|entry| entry.damage > 0. && color_distance(color, entry.color) < 0.25)
+    }
+
     pub fn allows(&self, color: u32, reserve_fraction: f64) -> bool {
         // A hungrier animal accepts more risk. Only learned harm and visible color enter the choice.
         let tolerance = 1. - 0.75 * reserve_fraction.clamp(0., 1.);

@@ -164,6 +164,7 @@ impl World {
             let mut dist = vision * vision;
             let predator_id = self.carnivores[i].id;
             let mut color_skips = 0;
+            let mut last_color_skip = None;
             for (j, h) in self.animals.items.iter().enumerate() {
                 if satiated {
                     break;
@@ -172,15 +173,14 @@ impl World {
                 if d < dist {
                     if !self.carnivore_allows_color(predator_id, h.genes.body_color, reserve_e) {
                         color_skips += 1;
+                        last_color_skip = Some(h.id);
                         continue;
                     }
                     dist = d;
                     nearest = Some(j);
                 }
             }
-            for _ in 0..color_skips {
-                self.record_carnivore_color_skip();
-            }
+
             // Phase 39: count prey within twice the vision radius even when no target is acquired.
             // These are diagnostic samples, not alternate target selection.
             let nearby_prey = self.animals.items.iter().any(|h| {
@@ -444,7 +444,17 @@ impl World {
             self.ledger
                 .dissipate_heat(&mut self.resources, reserve, burn)
                 .map_err(|e| format!("carnivore metabolism: {e:?}"))?;
+            let attacks_before = self.carnivore_debug.hunt_attempts;
             if let Some(j) = nearest {
+                let prey = &self.animals.items[j];
+                let learned_target = self.config.animal_toxin.color_learning_enabled
+                    && self.observe_carnivore_color_target(
+                        predator_id,
+                        prey.id,
+                        prey.genes.body_color,
+                        reserve_e,
+                        moved,
+                    );
                 let h = &self.animals.items[j];
                 if (h.x - nx).powi(2) + (h.y - ny).powi(2) <= c.attack_range * c.attack_range {
                     self.carnivore_debug.prey_in_attack_range += 1;
@@ -453,7 +463,8 @@ impl World {
                         h.genes.body_color,
                         self.resources.energy_balance(reserve).unwrap_or(0.),
                     ) {
-                        self.record_carnivore_color_skip();
+                        color_skips += 1;
+                        last_color_skip = Some(h.id);
                     } else if c.prey_refuge_enabled
                         && self.animals.items.len() <= c.prey_refuge_threshold as usize
                     {
@@ -509,6 +520,9 @@ impl World {
                             .bite_energy
                             .min(free_e)
                             .min(self.resources.energy_balance(prey_energy).unwrap_or(0.));
+                        if learned_target {
+                            self.observe_carnivore_learned_attack(n > 0. || e > 0.);
+                        }
                         if c.all_bites_to_stomach
                             && (n + 1e-9 < c.bite_nutrients || e + 1e-9 < c.bite_energy)
                         {
@@ -665,6 +679,19 @@ impl World {
                         }
                     }
                 }
+            }
+            if let Some(prey) = last_color_skip {
+                self.record_carnivore_color_skips(predator_id, prey, color_skips);
+            }
+            if self.config.animal_toxin.enabled {
+                self.trace_carnivore_toxin_decision(
+                    predator_id,
+                    nearest.map(|j| self.animals.items[j].id),
+                    last_color_skip,
+                    reserve_e,
+                    satiated,
+                    self.carnivore_debug.hunt_attempts != attacks_before,
+                );
             }
             let toxin_dead = self.config.animal_toxin.enabled && self.advance_carnivore_toxin(i)?;
             // Resource-conservative asexual reproduction. No food or energy created.

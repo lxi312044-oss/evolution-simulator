@@ -19,11 +19,14 @@ pub struct SimulationConfig {
 pub struct AnimalToxinSettings {
     pub enabled: bool,
     pub color_learning_enabled: bool,
+    /// Override the shared poison damage threshold for carnivores only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carnivore_damage_threshold: Option<f64>,
 }
 
 impl AnimalToxinSettings {
     fn is_off(&self) -> bool {
-        !self.enabled && !self.color_learning_enabled
+        !self.enabled && !self.color_learning_enabled && self.carnivore_damage_threshold.is_none()
     }
 }
 
@@ -44,6 +47,9 @@ pub struct ToxinSettings {
     pub plant_energy_cost_per_tick: f64,
     /// Phase 07.4.1 opt-in heritable toxic/non-toxic plant phenotype.
     pub plant_variation_enabled: bool,
+    /// Experiment only: pair founders 50/50 and display the resolved toxicity as color.
+    #[serde(skip_serializing_if = "is_false")]
+    pub experimental_plant_toxicity_colors: bool,
     /// Fraction of initially created / spontaneously germinated plants that are toxic.
     pub initial_toxic_plant_fraction: f64,
     /// Probability that a seed flips its parent's toxic phenotype.
@@ -85,6 +91,7 @@ impl Default for ToxinSettings {
             hp_damage_per_excess_unit: 0.001,
             plant_energy_cost_per_tick: 0.002,
             plant_variation_enabled: false,
+            experimental_plant_toxicity_colors: false,
             initial_toxic_plant_fraction: 1.0,
             plant_toxic_mutation_probability: 0.0,
             plant_toxin_type_variation_enabled: false,
@@ -156,6 +163,12 @@ pub struct PlantSettings {
 pub struct HerbivoreSettings {
     /// Let herbivores use visible plant colors and learned adverse experiences.
     pub color_learning_enabled: bool,
+    /// Experimental one-tick rescue when low reserve and all edible plants are rejected.
+    #[serde(skip_serializing_if = "is_false")]
+    pub hungry_color_recheck_enabled: bool,
+    /// Keep the opt-in recovery active until reserve reaches 30 percent.
+    #[serde(skip_serializing_if = "is_false")]
+    pub hungry_color_recovery_enabled: bool,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -364,6 +377,8 @@ impl Default for HerbivoreSettings {
             reproduction_enabled: true,
             reproduction_cooldown_ticks: 600,
             color_learning_enabled: false,
+            hungry_color_recheck_enabled: false,
+            hungry_color_recovery_enabled: false,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -477,7 +492,19 @@ impl SimulationConfig {
         if self.animal_toxin.color_learning_enabled && !self.animal_toxin.enabled {
             return Err("carnivore color learning requires animal toxin".into());
         }
+        if self
+            .animal_toxin
+            .carnivore_damage_threshold
+            .is_some_and(|value| !value.is_finite() || value < 0.)
+        {
+            return Err("invalid carnivore toxin damage threshold".into());
+        }
         let t = &self.toxin;
+        if t.experimental_plant_toxicity_colors
+            && (!t.enabled || !t.plant_variation_enabled || self.initial_population.plants % 2 != 0)
+        {
+            return Err("experimental plant colors require toxin, plant variation and an even founder count".into());
+        }
         if [
             t.dose_per_nutrient,
             t.clearance_fraction_per_tick,
@@ -750,4 +777,8 @@ impl SimulationConfig {
         }
         Ok(())
     }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }

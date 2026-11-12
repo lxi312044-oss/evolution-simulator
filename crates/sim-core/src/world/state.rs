@@ -11,6 +11,7 @@ use crate::{
 #[derive(Debug)]
 pub struct World {
     pub tick: u64,
+    pub(super) hungry_color_recovery: std::collections::BTreeSet<crate::entity::EntityId>,
     pub(super) animal_toxins: super::animal_toxin::AnimalToxins,
     pub plant_color_learning: std::collections::BTreeMap<
         crate::entity::EntityId,
@@ -95,6 +96,7 @@ impl World {
         let mut world = Self {
             tick: 0,
             plant_color_learning: Default::default(),
+            hungry_color_recovery: Default::default(),
             animal_toxins: Default::default(),
             rng: SimulationRng::new(config.seed),
             config,
@@ -147,6 +149,28 @@ impl World {
             let x = world.rng.unit() * world.config.world.width;
             let y = world.rng.unit() * world.config.world.height;
             world.create_initial_plant(x, y)?;
+        }
+        if world.config.toxin.experimental_plant_toxicity_colors {
+            let mut order: Vec<_> = (0..world.plants.items.len()).collect();
+            order.sort_by(|&a, &b| {
+                let a = &world.plants.items[a];
+                let b = &world.plants.items[b];
+                a.cell
+                    .cmp(&b.cell)
+                    .then_with(|| a.x.total_cmp(&b.x))
+                    .then_with(|| a.y.total_cmp(&b.y))
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            for (pair, indices) in order.chunks_exact(2).enumerate() {
+                let first_toxic =
+                    crate::toxin::plant_trait_draw(world.config.seed, pair as u64, 0x53543443)
+                        < 0.5;
+                for (side, &index) in indices.iter().enumerate() {
+                    let p = &mut world.plants.items[index];
+                    p.produces_toxin = first_toxic ^ (side == 1);
+                    p.color = crate::plants::visible_color(true, p.produces_toxin);
+                }
+            }
         }
         world.plant_grid = PlantGrid::new(world.config.world.width, world.config.world.height, 50.);
         world.plant_grid.rebuild(&world.plants);

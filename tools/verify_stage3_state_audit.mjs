@@ -43,7 +43,7 @@ if (!legacy) worlds[1].enable_lineage_observation(BigInt(ticks));
 const fields = ['tick', 'config', 'germination', 'allocator', 'resources', 'ledger', 'land', 'plants',
     'herbivores', 'carnivores', 'grid', 'rng', 'birth-death counts', 'diagnostics', 'carnivore debug',
     'prey trend', 'plant color memory', 'focal controls', 'behavior trace', 'health trace',
-    'energy trace', 'foraging trace', 'color events', 'carnivore life events', 'animal toxins'];
+    'energy trace', 'foraging trace', 'color events', 'carnivore life events', 'animal toxins', 'herbivore color recovery'];
 const view = bytes => Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 const stepMs = worlds.map(() => 0);
 let auditMs = 0;

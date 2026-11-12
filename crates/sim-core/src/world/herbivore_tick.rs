@@ -183,7 +183,11 @@ impl World {
             } else {
                 None
             };
-            let target = if !may_feed {
+            let observed_reserve_fraction = foraging_observed.then(|| {
+                self.resources.energy_balance(reserve).unwrap_or(0.)
+                    / (f64::from(hp_max) * h.max_energy_per_hp)
+            });
+            let mut target = if !may_feed {
                 None
             } else if let Some(memory) = color_memory {
                 let reserve_fraction = self.resources.energy_balance(reserve).unwrap_or(0.)
@@ -195,6 +199,46 @@ impl World {
             } else {
                 self.plant_grid.nearest(&self.plants, x, y, vision)
             };
+            let mut hungry_color_recheck = false;
+            let recovery_enabled = h.hungry_color_recheck_enabled
+                && h.hungry_color_recovery_enabled && h.color_learning_enabled;
+            let id = self.animals.items[i].id;
+            let mut recovery_active = recovery_enabled && self.hungry_color_recovery.contains(&id);
+            let mut recovery_released = false;
+            if recovery_active {
+                let fraction = self.resources.energy_balance(reserve).unwrap_or(0.)
+                    / (f64::from(hp_max) * h.max_energy_per_hp);
+                if fraction >= 0.30 {
+                    self.hungry_color_recovery.remove(&id);
+                    recovery_active = false;
+                    recovery_released = true;
+                }
+            }
+            if h.hungry_color_recheck_enabled && may_feed {
+                if let Some(memory) = color_memory {
+                    let fraction = self.resources.energy_balance(reserve).unwrap_or(0.)
+                        / (f64::from(hp_max) * h.max_energy_per_hp);
+                    let edible = |j: usize| {
+                        self.resources.nutrient_balance(self.plants.items[j].body).unwrap_or(0.) > 0.
+                    };
+                    if (fraction < 0.25 || recovery_active) && !target.is_some_and(edible) {
+                        let nearest_edible = self.plant_grid.nearest_where(&self.plants, x, y, vision, edible);
+                        if nearest_edible.is_some()
+                            && self.plant_grid.nearest_where(&self.plants, x, y, vision, |j| {
+                                edible(j) && memory.allows(self.plants.items[j].color, fraction)
+                            }).is_none()
+                        {
+                            // Tolerance 1 for the selected edible target in this tick only.
+                            target = nearest_edible;
+                            hungry_color_recheck = true;
+                            if recovery_enabled && !recovery_active {
+                                self.hungry_color_recovery.insert(id);
+                                recovery_active = true;
+                            }
+                        }
+                    }
+                }
+            }
             if target.is_some() {
                 self.diagnostics.herbivore_target_ticks += 1;
             } else {
@@ -380,36 +424,67 @@ impl World {
                 let mut visible = 0_u64;
                 let mut visible_n = 0_u64;
                 let mut visible_ne = 0_u64;
+                let mut color_rejected_n = 0_u64;
+                let mixed_observation = self.config.toxin.experimental_plant_toxicity_colors;
+                let mut visible_by_toxicity = [0_u64; 2];
+                let mut rejected_by_toxicity = [0_u64; 2];
+                let mut in_range_by_toxicity = [0_u64; 2];
+                let memory = h.color_learning_enabled
+                    .then(|| self.plant_color_learning.get(&self.animals.items[i].id))
+                    .flatten();
                 for p in &self.plants.items {
-                    if (p.x - x).powi(2) + (p.y - y).powi(2) <= vision * vision {
+                    let in_vision = (p.x - x).powi(2) + (p.y - y).powi(2) <= vision * vision;
+                    if mixed_observation && (p.x - ax).powi(2) + (p.y - ay).powi(2) <= range * range
+                        && self.resources.nutrient_balance(p.body).unwrap_or(0.) > 0.
+                    {
+                        in_range_by_toxicity[usize::from(p.produces_toxin)] += 1;
+                    }
+                    if in_vision {
                         visible += 1;
                         let n = self.resources.nutrient_balance(p.body).unwrap_or(0.);
                         let e = self.resources.energy_balance(p.reserve).unwrap_or(0.);
                         if n > 0. {
                             visible_n += 1;
+                            if mixed_observation {
+                                visible_by_toxicity[usize::from(p.produces_toxin)] += 1;
+                            }
+                            if memory.is_some_and(|m| !m.allows(p.color, observed_reserve_fraction.unwrap())) {
+                                color_rejected_n += 1;
+                                if mixed_observation {
+                                    rejected_by_toxicity[usize::from(p.produces_toxin)] += 1;
+                                }
+                            }
                             if e > 0. {
                                 visible_ne += 1;
                             }
                         }
                     }
                 }
+                let observed_target = target.map(|j| {let p=&self.plants.items[j];serde_json::json!({"id":[p.id.index,p.id.generation],
+                        "distance_after":((ax-p.x).powi(2)+(ay-p.y).powi(2)).sqrt(),
+                        "in_range":(ax-p.x).powi(2)+(ay-p.y).powi(2) <= range*range,
+                        "n":self.resources.nutrient_balance(p.body).unwrap_or(0.),"e":self.resources.energy_balance(p.reserve).unwrap_or(0.)})});
+                let mixed = serde_json::json!({"visible":visible_by_toxicity,"rejected":rejected_by_toxicity,
+                    "in_range":in_range_by_toxicity,"target_toxic":target.map(|j| self.plants.items[j].produces_toxin)});
                 Some(
                     serde_json::json!({"id":[self.animals.items[i].id.index,self.animals.items[i].id.generation],"tick":self.tick,
                     "plants":self.plants.len(),"plant_protected":plants_protected,"satiety_blocked":h.satiety_enabled && !self.animals.items[i].feeding_active,
-                    "may_feed":may_feed,"action":format!("{action:?}"),"visible":visible,"visible_n":visible_n,"visible_ne":visible_ne,
+                    "may_feed":may_feed,"action":format!("{action:?}"),"visible":visible,"visible_n":visible_n,"visible_ne":visible_ne,"color_rejected_visible_n":color_rejected_n,
                     "position_before":[x,y],"position_after":[ax,ay],"vision":vision,"range":range,
                     "desired_step":desired_distance,"affordable_step":step,"movement_energy":energy,
                     "reserve_e":self.resources.energy_balance(reserve).unwrap_or(0.),
+                    "mixed":mixed,
                     "stomach_n_before_digest":stomach_before,"digested_n":digested_n,
                     "stomach_n_before_feeding":self.resources.nutrient_balance(self.animals.items[i].stomach).unwrap_or(0.),
-                    "reserve_e_before_tick":reserve_before,
+                    "reserve_e_before_tick":reserve_before,"hp_before_feeding":self.animals.items[i].hp,
+                    "reserve_fraction_at_choice":observed_reserve_fraction,
+                    "max_reserve_e":f64::from(hp_max)*h.max_energy_per_hp,
+                    "hungry_color_recheck":hungry_color_recheck,
+                    "recovery_active":recovery_active,"recovery_released":recovery_released,
                     "energy_threshold":f64::from(hp_max)*h.max_energy_per_hp*h.reproduction_min_energy_fraction,
                     "feeding_active_before":feeding_before,"feeding_active":self.animals.items[i].feeding_active,
                     "streak_before":prior_streak,"streak_after":self.animals.items[i].well_fed_ticks,
-                    "target":target.map(|j| {let p=&self.plants.items[j];serde_json::json!({"id":[p.id.index,p.id.generation],
-                        "distance_after":((ax-p.x).powi(2)+(ay-p.y).powi(2)).sqrt(),
-                        "in_range":(ax-p.x).powi(2)+(ay-p.y).powi(2) <= range*range,
-                        "n":self.resources.nutrient_balance(p.body).unwrap_or(0.),"e":self.resources.energy_balance(p.reserve).unwrap_or(0.)})})}),
+                    "target": observed_target}),
                 )
             } else {
                 None
@@ -553,6 +628,7 @@ impl World {
                 event["feeding"] = feeding_outcome.unwrap_or_else(
                     || serde_json::json!({"attempted":false,"eaten_n":0.,"gained_e":0.}),
                 );
+                event["reserve_e_after_feeding"] = serde_json::json!(self.resources.energy_balance(reserve).unwrap_or(0.));
                 self.foraging_trace.as_mut().unwrap().events.push(event);
             }
             // Clearance and physiological damage; HP is a health state, not a resource balance.
@@ -796,6 +872,7 @@ impl World {
                 self.animal_toxins.remove_herbivore(&a);
             }
             self.plant_color_learning.remove(&a.id);
+            self.hungry_color_recovery.remove(&a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
                     .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));

@@ -32,3 +32,11 @@ impl PlantStore {
         self.items.len()
     }
 }
+
+pub(crate) fn visible_color(experimental: bool, toxic: bool) -> u32 {
+    if experimental && toxic {
+        0xb86be3ff
+    } else {
+        0x4ecb70ff
+    }
+}

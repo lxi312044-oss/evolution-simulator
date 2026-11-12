@@ -286,7 +286,7 @@ impl World {
                 age: 0,
                 seed_cooldown: p.seed_cooldown_ticks,
                 max_age: p.max_age_ticks,
-                color: 0x4ecb70ff,
+                color: crate::plants::visible_color(self.config.toxin.experimental_plant_toxicity_colors, produces_toxin),
                 produces_toxin,
                 toxin_type,
             });
@@ -341,6 +341,12 @@ impl World {
                     self.ledger
                         .capture_sunlight(&mut self.resources, reserve, initial_energy)
                         .map_err(|e| format!("germination sunlight: {e:?}"))?;
+                    let produces_toxin = crate::toxin::founder_plant_toxic(
+                        self.config.seed,
+                        id.index as u64,
+                        self.config.toxin.plant_variation_enabled,
+                        self.config.toxin.initial_toxic_plant_fraction,
+                    );
                     self.plants.items.push(Plant {
                         id,
                         x,
@@ -352,13 +358,8 @@ impl World {
                         age: 0,
                         seed_cooldown: p.seed_cooldown_ticks,
                         max_age: p.max_age_ticks,
-                        color: 0x4ecb70ff,
-                        produces_toxin: crate::toxin::founder_plant_toxic(
-                            self.config.seed,
-                            id.index as u64,
-                            self.config.toxin.plant_variation_enabled,
-                            self.config.toxin.initial_toxic_plant_fraction,
-                        ),
+                        color: crate::plants::visible_color(self.config.toxin.experimental_plant_toxicity_colors, produces_toxin),
+                        produces_toxin,
                         toxin_type: crate::toxin::founder_plant_toxin_type_biased(
                             self.config.seed,
                             id.index as u64,

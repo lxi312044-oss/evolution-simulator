@@ -37,6 +37,7 @@ for source in (root / "crates/sim-core/src").rglob("*.rs"):
 world = Path("crates/sim-core/src/world")
 audit = (root / world / "state_audit.rs").read_text(encoding="utf-8")
 audit = audit.replace("legacy: bool", "_legacy: bool").replace("            animal_toxins,\n", "")
+audit = audit.replace("            hungry_color_recovery,\n", "")
 audit = audit[:audit.index("        if legacy {")] + audit[audit.index("        bytes\n"):]
 audit = audit[:audit.index("#[cfg(test)]")]
 (baseline / world / "state_audit.rs").write_text(audit, encoding="utf-8")

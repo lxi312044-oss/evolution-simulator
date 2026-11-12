@@ -9,6 +9,7 @@ impl World {
             tick,
             animal_toxins,
             plant_color_learning,
+            hungry_color_recovery,
             config,
             spontaneous_germination,
             spontaneous_births,
@@ -103,6 +104,7 @@ impl World {
         emit!(22, &(color_event_logging, color_events));
         emit!(23, p42_life_events);
         if legacy {
+            assert!(hungry_color_recovery.is_empty());
             assert!(!config.animal_toxin.enabled && !config.animal_toxin.color_learning_enabled);
             assert_eq!(
                 bincode::serialize(animal_toxins).unwrap(),
@@ -111,6 +113,7 @@ impl World {
             );
         } else {
             emit!(24, animal_toxins);
+            emit!(25, hungry_color_recovery);
         }
         bytes
     }

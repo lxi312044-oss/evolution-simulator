@@ -42,10 +42,33 @@ pub(super) struct AnimalToxins {
     transferred_produced: [f64; TYPES],
     transferred_residual: [f64; TYPES],
     damage: [f64; TYPES],
+    prevented_damage: [f64; TYPES],
+    peak_cleared_load: [f64; TYPES],
+    damaging_type_ticks: [u64; TYPES],
     production_energy: f64,
     resistance_energy: f64,
     pub(super) toxin_deaths: u64,
     color_skips: u64,
+    last_color_skip: BTreeMap<EntityId, EntityId>,
+    learned_target_ticks: u64,
+    learned_approach_ticks: u64,
+    learned_attacks: u64,
+    learned_feeds: u64,
+    hunger_reapproaches: u64,
+    hunger_reapproach_opportunities: u64,
+    threshold_exceedance_ticks: [u64; TYPES],
+    trace: Option<CarnivoreToxinTrace>,
+}
+
+#[derive(Debug, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
+struct CarnivoreToxinTrace {
+    events: Vec<serde_json::Value>,
+    next_decision: std::collections::BTreeSet<EntityId>,
+}
+
+fn trace_id(id: EntityId) -> [u32; 2] {
+    [id.index, id.generation]
 }
 
 fn type_count(t: &ToxinSettings) -> usize {
@@ -150,6 +173,7 @@ impl AnimalToxins {
     }
 
     pub(super) fn remove_carnivore(&mut self, id: EntityId) {
+        self.last_color_skip.remove(&id);
         if let Some(predator) = self.predators.remove(&id) {
             for (kind, discarded) in self.discarded.iter_mut().enumerate() {
                 *discarded += predator.production.stock[kind] + predator.load[kind];
@@ -251,7 +275,18 @@ impl World {
                 .as_deref_mut()
                 .map_or(0., |p| remove_fraction(&mut p.stock[kind], fraction));
             let dose = produced + residual;
+            let previous_load = predator.load[kind];
             predator.load[kind] += dose;
+            if dose > 0. {
+                if let Some(trace) = &mut book.trace {
+                    trace
+                        .events
+                        .push(serde_json::json!({"event":"transfer","tick":self.tick,
+                        "id":trace_id(id),"prey":trace_id(prey.id),"rgb":color,"type":kind,
+                        "body_n":body_n,"eaten_n":eaten_n,"produced":produced,"residual":residual,
+                        "load_before":previous_load,"load_after":predator.load[kind]}));
+                }
+            }
             if learning && dose > 0. {
                 predator.memory.ingest(color, kind, dose);
             }
@@ -262,7 +297,11 @@ impl World {
 
     pub(super) fn advance_carnivore_toxin(&mut self, index: usize) -> Result<bool, String> {
         let animal = &self.carnivores[index];
-        let t = &self.config.toxin;
+        let mut settings = self.config.toxin.clone();
+        if let Some(threshold) = self.config.animal_toxin.carnivore_damage_threshold {
+            settings.damage_threshold = threshold;
+        }
+        let t = &settings;
         let types = type_count(t);
         let book = &mut self.animal_toxins;
         let predator = book
@@ -276,10 +315,32 @@ impl World {
             predator.load[kind] = step.remaining_load;
             book.cleared[kind] += step.cleared;
             book.damage[kind] += f64::from(step.damage);
+            book.prevented_damage[kind] += step.prevented_damage;
+            book.peak_cleared_load[kind] = book.peak_cleared_load[kind].max(step.remaining_load);
+            book.damaging_type_ticks[kind] += u64::from(step.damage > 0.);
+            book.threshold_exceedance_ticks[kind] +=
+                u64::from(step.remaining_load > t.damage_threshold);
+            let trace_damage = step.damage > 0. && book.trace.is_some();
+            let memory_before = trace_damage.then(|| predator.memory.harm_scores());
             if self.config.animal_toxin.color_learning_enabled {
                 predator
                     .memory
                     .observe_damage(kind, before, step.remaining_load, step.damage);
+            }
+            if let Some(memory_before) = memory_before {
+                let memory_after = predator.memory.harm_scores();
+                let trace = book.trace.as_mut().unwrap();
+                if memory_before != memory_after {
+                    trace.next_decision.insert(animal.id);
+                }
+                trace
+                    .events
+                    .push(serde_json::json!({"event":"damage","tick":self.tick,
+                    "id":trace_id(animal.id),"type":kind,"load_before_clearance":before,
+                    "load_after_clearance":step.remaining_load,"damage":step.damage,
+                    "prevented":step.prevented_damage,"hp_before":(predator.hp - damage).max(0.),
+                    "hp_after":(predator.hp - damage - f64::from(step.damage)).max(0.),
+                    "memory_before":memory_before,"memory_after":memory_after}));
             }
             damage += f64::from(step.damage);
         }
@@ -343,8 +404,87 @@ impl World {
                 .is_none_or(|p| p.memory.allows(visible_color(color), reserve_e / 60.))
     }
 
-    pub(super) fn record_carnivore_color_skip(&mut self) {
-        self.animal_toxins.color_skips += 1;
+    pub(super) fn record_carnivore_color_skips(
+        &mut self,
+        predator: EntityId,
+        prey: EntityId,
+        count: u64,
+    ) {
+        self.animal_toxins.color_skips += count;
+        self.animal_toxins.last_color_skip.insert(predator, prey);
+    }
+
+    pub(super) fn observe_carnivore_color_target(
+        &mut self,
+        predator: EntityId,
+        prey: EntityId,
+        color: crate::animals::color::BodyColor,
+        reserve_e: f64,
+        moved: f32,
+    ) -> bool {
+        let book = &mut self.animal_toxins;
+        let color = visible_color(color);
+        let Some(state) = book.predators.get(&predator) else {
+            return false;
+        };
+        if !state.memory.has_harm_for_color(color) {
+            return false;
+        }
+        book.learned_target_ticks += 1;
+        let hunger_opportunity = book.last_color_skip.get(&predator) == Some(&prey)
+            && !state.memory.allows(color, 1.)
+            && state.memory.allows(color, reserve_e / 60.);
+        book.hunger_reapproach_opportunities += u64::from(hunger_opportunity);
+        if moved > 0. {
+            book.learned_approach_ticks += 1;
+            if hunger_opportunity {
+                book.hunger_reapproaches += 1;
+                book.last_color_skip.remove(&predator);
+            }
+        }
+        if let Some(trace) = &mut book.trace {
+            trace.events.push(
+                serde_json::json!({"event":"learned_target","tick":self.tick,
+                "id":trace_id(predator),"prey":trace_id(prey),"rgb":color,
+                "reserve_e":reserve_e,"moved":moved,"hunger_opportunity":hunger_opportunity}),
+            );
+        }
+        true
+    }
+
+    pub(super) fn observe_carnivore_learned_attack(&mut self, fed: bool) {
+        self.animal_toxins.learned_attacks += 1;
+        self.animal_toxins.learned_feeds += u64::from(fed);
+    }
+
+    pub fn set_carnivore_toxin_trace(&mut self, enabled: bool) {
+        self.animal_toxins.trace = enabled.then(CarnivoreToxinTrace::default);
+    }
+
+    pub fn take_carnivore_toxin_trace(&mut self) -> Vec<serde_json::Value> {
+        self.animal_toxins
+            .trace
+            .as_mut()
+            .map_or_else(Vec::new, |trace| std::mem::take(&mut trace.events))
+    }
+
+    pub(super) fn trace_carnivore_toxin_decision(
+        &mut self,
+        predator: EntityId,
+        selected: Option<EntityId>,
+        skipped: Option<EntityId>,
+        reserve_e: f64,
+        satiated: bool,
+        attacked: bool,
+    ) {
+        if let Some(trace) = &mut self.animal_toxins.trace {
+            let next = trace.next_decision.remove(&predator);
+            if next || skipped.is_some() {
+                trace.events.push(serde_json::json!({"event":"decision","tick":self.tick,
+                    "id":trace_id(predator),"selected":selected.map(trace_id),"skipped":skipped.map(trace_id),
+                    "reserve_e":reserve_e,"satiated":satiated,"attacked":attacked,"after_memory_update":next}));
+            }
+        }
     }
 
     pub fn animal_toxin_observation_state(&self) -> String {
@@ -382,9 +522,19 @@ impl World {
             "plant_intake": book.plant_intake, "cleared": book.cleared, "discarded": book.discarded,
             "transferred_produced": book.transferred_produced,
             "transferred_residual": book.transferred_residual,
-            "damage": book.damage, "production_energy": book.production_energy,
+            "damage": book.damage, "prevented_damage": book.prevented_damage,
+            "peak_cleared_load": book.peak_cleared_load,
+            "damaging_type_ticks": book.damaging_type_ticks,
+            "production_energy": book.production_energy,
             "resistance_energy": book.resistance_energy, "toxin_deaths": book.toxin_deaths,
             "color_skips": book.color_skips,
+            "learned_target_ticks": book.learned_target_ticks,
+            "learned_approach_ticks": book.learned_approach_ticks,
+            "learned_attacks": book.learned_attacks,
+            "learned_feeds": book.learned_feeds,
+            "hunger_reapproaches": book.hunger_reapproaches,
+            "hunger_reapproach_opportunities": book.hunger_reapproach_opportunities,
+            "threshold_exceedance_ticks": book.threshold_exceedance_ticks,
         })
         .to_string()
     }
