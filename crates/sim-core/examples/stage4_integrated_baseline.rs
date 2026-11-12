@@ -35,6 +35,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config: SimulationConfig = serde_json::from_slice(&std::fs::read(&args[1])?)?;
     config.seed = args[2].parse()?;
     assert!((12345..=12347).contains(&config.seed));
+    let compatibility = args.get(3).is_some_and(|arg| arg == "compatibility");
     let opportunities = args.get(3).is_some_and(|arg| arg == "opportunities");
     let mut shadow = if opportunities {
         Some(World::new(config.clone())?)
@@ -50,7 +51,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .all(|a| a.toxin_load == 0. && a.typed_load.iter().all(|&v| v == 0.)));
         world.enable_carnivore_opportunity_trace();
     }
-    let trace_enabled = args.get(3).is_some_and(|arg| arg == "trace");
+    let trace_enabled = compatibility || args.get(3).is_some_and(|arg| arg == "trace");
+    if compatibility {
+        assert!(!world.config.herbivores.hungry_color_recheck_enabled);
+        assert!(!world.config.herbivores.hungry_color_recovery_enabled);
+        assert!(!world.config.toxin.experimental_plant_toxicity_colors);
+        assert!(!world.config.toxin.experimental_inherited_plant_colors);
+        assert!(world
+            .config
+            .animal_toxin
+            .carnivore_hp_damage_per_excess_unit
+            .is_none());
+    }
     if !opportunities {
         world.set_carnivore_toxin_trace(trace_enabled);
     }
@@ -84,6 +96,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         <= shadow.config.world.max_living_entities as usize
                 );
             }
+        }
+        #[cfg(feature = "state-audit")]
+        if compatibility {
+            assert_eq!(
+                world.audit_state(false, Some(25)),
+                0_u64.to_le_bytes(),
+                "recovery state was not empty at Tick {tick}"
+            );
         }
         let counts = [
             world.plants.len(),
@@ -165,12 +185,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     #[cfg(not(feature = "state-audit"))]
     let terminal_state = "";
+    #[cfg(feature = "state-audit")]
+    let common_terminal_state = compatibility.then(|| {
+        use std::hash::{Hash, Hasher};
+        let common: Vec<u8> = (0..=24)
+            .flat_map(|section| world.audit_state(false, Some(section)))
+            .collect();
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        common.hash(&mut hasher);
+        format!("{:016x}", hasher.finish())
+    });
+    #[cfg(not(feature = "state-audit"))]
+    let common_terminal_state: Option<String> = None;
     println!(
         "{}",
         json!({"config":world.config,"initial_colors":initial_colors,"first_zero":extinction,
         "max_n_error":max_n,"max_e_error":max_e,"max_sampled_toxin_error":max_toxin,
         "max_population":max_total,"seconds":start.elapsed().as_secs_f64(),"rows":rows,
-        "trace":events,"plant_resources":plant_resources,"terminal_state_hash":terminal_state})
+        "trace":events,"common_terminal_state_hash":common_terminal_state,"plant_resources":plant_resources,"terminal_state_hash":terminal_state})
     );
     Ok(())
 }

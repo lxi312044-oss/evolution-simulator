@@ -314,17 +314,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let seed: u64 = args[1].parse()?;
     assert!((12345..=12347).contains(&seed));
     let inherited = args[2].starts_with("inherited-");
+    let candidate = args[2] == "inherited-predator-candidate";
+    let combined = candidate || args[2] == "inherited-predator-reference";
+    let mut predator_trace = Vec::new();
+    let mut first_zero = [None; 3];
     let mut inherited_choices = BTreeMap::<u64, InheritedChoice>::new();
     let mut inherited_total = InheritedChoice::default();
     let mut plant_flows = [[0_u64; 4]; 3];
     let mut predator_events = BTreeMap::<String, u64>::new();
     let learning = match args[2].as_str() {
-        "on" | "rescue" | "recovery" | "mixed-on" | "inherited-on" => true,
+        "on"
+        | "rescue"
+        | "recovery"
+        | "mixed-on"
+        | "inherited-on"
+        | "inherited-predator-candidate"
+        | "inherited-predator-reference" => true,
         "off" | "mixed-off" | "inherited-off" => false,
         _ => return Err("expected on or off".into()),
     };
     let mixed = args[2].starts_with("mixed-");
-    let mut config: SimulationConfig = serde_json::from_str(if inherited {
+    let mut config: SimulationConfig = serde_json::from_str(if candidate {
+        include_str!("../../../config/stage4-inherited-predator-candidate.json")
+    } else if inherited {
         include_str!("../../../config/stage4-inherited-plant-colors.json")
     } else if mixed {
         include_str!("../../../config/stage4-mixed-plant-colors.json")
@@ -338,6 +350,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.herbivores.hungry_color_recovery_enabled = hysteresis;
     let mut shadow = World::new(config.clone())?;
     let mut world = World::new(config.clone())?;
+    if combined {
+        let mut reference_config: SimulationConfig = serde_json::from_str(include_str!(
+            "../../../config/stage4-inherited-plant-colors.json"
+        ))?;
+        reference_config.seed = seed;
+        let mut reference = World::new(reference_config)?;
+        reference.config.animal_toxin = config.animal_toxin.clone();
+        assert_eq!(
+            world.audit_state(false, None),
+            reference.audit_state(false, None)
+        );
+    }
     if mixed || inherited {
         let mut opposite = config.clone();
         opposite.herbivores.color_learning_enabled = !learning;
@@ -406,6 +430,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         world.enable_carnivore_opportunity_trace();
     }
     let mut samples = Vec::new();
+    let mut combined_population = Vec::new();
     let mut capacity_ticks = 0;
     let mut herbivore_end_tick_population_sum = 0;
     let mut removed_herbivore_damage = 0.;
@@ -440,6 +465,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if kind == "decision" && !event["skipped"].is_null() {
                     *predator_events.entry("color_skip".into()).or_default() += 1;
                 }
+                if combined {
+                    predator_trace.push(event);
+                }
             }
         }
         let counts = [
@@ -447,6 +475,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             world.animals.items.len(),
             world.carnivores.len(),
         ];
+        for (first, count) in first_zero.iter_mut().zip(counts) {
+            if count == 0 {
+                first.get_or_insert(tick);
+            }
+        }
         let total: usize = counts.iter().sum();
         if tick > 0 {
             herbivore_end_tick_population_sum += counts[1];
@@ -582,6 +615,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     assert_eq!(plant_types, [[15, 15], [60, 60]]);
                 }
             }
+            if combined {
+                let reserves = |ids: &[f64]| -> Option<f64> {
+                    (!ids.is_empty()).then(|| ids.iter().sum::<f64>() / ids.len() as f64)
+                };
+                let herbivore_e: Vec<_> = world
+                    .animals
+                    .items
+                    .iter()
+                    .map(|a| world.resources.energy_balance(a.reserve).unwrap())
+                    .collect();
+                let carnivore_e: Vec<_> = world
+                    .carnivores
+                    .iter()
+                    .map(|a| world.resources.energy_balance(a.reserve).unwrap())
+                    .collect();
+                combined_population.push(json!({
+                    "tick":tick,"carnivore_births":world.carnivore_births,
+                    "carnivore_deaths":world.carnivore_deaths,
+                    "herbivore_reserve_e_mean":reserves(&herbivore_e),
+                    "carnivore_reserve_e_mean":reserves(&carnivore_e)
+                }));
+            }
             samples.push(
                 json!({"tick":tick,"plant_classes":classes,"plant_types":plant_types,"plant_flows":plant_flows,
                 "toxin": if inherited { Some(&toxin) } else { None },
@@ -612,7 +667,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "seconds":start.elapsed().as_secs_f64(),"coexistence_ticks":coexistence_ticks,"first_absent":first_absent,"capacity_ticks":capacity_ticks,
         "max_population":max_population,"max_toxin_error":max_toxin_error,
         "max_n_error":n_error,"max_e_error":e_error,"samples":samples,"founders":rows,
-        "predator_events":predator_events,"inherited_choices":inherited_choices,"inherited_total":inherited.then_some(inherited_total)})
+        "predator_events":predator_events,"predator_trace":predator_trace,"combined_population":combined_population,"first_zero":first_zero,"inherited_choices":inherited_choices,"inherited_total":inherited.then_some(inherited_total)})
     );
     Ok(())
 }
