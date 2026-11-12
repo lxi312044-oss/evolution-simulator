@@ -22,11 +22,17 @@ pub struct AnimalToxinSettings {
     /// Override the shared poison damage threshold for carnivores only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub carnivore_damage_threshold: Option<f64>,
+    /// Override HP damage per excess toxin unit per Tick for carnivores only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carnivore_hp_damage_per_excess_unit: Option<f64>,
 }
 
 impl AnimalToxinSettings {
     fn is_off(&self) -> bool {
-        !self.enabled && !self.color_learning_enabled && self.carnivore_damage_threshold.is_none()
+        !self.enabled
+            && !self.color_learning_enabled
+            && self.carnivore_damage_threshold.is_none()
+            && self.carnivore_hp_damage_per_excess_unit.is_none()
     }
 }
 
@@ -502,6 +508,11 @@ impl SimulationConfig {
             .is_some_and(|value| !value.is_finite() || value < 0.)
         {
             return Err("invalid carnivore toxin damage threshold".into());
+        }
+        if self.animal_toxin.carnivore_hp_damage_per_excess_unit
+            .is_some_and(|value| !value.is_finite() || value < 0.)
+        {
+            return Err("invalid carnivore toxin damage coefficient".into());
         }
         let t = &self.toxin;
         if t.experimental_inherited_plant_colors

@@ -309,6 +309,9 @@ impl World {
         if let Some(threshold) = self.config.animal_toxin.carnivore_damage_threshold {
             settings.damage_threshold = threshold;
         }
+        if let Some(coefficient) = self.config.animal_toxin.carnivore_hp_damage_per_excess_unit {
+            settings.hp_damage_per_excess_unit = coefficient;
+        }
         let t = &settings;
         let types = type_count(t);
         let book = &mut self.animal_toxins;
@@ -488,6 +491,10 @@ impl World {
         self.animal_toxins.trace.as_mut().unwrap().opportunities = true;
     }
 
+    pub(super) fn observes_carnivore_opportunities(&self) -> bool {
+        self.animal_toxins.trace.as_ref().is_some_and(|trace| trace.opportunities)
+    }
+
     pub(super) fn carnivore_opportunity_snapshot(
         &self,
         index: usize,
@@ -495,12 +502,7 @@ impl World {
         satiated: bool,
         hunger_override: bool,
     ) -> Option<serde_json::Value> {
-        if !self
-            .animal_toxins
-            .trace
-            .as_ref()
-            .is_some_and(|t| t.opportunities)
-        {
+        if !self.observes_carnivore_opportunities() {
             return None;
         }
         let pred = &self.carnivores[index];
@@ -522,6 +524,8 @@ impl World {
         let mut visible = [0_u64; 3]; // plant-derived, produced, either
         let mut same_colors = BTreeMap::<u32, [u64; 5]>::new();
         let mut same_color_distance = BTreeMap::<u32, f32>::new();
+        let mut learned_ready = Vec::new();
+        let tolerance = super::plant_color_learning::risk_tolerance(e / 60.);
         let mut closest = None;
         let mut closest_d2 = pred.vision * pred.vision;
         for prey in &self.animals.items {
@@ -546,6 +550,21 @@ impl World {
                 closest = Some(prey.id);
             }
             let color = visible_color(prey.genes.body_color);
+            if ready && d2 <= c.attack_range * c.attack_range {
+                let risk = scores.iter().filter_map(|&(key, score)| {
+                    let similarity = (1. - super::plant_color_learning::color_distance(color, key) / 0.25).max(0.);
+                    (similarity > 0.).then_some((key, score * 10. * similarity))
+                }).max_by(|a, b| a.1.total_cmp(&b.1));
+                if let Some((memory_color, risk)) = risk {
+                    let original = self.animal_toxins.trace.as_ref().unwrap()
+                        .first_prey_by_color.get(&(pred.id, memory_color)) == Some(&prey.id);
+                    learned_ready.push(serde_json::json!({
+                        "prey":trace_id(prey.id), "color":color, "memory_color":memory_color,
+                        "original":original, "distance":d2.sqrt(), "risk":risk,
+                        "rejected":!self.carnivore_allows_color(pred.id, prey.genes.body_color, e),
+                    }));
+                }
+            }
             if scores.iter().any(|&(key, _)| key == color) {
                 same_color_distance
                     .entry(color)
@@ -578,6 +597,7 @@ impl World {
             serde_json::json!({"event":"opportunity","tick":self.tick,"id":trace_id(pred.id),
             "visible":visible,"same_colors":same_colors,"same_color_distance":same_color_distance,"target":target,
             "closest_edible_without_color":closest.map(trace_id),"reserve_e":e,"vision":pred.vision,
+            "learned_ready":learned_ready,"tolerance":tolerance,
             "attack_range":c.attack_range,"cooldown":pred.attack_cooldown,"satiated":satiated,
             "hunger_override":hunger_override,"stomach_full":full,"refuge":refuge}),
         )
@@ -587,7 +607,7 @@ impl World {
         self.animal_toxins.trace.as_mut().unwrap().events.push(row);
     }
 
-    pub(super) fn trace_carnivore_toxin_removal(&mut self, id: EntityId) {
+    pub(super) fn trace_carnivore_toxin_removal(&mut self, id: EntityId, reason: &'static str) {
         let book = &mut self.animal_toxins;
         if let Some(trace) = book.trace.as_mut().filter(|t| t.opportunities) {
             let load = book
@@ -598,7 +618,7 @@ impl World {
             trace
                 .events
                 .push(serde_json::json!({"event":"removal","tick":self.tick,
-                "id":trace_id(id),"load":load}));
+                "id":trace_id(id),"load":load,"reason":reason}));
         }
     }
 
@@ -745,6 +765,29 @@ mod tests {
         close(w.animal_toxins.predators[&predator].load[0], 6.);
         close(w.animal_toxins.herbivores[&prey].stock[0], 0.);
         close(w.animals.items[0].toxin_load, 0.);
+    }
+
+    #[test]
+    fn carnivore_damage_coefficient_is_an_optional_species_override() {
+        let measure = |override_coefficient| {
+            let mut w = world();
+            w.config.toxin.hp_damage_per_excess_unit = 0.01;
+            w.config.toxin.resistance_enabled = false;
+            w.config.toxin.damage_threshold = 0.;
+            w.config.toxin.clearance_fraction_per_tick = 0.;
+            w.config.animal_toxin.carnivore_hp_damage_per_excess_unit = override_coefficient;
+            let id = w.carnivores[0].id;
+            let mut state = PredatorToxin::founder(w.config.seed, id, &w.config.toxin);
+            state.load[0] = 2.;
+            w.animal_toxins.predators.insert(id, state);
+            assert!(!w.advance_carnivore_toxin(0).unwrap());
+            assert_eq!(w.config.toxin.hp_damage_per_excess_unit, 0.01);
+            assert_eq!(w.animal_toxins.predators[&id].load[0], 2.);
+            w.animal_toxins.damage[0]
+        };
+        assert_eq!(measure(None), measure(Some(0.01)));
+        assert_eq!(measure(None), f64::from(0.02_f32));
+        assert_eq!(measure(Some(0.50)), 1.);
     }
 
     #[test]

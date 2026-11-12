@@ -70,6 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut max_total = 0;
     let mut extinction = [None; 3];
     let mut rows = Vec::new();
+    let mut plant_resources = Vec::new();
     for tick in 0..=6000 {
         if start.elapsed() >= Duration::from_secs(120) {
             return Err(format!("time limit at Tick {tick}").into());
@@ -133,6 +134,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .iter()
                 .filter(|p| p.toxin_type.0 == 0)
                 .count();
+            if opportunities {
+                let n = world
+                    .plants
+                    .items
+                    .iter()
+                    .map(|p| world.resources.nutrient_balance(p.body).unwrap())
+                    .sum::<f64>();
+                let e = world
+                    .plants
+                    .items
+                    .iter()
+                    .map(|p| world.resources.energy_balance(p.reserve).unwrap())
+                    .sum::<f64>();
+                plant_resources.push([tick as f64, n, e]);
+            }
             rows.push(json!({"tick":tick,"counts":counts,"plant_types":[a,counts[0]-a],
                 "animal_toxin":toxin,"diagnostics":world.diagnostics,"carnivore":world.carnivore_debug,
                 "carnivore_births":world.carnivore_births,"carnivore_deaths":world.carnivore_deaths,
@@ -154,7 +170,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         json!({"config":world.config,"initial_colors":initial_colors,"first_zero":extinction,
         "max_n_error":max_n,"max_e_error":max_e,"max_sampled_toxin_error":max_toxin,
         "max_population":max_total,"seconds":start.elapsed().as_secs_f64(),"rows":rows,
-        "trace":events,"terminal_state_hash":terminal_state})
+        "trace":events,"plant_resources":plant_resources,"terminal_state_hash":terminal_state})
     );
     Ok(())
 }

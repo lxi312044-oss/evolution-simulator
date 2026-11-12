@@ -73,7 +73,7 @@ impl PlantColorMemory {
 
     pub fn allows(&self, color: u32, reserve_fraction: f64) -> bool {
         // A hungrier animal accepts more risk. Only learned harm and visible color enter the choice.
-        let tolerance = 1. - 0.75 * reserve_fraction.clamp(0., 1.);
+        let tolerance = risk_tolerance(reserve_fraction);
         self.experiences.iter().all(|entry| {
             let risk = entry.damage * 10.;
             risk <= tolerance
@@ -82,7 +82,11 @@ impl PlantColorMemory {
     }
 }
 
-fn color_distance(a: u32, b: u32) -> f64 {
+pub(super) fn risk_tolerance(reserve_fraction: f64) -> f64 {
+    1. - 0.75 * reserve_fraction.clamp(0., 1.)
+}
+
+pub(super) fn color_distance(a: u32, b: u32) -> f64 {
     let squared: f64 = [8, 16, 24]
         .into_iter()
         .map(|shift| {

@@ -165,6 +165,8 @@ impl World {
             let predator_id = self.carnivores[i].id;
             let mut color_skips = 0;
             let mut last_color_skip = None;
+            let mut selection_color_skips = Vec::new();
+            let observe_opportunities = self.observes_carnivore_opportunities();
             for (j, h) in self.animals.items.iter().enumerate() {
                 if satiated {
                     break;
@@ -174,6 +176,9 @@ impl World {
                     if !self.carnivore_allows_color(predator_id, h.genes.body_color, reserve_e) {
                         color_skips += 1;
                         last_color_skip = Some(h.id);
+                        if observe_opportunities {
+                            selection_color_skips.push([h.id.index, h.id.generation]);
+                        }
                         continue;
                     }
                     dist = d;
@@ -448,6 +453,10 @@ impl World {
                 .dissipate_heat(&mut self.resources, reserve, burn)
                 .map_err(|e| format!("carnivore metabolism: {e:?}"))?;
             let attacks_before = self.carnivore_debug.hunt_attempts;
+            let mut attack_color_rejected = false;
+            let attack_reserve_e = opportunity.as_ref().map(|_| {
+                self.resources.energy_balance(reserve).unwrap_or(0.)
+            });
             if let Some(j) = nearest {
                 let prey = &self.animals.items[j];
                 let learned_target = self.config.animal_toxin.color_learning_enabled
@@ -468,6 +477,7 @@ impl World {
                     ) {
                         color_skips += 1;
                         last_color_skip = Some(h.id);
+                        attack_color_rejected = true;
                     } else if c.prey_refuge_enabled
                         && self.animals.items.len() <= c.prey_refuge_threshold as usize
                     {
@@ -684,6 +694,9 @@ impl World {
                 }
             }
             if let Some(mut row) = opportunity {
+                row["selection_color_skips"] = serde_json::json!(selection_color_skips);
+                row["attack_color_rejected"] = serde_json::json!(attack_color_rejected);
+                row["attack_reserve_e"] = serde_json::json!(attack_reserve_e);
                 row["attacked"] =
                     serde_json::json!(self.carnivore_debug.hunt_attempts != attacks_before);
                 row["eaten_n"] =
@@ -1019,7 +1032,14 @@ impl World {
                 self.carnivore_debug.gene_deaths[bin] += 1;
                 let a = self.carnivores.swap_remove(i);
                 if self.config.animal_toxin.enabled {
-                    self.trace_carnivore_toxin_removal(a.id);
+                    let reason = if toxin_dead {
+                        "toxin_hp_zero"
+                    } else if a.age >= a.max_age {
+                        "age"
+                    } else {
+                        "energy"
+                    };
+                    self.trace_carnivore_toxin_removal(a.id, reason);
                     self.animal_toxins.remove_carnivore(a.id);
                 }
                 let cell = self.land.cell_index(
