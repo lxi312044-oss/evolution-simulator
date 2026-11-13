@@ -1,3 +1,4 @@
+import { defaultWebPreset, greenFounderPreset } from "./initial-preset";
 import { formatSettingError } from "./settings-display";
 import init, { Simulation } from "./pkg/sim_wasm";
 import config from "../../config/standard-toxin.json";
@@ -57,11 +58,13 @@ let stopAt = 0;
 let interval = 100;
 let reference: {config: Config; condition: string} | undefined;
 const playNames: Record<string, string> = {
-  "standard-toxin": "標準の生態系",
+  [defaultWebPreset]: "無毒の緑から始まる世界",
+  "standard-toxin": "通常毒",
   "stage4-fixed-candidate": "色を覚える捕食者",
   "stage4-fixed-baseline": "色のある草原",
 };
 const playNotes: Record<string, string> = {
+  [defaultWebPreset]: "最初の植物はすべて無毒の緑色です。種子から生まれる子では、毒性と色が独立に変異します。草食は食べた後の被毒経験から色を学習します。色だけで有毒株を正確に見分けられるとは限りません。",
   "standard-toxin": "植物・草食・肉食と資源の循環を観察します。",
   "stage4-fixed-candidate": "色を手掛かりに餌を選ぶ草食と、被毒経験を覚える肉食を観察します。",
   "stage4-fixed-baseline": "色と毒性が部分的に対応する草原で、草食の餌選びを観察します。",
@@ -99,6 +102,7 @@ function normalizeConfig(source: unknown): Config {
   return merged;
 }
 const phase19Configs:Record<string,Config>=Object.fromEntries(Object.entries({"standard-toxin":config,"control":control,"plant-120":plant120,"plant-150":plant150,"herbivore-120":herbivore120,"combined":combined,"p29-control":phase29control,"p29-hunting":phase29hunting,"p29-fixed":phase29fixed,"p29-combined":phase29combined,"p30-hunting-only":phase30huntingonly,"p30-stomach-relaxed":phase30stomachrelaxed,"p30-digestion-adjusted":phase30digestionadjusted,"p30-combined":phase30combined,"p31-control":phase31control,"p31-basal-80":phase31basal80,"p31-movement-80":phase31movement80,"p31-combined-80":phase31combined80,"p32-control":p32_0,"p32-ambush":p32_1,"p32-roaming":p32_2,"p32-hybrid":p32_3,"p32-hybrid-evasion":p32_4,"p32-combined80":p32_5,"p32-combined80-evasion":p32_6,"p35-fixed":p35fixed,"p35-ambush":p35ambush,"p35-genetic":p35genetic}).map(([name, preset]) => [name, normalizeConfig(preset)]));
+phase19Configs[defaultWebPreset] = greenFounderPreset(config);
 phase19Configs["stage4-fixed-baseline"] = normalizeConfig(fixedBaseline);
 phase19Configs["stage4-fixed-candidate"] = normalizeConfig(fixedCandidate);
 phase19Configs["stage4-baseline"] = normalizeConfig(stage4Baseline);
@@ -106,7 +110,7 @@ phase19Configs["stage4-hungry-recheck"] = normalizeConfig({
   ...stage4Baseline,
   herbivores: { ...stage4Baseline.herbivores, hungry_color_recheck_enabled: true },
 });
-let activeCondition = "standard-toxin";
+let activeCondition = defaultWebPreset;
 let baseline:Config = structuredClone(config);
 const presets={
  baseline:{growth:0.003,uptake:0.1,seed:0.35,feeding:1.5,herbivores:80,mineralization:0.002,diffusion:0,radius:70,cooldown:100},
@@ -411,10 +415,10 @@ async function main(){
   const requested = new URLSearchParams(location.search).get("preset");
   if (!dev) {
     conditionSelect.replaceChildren(...Object.entries(playNames).map(([key, name])=>new Option(name,key)));
-    if (requested && phase19Configs[requested] && !playNames[requested])
+    if (requested && Object.hasOwn(phase19Configs, requested) && !Object.hasOwn(playNames, requested))
       conditionSelect.add(new Option("URL指定の環境", requested));
   }
-  conditionSelect.value = requested && phase19Configs[requested] ? requested : "standard-toxin";
+  conditionSelect.value = requested && Object.hasOwn(phase19Configs, requested) ? requested : defaultWebPreset;
   conditionSelect.onchange=()=>{
     try{
       const next=structuredClone(phase19Configs[conditionSelect.value]);
