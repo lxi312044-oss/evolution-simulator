@@ -29,3 +29,18 @@ details{margin:8px 0}summary{cursor:pointer;padding:.45rem 0}
 #research-summary{max-height:340px;overflow:auto;background:#0e1818;padding:12px;font-size:12px}
 #pending{color:#f2c183}#status:empty{display:none}
 .playback{margin:0 0 12px}
+
+#settings-groups .tuning-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); }
+.tuning-grid .setting-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start;
+  padding: 12px; background: #0e1b20; border: 1px solid #304941; border-radius: 8px; gap: 7px 12px; }
+.setting-name { font-weight: 650; color: #e2f3e9; }
+.tuning-grid .setting-card input[type=number] { width: min(100%, 10rem); justify-self: end; }
+.tuning-grid .setting-card input[type=checkbox] { width: 1.2rem; height: 1.2rem; margin: 0; accent-color: #78d6aa; }
+.setting-help, .setting-range, .setting-card code { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.setting-help { line-height: 1.6; }
+.setting-range, .setting-card code { color: #a4c4b5; font-size: 12px; }
+#settings-error { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 500px) {
+  .tuning-grid .setting-card:has(input[type=number]) { grid-template-columns: minmax(0, 1fr); }
+  .tuning-grid .setting-card input[type=number] { justify-self: start; }
+}

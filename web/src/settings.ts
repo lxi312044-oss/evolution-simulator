@@ -1,3 +1,4 @@
+import { formatSettingError, settingControlKeys, settingDisplay } from "./settings-display";
 type Values = Record<string, unknown>;
 const groups: [string, string[], string][] = [
   ["環境・初期集団", ["seed", "world", "initial_population", "simulation"], "初期配置はseedに従うコード内の手順です。"],
@@ -10,23 +11,12 @@ const groups: [string, string[], string][] = [
   ["摂食・繁殖", ["herbivores", "carnivores"], ""],
 ];
 const optional = ["animal_toxin.carnivore_damage_threshold", "animal_toxin.carnivore_hp_damage_per_excess_unit"];
-const labels: Record<string, string> = {
-  "toxin.enabled": "植物毒の作用（toxin.enabled）",
-  seed: "乱数seed", "world.width": "世界の幅", "world.height": "世界の高さ",
-  "world.land_columns": "土壌の列数", "world.land_rows": "土壌の行数",
-  "world.max_living_entities": "全種合計の個体数上限",
-  "initial_population.plants": "初期植物数", "initial_population.herbivores": "初期草食数",
-  "initial_population.carnivores": "初期肉食数",
-  "herbivores.color_learning_enabled": "草食の色学習", "animal_toxin.color_learning_enabled": "肉食の色学習",
-  "animal_toxin.carnivore_damage_threshold": "肉食の毒損傷閾値",
-  "animal_toxin.carnivore_hp_damage_per_excess_unit": "肉食の毒損傷係数（HP／超過毒量／Tick）",
-};
 const matches = (path: string, parts: string[]) => parts.some(part => path === part || path.startsWith(part + ".")
   || part.includes(".") && path.startsWith(part));
 
 export function editor(container: HTMLElement, dirty: () => void) {
   const state = {
-    onApply: (_value: Values) => {},
+    onApply: (_value: Values, _changed: boolean) => {},
     load(value: Values) {
       const draft = structuredClone(value);
       if (!draft.animal_toxin) draft.animal_toxin = {enabled:false,color_learning_enabled:false};
@@ -34,7 +24,8 @@ export function editor(container: HTMLElement, dirty: () => void) {
       const herbivores = draft.herbivores as Values;
       for (const key of ["experimental_plant_toxicity_colors", "experimental_inherited_plant_colors"]) toxin[key] ??= false;
       for (const key of ["hungry_color_recheck_enabled", "hungry_color_recovery_enabled"]) herbivores[key] ??= false;
-      const lists = groups.map(() => document.createElement("div"));
+      const original = JSON.stringify(draft);
+      const lists = [...groups, ["その他"]].map(() => document.createElement("div"));
       lists.forEach(list => list.className = "tuning-grid");
       const entries = Object.entries(draft).flatMap(([key,val]) =>
         val && typeof val === "object" && !Array.isArray(val)
@@ -44,9 +35,19 @@ export function editor(container: HTMLElement, dirty: () => void) {
       for (const [path,val] of entries) {
         if (typeof val !== "number" && typeof val !== "boolean" && !optional.includes(path)) continue;
         const index = matches(path, groups[3][1]) ? 3 : groups.findIndex(([,parts]) => matches(path, parts));
-        if (index < 0) continue;
+        const display = settingDisplay[path];
         const label = document.createElement("label");
-        label.textContent = labels[path] ?? path;
+        const name = document.createElement("span");
+        name.className = "setting-name";
+        name.textContent = display?.name ?? path;
+        const help = document.createElement("span");
+        help.className = "setting-help";
+        help.textContent = display?.description ?? "説明未登録";
+        const range = document.createElement("span");
+        range.className = "setting-range";
+        range.textContent = display?.range ?? "入力範囲は設定検証に従います";
+        const keyLabel = document.createElement("code");
+        keyLabel.textContent = path;
         label.title = path;
         const input = document.createElement("input");
         input.type = typeof val === "boolean" ? "checkbox" : "number";
@@ -57,11 +58,14 @@ export function editor(container: HTMLElement, dirty: () => void) {
           input.required = !optional.includes(path);
           if (!input.required) input.placeholder = "共有設定を使用";
         }
+        input.readOnly = path === "simulation.decision_interval_ticks";
         input.addEventListener("input", dirty);
-        label.append(input);
-        lists[index].append(label);
+        label.className = "setting-card";
+        input.setAttribute("aria-label", display?.name ?? path);
+        label.append(name, input, help, range, keyLabel);
+        lists[index < 0 ? groups.length : index].append(label);
         updates.push(() => {
-          if (!input.reportValidity()) throw new Error(path + " の値を確認してください");
+          if (!input.reportValidity()) throw new Error((display?.name ?? path) + "（" + path + "）を " + (display?.range ?? "有効な範囲") + " で入力してください。");
           const [section, key] = path.split(".");
           const target = key ? draft[section] as Values : draft;
           const name = key ?? section;
@@ -70,7 +74,7 @@ export function editor(container: HTMLElement, dirty: () => void) {
           else {
             const number = input.valueAsNumber;
             if (!Number.isFinite(number) || (path === "seed" && (!Number.isSafeInteger(number) || number < 0)))
-              throw new Error(path + " の値を確認してください");
+              throw new Error((display?.name ?? path) + "（" + path + "）を " + (display?.range ?? "有効な範囲") + " で入力してください。");
             target[name] = number;
           }
         });
@@ -87,14 +91,44 @@ export function editor(container: HTMLElement, dirty: () => void) {
         details.append(lists[i]);
         return details;
       });
+      if (lists[groups.length].childElementCount) {
+        const extra = document.createElement("details");
+        const title = document.createElement("summary");
+        title.textContent = "その他の設定";
+        extra.append(title, lists[groups.length]);
+        sections.push(extra);
+      }
       const apply = document.createElement("button");
       apply.textContent = "適用して新規開始";
       apply.onclick = () => {
-        try { updates.forEach(update => update()); state.onApply(draft); }
-        catch (e) { document.getElementById("status")!.textContent = String(e); }
+        try { updates.forEach(update => update()); state.onApply(draft, JSON.stringify(draft) !== original); }
+        catch (e) { document.getElementById("settings-error")!.textContent = formatSettingError(e); }
       };
       container.replaceChildren(...sections, apply);
     },
   };
   return state;
+}
+
+export function describeExistingControls() {
+  for (const [id, key] of Object.entries(settingControlKeys)) {
+    const control = document.getElementById(id) as HTMLInputElement | HTMLSelectElement;
+    const label = control.closest("label")!;
+    const display = settingDisplay[key];
+    const name = document.createElement("span");
+    name.className = "setting-name";
+    name.textContent = display.name;
+    const help = document.createElement("span");
+    help.className = "setting-help";
+    help.textContent = display.description;
+    const range = document.createElement("span");
+    range.className = "setting-range";
+    const bounds = control instanceof HTMLInputElement && control.type === "number" && control.min && control.max;
+    range.textContent = display.range + (bounds ? "（簡易調整では " + control.min + "〜" + control.max + "）" : "");
+    const code = document.createElement("code");
+    code.textContent = key;
+    control.setAttribute("aria-label", display.name);
+    label.className = "setting-card";
+    label.replaceChildren(name, control, help, range, code);
+  }
 }

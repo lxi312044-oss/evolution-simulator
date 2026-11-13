@@ -1,3 +1,4 @@
+import { formatSettingError } from "./settings-display";
 import init, { Simulation } from "./pkg/sim_wasm";
 import config from "../../config/standard-toxin.json";
 import fixedBaseline from "../../config/stage4-inherited-plant-colors.json";
@@ -34,7 +35,7 @@ import "./style.css";
 import { resizeField } from "./field";
 import {drawAnimalSprite} from "./sprites";
 import { EcosystemMap } from "./map";
-import { editor } from "./settings";
+import { describeExistingControls, editor } from "./settings";
 const el=(id:string)=>document.getElementById(id)!;
 const status=el("status");
 const canvas=el("world") as HTMLCanvasElement;
@@ -242,7 +243,7 @@ function resetWithSettings(){
   const nextConfig=readConfig();
   installConfig(nextConfig);
   showConfigInControls(nextConfig);
- }catch(e){status.textContent=`設定エラー: ${String(e)}`;}
+ }catch(e){status.textContent=`設定エラー: ${formatSettingError(e)}`;}
 }
 
 let playing=false;
@@ -461,7 +462,7 @@ async function main(){
       throw e;
     }
     baseline=structuredClone(next);showConfigInControls(next);conditionSelect.value="";
-   }catch(e){status.textContent=`JSON読み込みエラー: ${String(e)}`;}
+   }catch(e){status.textContent=`JSON読み込みエラー: ${formatSettingError(e)}`;}
    (el("config-file") as HTMLInputElement).value="";
   };
   el("step").onclick=()=>step(1);
@@ -472,11 +473,12 @@ async function main(){
   el("reset").onclick=()=>{try { installConfig(activeConfig); showConfigInControls(activeConfig); }
     catch(e){status.textContent=String(e);}};
   el("apply").onclick=()=>resetWithSettings();
-  settings.onApply = value => {
-    try { const next=normalizeConfig(value); installConfig(next); baseline=structuredClone(next); showConfigInControls(next); }
+  if (dev) describeExistingControls();
+  settings.onApply = (value, changed) => {
+    try { const next=changed ? normalizeConfig(value) : structuredClone(activeConfig); installConfig(next); baseline=structuredClone(next); showConfigInControls(next); }
     catch(e){
       el("pending").textContent="適用できませんでした。編集値は保持されています。";
-      el("settings-error").textContent=String(e);
+      el("settings-error").textContent=formatSettingError(e);
       status.textContent="設定を適用できませんでした。実行中の環境は操作できます。";
     }
   };
