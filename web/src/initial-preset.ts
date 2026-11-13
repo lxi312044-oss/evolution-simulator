@@ -4,9 +4,11 @@ export function greenFounderPreset<T extends {
   plants: object;
   herbivores: object;
   toxin: object;
+  carnivores: object;
 }>(standard: T) {
   return {
     ...standard,
+    carnivores: { ...standard.carnivores, speed: 4.2 },
     plants: {
       ...standard.plants,
       color_inheritance_enabled: true,

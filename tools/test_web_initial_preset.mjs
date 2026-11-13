@@ -19,10 +19,14 @@ Object.assign(expected.plants, {
   color_inheritance_enabled: true, color_mutation_probability: 0.2, color_mutation_scale: 0.25,
 });
 expected.herbivores.color_learning_enabled = true;
+expected.carnivores.speed = 4.2;
 assert.deepEqual(config, expected);
 
 const sim = new Simulation(JSON.stringify(config));
-const old = new Simulation(JSON.stringify(original));
+const previousPreset = structuredClone(config);
+delete previousPreset.carnivores.speed;
+const old = new Simulation(JSON.stringify(previousPreset));
+const repeat = new Simulation(sim.effective_config_json());
 assert.equal(sim.herbivore_color_snapshot_json(), old.herbivore_color_snapshot_json());
 assert.equal(sim.carnivore_snapshot_json(), old.carnivore_snapshot_json());
 const readPlants = () => {
@@ -36,8 +40,27 @@ const founders = readPlants();
 assert.equal(founders.length, 300);
 assert.ok(founders.every(p => !p.toxic && isGreen(p)));
 assert.equal(JSON.parse(sim.effective_config_json()).herbivores.color_learning_enabled, true);
-sim.enable_standard_germination();
-sim.step(1000);
+for (const world of [sim, old, repeat]) {
+  world.enable_standard_germination();
+  const initialN = world.total_nutrients();
+  const initialE = world.total_energy();
+  world.step(1000);
+  assert.ok(Math.abs(world.total_nutrients() - initialN) < 1e-6);
+  const energyError = world.total_energy() - initialE - world.sunlight_in() + world.heat_out();
+  assert.ok(Math.abs(energyError) < 1e-3, String(energyError));
+}
+assert.deepEqual(sim.audit_state(false), repeat.audit_state(false));
+for (const [name, world] of [["before", old], ["after", sim]]) {
+  const d = JSON.parse(world.carnivore_debug_json());
+  const h = JSON.parse(world.diagnostics_json());
+  console.log(name, {
+    distance: d.predator_movement_distance, movementE: d.energy_movement_spent,
+    chaseMovementE: d.p41_chase_movement_energy, attacks: Number(world.carnivore_hunts()),
+    huntAttempts: d.hunt_attempts, herbivoreMovementE: h.herbivore_movement_e,
+    counts: [world.plant_count(), world.herbivore_count(), world.carnivore_count()],
+  });
+}
+repeat.free();
 const plants = readPlants();
 assert.ok(plants.some(p => p.toxic));
 assert.ok(plants.some(p => !isGreen(p)));

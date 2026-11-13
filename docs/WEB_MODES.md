@@ -32,6 +32,7 @@ npm run dev -- --host 127.0.0.1 --port 5175 --strictPort
 | `plants.color_mutation_probability` | RGB各成分につき0.20 |
 | `plants.color_mutation_scale` | 0.25 |
 | `herbivores.color_learning_enabled` | ON |
+| `carnivores.speed` | 4.2 距離/Tick（通常毒は3.2） |
 | `toxin.experimental_plant_toxicity_colors`、`toxin.experimental_inherited_plant_colors` | OFF |
 
 色と毒性の値は観察用。URL指定と開発版で読み込んだJSONはそれぞれの設定で開始する。リセットは適用中の設定で再開始する。CLIとエンジンの既定値は従来どおり。
