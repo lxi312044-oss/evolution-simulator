@@ -648,6 +648,69 @@ impl World {
         }
     }
 
+    /// Read-only individual state for the Web inspector.
+    pub fn inspect_entity(&self, index: u32, generation: u32) -> serde_json::Value {
+        use serde_json::json;
+        let id = EntityId { index, generation };
+        let n = |account| self.resources.nutrient_balance(account);
+        let e = |account| self.resources.energy_balance(account);
+        let rgb = |color: u32| [24, 16, 8].map(|shift| ((color >> shift) & 255) as f64 / 255.);
+        let types = type_count(&self.config.toxin);
+        if let Some(p) = self.plants.items.iter().find(|p| p.id == id) {
+            return json!({"kind":"plant","id":[index,generation],"position":[p.x,p.y],"rgb":rgb(p.color),
+                "age":p.age,"max_age":p.max_age,"body_n":n(p.body),"reserve_n":n(p.reserve),
+                "reserve_e":e(p.reserve),"growth":p.growth,"seed_cooldown":p.seed_cooldown,
+                "toxic":self.config.toxin.enabled && p.produces_toxin,"toxin_type":p.toxin_type.0,
+                "toxin_stock":null});
+        }
+        if let Some(a) = self.animals.items.iter().find(|a| a.id == id) {
+            let h = &self.config.herbivores;
+            let maximum = f64::from(a.genes.adult_max_hp) * h.max_energy_per_hp;
+            let reserve = e(a.reserve);
+            let mut load = a.typed_load;
+            load[0] = a.toxin_load;
+            let mut resistance = a.genes.typed_resistance;
+            resistance[0] = a.genes.toxin_resistance;
+            let memory = self.plant_color_learning.get(&id);
+            return json!({"kind":"herbivore","id":[index,generation],"position":[a.x,a.y],
+                "rgb":a.genes.body_color.rgb(),"age":a.age,"max_age":a.max_age,
+                "hp":a.hp,"adult_hp_max":a.genes.adult_max_hp,"body_n":n(a.body),
+                "reserve_n":n(a.reserve),"reserve_e":reserve,"reserve_e_max":maximum,
+                "stomach_n":n(a.stomach),"stomach_n_max":h.satiety_enabled.then_some(h.stomach_capacity_n),
+                "load":load[..types],"resistance":resistance[..types],
+                "toxin_stock":self.animal_toxins.herbivores.get(&id).map(|p| &p.stock[..types]),
+                "target":a.target.map(trace_id),"feeding_active":h.satiety_enabled.then_some(a.feeding_active),
+                "reproduction_cooldown":a.reproduction_cooldown,"well_fed_ticks":a.well_fed_ticks,
+                "births":a.successful_births,"dose":a.lifetime_toxin_dose,"damage":a.lifetime_toxin_damage,
+                "tolerance":reserve.filter(|_| h.color_learning_enabled).map(|v|
+                    super::plant_color_learning::risk_tolerance(v / maximum)),
+                "memory":memory.map(|m| m.harm_scores().into_iter().map(|(c, harm)|
+                    json!({"rgb":rgb(c),"harm":harm,"risk_same_color":harm*10.})).collect::<Vec<_>>())});
+        }
+        if let Some(a) = self.carnivores.iter().find(|a| a.id == id) {
+            let c = &self.config.carnivores;
+            let toxin = self.animal_toxins.predators.get(&id);
+            let reserve = e(a.reserve);
+            return json!({"kind":"carnivore","id":[index,generation],"position":[a.x,a.y],"rgb":a.color.rgb(),
+                "age":a.age,"max_age":a.max_age,"parent":a.parent_id.map(trace_id),
+                "hp":toxin.map(|p|p.hp),"adult_hp_max":self.config.animal_toxin.enabled.then_some(INITIAL_HP),
+                "body_n":n(a.body),"reserve_n":n(a.reserve),"reserve_e":reserve,
+                "stomach_n":n(a.stomach),"stomach_e":e(a.stomach),
+                "stomach_n_max":c.digestion_enabled.then_some(c.stomach_capacity_nutrients),
+                "stomach_e_max":c.digestion_enabled.then_some(c.stomach_capacity_energy),
+                "load":toxin.map(|p|&p.load[..types]),"resistance":toxin.map(|p|&p.resistance[..types]),
+                "toxin_stock":toxin.map(|p|&p.production.stock[..types]),
+                "last_target":a.p42.previous_target.map(trace_id),"feeding_active":c.digestion_enabled.then_some(a.feeding_active),
+                "reproduction_cooldown":a.cooldown,"attack_cooldown":a.attack_cooldown,
+                "births":a.p42.births_as_parent,
+                "tolerance":reserve.filter(|_|self.config.animal_toxin.color_learning_enabled).map(|v|
+                    super::plant_color_learning::risk_tolerance(v / 60.)),
+                "memory":toxin.map(|p| p.memory.harm_scores().into_iter().map(|(c,harm)|
+                    json!({"rgb":rgb(c),"harm":harm,"risk_same_color":harm*10.})).collect::<Vec<_>>())});
+        }
+        serde_json::Value::Null
+    }
+
     pub fn animal_toxin_observation_state(&self) -> String {
         format!("{:?}", self.animal_toxins)
     }

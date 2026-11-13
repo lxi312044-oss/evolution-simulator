@@ -405,6 +405,12 @@ impl Simulation {
         }
         state
     }
+    /// Reports the effective experiment switch in the running WASM simulation.
+    pub fn hungry_color_recheck_enabled(&self) -> bool {
+        let settings = &self.world.config.herbivores;
+        settings.color_learning_enabled && settings.hungry_color_recheck_enabled
+    }
+
     pub fn tick_count(&self) -> u64 {
         self.world.tick
     }
@@ -474,6 +480,31 @@ impl Simulation {
     }
     pub fn deaths(&self) -> u64 {
         self.world.deaths
+    }
+    pub fn effective_config_json(&self) -> String {
+        serde_json::to_string(&self.world.config).unwrap()
+    }
+
+    /// Complete IDs in the same iteration order as the three map snapshots.
+    pub fn map_entity_ids(&self) -> Vec<u32> {
+        self.world.plants.items.iter().map(|p| p.id)
+            .chain(self.world.animals.items.iter().map(|a| a.id))
+            .chain(self.world.carnivores.iter().map(|a| a.id))
+            .flat_map(|id| [id.index, id.generation]).collect()
+    }
+
+    pub fn inspect_entity_json(&self, index: u32, generation: u32) -> String {
+        self.world.inspect_entity(index, generation).to_string()
+    }
+
+    pub fn plant_color_snapshot_json(&self) -> String {
+        let plants: Vec<[f32; 7]> = self.world.plants.items.iter().map(|p| [
+            p.x, p.y, 2.5 + 4.5 * p.growth, p.growth,
+            ((p.color >> 24) & 255) as f32 / 255.0,
+            ((p.color >> 16) & 255) as f32 / 255.0,
+            ((p.color >> 8) & 255) as f32 / 255.0,
+        ]).collect();
+        serde_json::to_string(&plants).unwrap_or_else(|_| "[]".into())
     }
     pub fn plant_snapshot_json(&self) -> String {
         serde_json::to_string(&self.world.render_snapshot()).unwrap_or_else(|_| "[]".into())
