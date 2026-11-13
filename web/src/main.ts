@@ -393,6 +393,7 @@ function step(n:number){
  finally { stepMs = performance.now() - started; }
 }
 // ×1/×2/×4 denotes simulation ticks per 50 ms of wall time (not wall-clock acceleration guarantees).
+let speedSample: { time: number; tick: number } | undefined;
 function loop(t:number){
  if(dev){
    if(!frameStart) frameStart=t;
@@ -403,8 +404,19 @@ function loop(t:number){
    }
  }
  if(playing&&t-last>=50){
+  const tick=Number(simulation.tick_count());
+  if(!speedSample) speedSample={time:t,tick};
+  else if(t-speedSample.time>=1000){
+    const actual=(tick-speedSample.tick)*1000/(t-speedSample.time);
+    el("actual-speed").textContent="実測 "+actual.toFixed(1)+" Tick/秒";
+    speedSample={time:t,tick};
+  }
   const speed=Number((el("play-speed") as HTMLSelectElement).value)||1;
   step(speed);last=t;
+ }
+ if(!playing&&speedSample){
+  speedSample=undefined;
+  el("actual-speed").textContent="停止中";
  }
  requestAnimationFrame(loop);
 }

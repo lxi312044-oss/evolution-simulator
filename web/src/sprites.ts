@@ -38,6 +38,8 @@ const patterns: Record<SpeciesSprite,string[]> = {
  '.....oooo..ooo..'
  ]
 };
+// Retain enough variants for a dense view of the default 5,000-entity world.
+const maxCachedSprites = 8192;
 const cache = new Map<string, HTMLCanvasElement>();
 /** Color channels are sRGB floats in [0,1], matching Rust BodyColor. */
 export type BodyRGB = readonly [number,number,number];
@@ -55,7 +57,11 @@ function recolor(base:string,color:BodyRGB,shade:number):string {
 export function sprite(species:SpeciesSprite,bodyColor?:BodyRGB):HTMLCanvasElement {
  const rgb=bodyColor?.map(v=>Math.max(0,Math.min(255,Math.round(v*255))));
  const key=species+(rgb?`:${rgb.join(',')}`:'');
- const cached=cache.get(key);if(cached)return cached;
+ const cached=cache.get(key);if(cached){
+  cache.delete(key);
+  cache.set(key,cached);
+  return cached;
+ }
  const rows=patterns[species];
  const c=document.createElement('canvas');c.width=16;c.height=16;
  const context=c.getContext('2d')!;
@@ -77,8 +83,11 @@ export function sprite(species:SpeciesSprite,bodyColor?:BodyRGB):HTMLCanvasEleme
    if(color){context.fillStyle=color;context.fillRect(x,y,1,1);}
   }
  });
- // Bound cache memory for long-running evolving populations.
- if(cache.size>=512)cache.clear();
+ // Evict only the least recently used image.
+ if(cache.size>=maxCachedSprites){
+  const oldest=cache.keys().next();
+  if(!oldest.done)cache.delete(oldest.value);
+ }
  cache.set(key,c);return c;
 }
 export function drawAnimalSprite(ctx:CanvasRenderingContext2D,species:SpeciesSprite,x:number,y:number,size:number,flip=false,bodyColor?:BodyRGB):void {
