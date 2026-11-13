@@ -8,7 +8,7 @@ export function greenFounderPreset<T extends {
 }>(standard: T) {
   return {
     ...standard,
-    carnivores: { ...standard.carnivores, speed: 4.2 },
+    carnivores: { ...standard.carnivores, speed: 5.25 },
     plants: {
       ...standard.plants,
       color_inheritance_enabled: true,

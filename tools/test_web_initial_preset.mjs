@@ -19,12 +19,12 @@ Object.assign(expected.plants, {
   color_inheritance_enabled: true, color_mutation_probability: 0.2, color_mutation_scale: 0.25,
 });
 expected.herbivores.color_learning_enabled = true;
-expected.carnivores.speed = 4.2;
+expected.carnivores.speed = 5.25;
 assert.deepEqual(config, expected);
 
 const sim = new Simulation(JSON.stringify(config));
 const previousPreset = structuredClone(config);
-delete previousPreset.carnivores.speed;
+previousPreset.carnivores.speed = 4.2;
 const old = new Simulation(JSON.stringify(previousPreset));
 const repeat = new Simulation(sim.effective_config_json());
 assert.equal(sim.herbivore_color_snapshot_json(), old.herbivore_color_snapshot_json());

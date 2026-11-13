@@ -2,7 +2,7 @@ use sim_core::{SimulationConfig, World};
 
 #[test]
 fn representative_flee_and_pursuit_use_configured_speed_and_movement_cost() {
-    for speed in [3.2, 4.2] {
+    for speed in [4.2, 5.25] {
         let mut config: SimulationConfig =
             serde_json::from_str(include_str!("../../../config/standard-toxin.json")).unwrap();
         config.initial_population.plants = 0;
