@@ -4,13 +4,14 @@ const groups: [string, string[], string][] = [
   ["植物・色", ["plants", "toxin.plant_", "toxin.initial_toxic_", "toxin.initial_type", "toxin.experimental_"],
     "固定配色モードは相互排他です。植物RGBの独立変異率や自由な色配置は未実装です。"],
   ["毒・耐性", ["toxin", "animal_toxin"],
-    "動物の生成上限・生成費と身体N割合に基づく移送はコード内固定です。"],
+    "toxin.enabled は植物毒の作用と草食の被毒処理を切り替えます。植物の配色・継承と動物毒・耐性の設定は個別です。動物の生成上限・生成費と身体N割合に基づく移送はコード内固定です。"],
   ["学習・判断", ["herbivores.color_learning", "herbivores.hungry_color", "animal_toxin.color_learning"],
     "記憶は最大30色、一般化距離0.25、空腹時の許容式はコード内固定です。時間経過による忘却は未実装です。"],
   ["摂食・繁殖", ["herbivores", "carnivores"], ""],
 ];
 const optional = ["animal_toxin.carnivore_damage_threshold", "animal_toxin.carnivore_hp_damage_per_excess_unit"];
 const labels: Record<string, string> = {
+  "toxin.enabled": "植物毒の作用（toxin.enabled）",
   seed: "乱数seed", "world.width": "世界の幅", "world.height": "世界の高さ",
   "world.land_columns": "土壌の列数", "world.land_rows": "土壌の行数",
   "world.max_living_entities": "全種合計の個体数上限",

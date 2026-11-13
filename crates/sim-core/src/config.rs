@@ -515,18 +515,31 @@ impl SimulationConfig {
             return Err("invalid carnivore toxin damage coefficient".into());
         }
         let t = &self.toxin;
+        if t.experimental_inherited_plant_colors && t.experimental_plant_toxicity_colors {
+            return Err("配色設定 toxin.experimental_inherited_plant_colors と toxin.experimental_plant_toxicity_colors は同時に使えません。片方をOFFにしてください。".into());
+        }
+        // Founder colors and inherited traits are independent of active plant toxin effects.
         if t.experimental_inherited_plant_colors
-            && (t.experimental_plant_toxicity_colors || !t.enabled || !t.plant_variation_enabled
-                || !t.plant_toxin_type_variation_enabled || t.plant_toxin_type_count != 2
-                || t.plant_toxic_mutation_probability != 0. || t.plant_toxin_type_mutation_probability != 0.
+            && (!t.plant_variation_enabled
+                || !t.plant_toxin_type_variation_enabled
+                || t.plant_toxin_type_count != 2
+                || t.plant_toxic_mutation_probability != 0.
+                || t.plant_toxin_type_mutation_probability != 0.
                 || self.initial_population.plants != 300)
         {
-            return Err("inherited plant colors require the fixed 300-founder, two-type, zero-mutation profile".into());
+            return Err(concat!(
+                "継承配色（toxin.experimental_inherited_plant_colors）の設定が不整合です。",
+                " 継承配色を使うには initial_population.plants=300、",
+                "toxin.plant_variation_enabled と toxin.plant_toxin_type_variation_enabled をON、",
+                "toxin.plant_toxin_type_count=2、toxin.plant_toxic_mutation_probability と ",
+                "toxin.plant_toxin_type_mutation_probability を0にしてください。",
+                " この条件を使わない場合は継承配色をOFFにしてください。"
+            ).into());
         }
         if t.experimental_plant_toxicity_colors
-            && (!t.enabled || !t.plant_variation_enabled || self.initial_population.plants % 2 != 0)
+            && (!t.plant_variation_enabled || self.initial_population.plants % 2 != 0)
         {
-            return Err("experimental plant colors require toxin, plant variation and an even founder count".into());
+            return Err("毒性連動配色（toxin.experimental_plant_toxicity_colors）には toxin.plant_variation_enabled=ON と偶数の initial_population.plants が必要です。これらを確認するか、毒性連動配色をOFFにしてください。".into());
         }
         if [
             t.dose_per_nutrient,

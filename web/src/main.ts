@@ -229,7 +229,9 @@ function installConfig(nextConfig:Config, condition=activeCondition){
  previous?.free(); simulation=next; activeConfig=nextConfig; activeCondition=condition;
  latestLineageSample=null; lineageFinished=false; populationTrend.length=0; priorTick=-1; observedPresent=[false,false,false]; map.reset();
  if (dev) { resetLog(); settings.load(JSON.parse(simulation.effective_config_json())); }
- el("pending").textContent="適用中";
+ el("pending").textContent="編集中の設定は実行中の設定と一致しています";
+ el("settings-error").textContent="";
+ el("running-config").textContent=`実行中 · Seed ${nextConfig.seed} · 植物毒 ${nextConfig.toxin.enabled ? "ON" : "OFF"}`;
  el("phase19-active").textContent=playNames[condition] ?? condition;
  el("preset-note").textContent=playNotes[condition] ?? "";
  render();
@@ -249,7 +251,7 @@ function render(){
   const renderStart = performance.now();
   el("condition-seed").textContent=String(activeConfig.seed);
   el("hungry-color-recheck").textContent=simulation.hungry_color_recheck_enabled()?"有効（予備E 25%未満）":"無効";
-  el("toxin-mode").textContent=activeConfig.toxin.enabled ? `通常毒 ${activeConfig.toxin.hp_damage_per_excess_unit===0.01?"（1倍）":`（係数 ${activeConfig.toxin.hp_damage_per_excess_unit}）`}` : "毒なし";
+  el("toxin-mode").textContent=activeConfig.toxin.enabled ? `植物毒 ${activeConfig.toxin.hp_damage_per_excess_unit===0.01?"（1倍）":`（係数 ${activeConfig.toxin.hp_damage_per_excess_unit}）`}` : "植物毒OFF";
   const mean=simulation.resistance_mean();
   el("resistance-mean").textContent=Number.isFinite(mean)?mean.toFixed(4):"—（草食動物なし）";
   el("resistance-high").textContent=String(simulation.resistance_high_count());
@@ -472,7 +474,11 @@ async function main(){
   el("apply").onclick=()=>resetWithSettings();
   settings.onApply = value => {
     try { const next=normalizeConfig(value); installConfig(next); baseline=structuredClone(next); showConfigInControls(next); }
-    catch(e){status.textContent="設定エラー: "+String(e);}
+    catch(e){
+      el("pending").textContent="適用できませんでした。編集値は保持されています。";
+      el("settings-error").textContent=String(e);
+      status.textContent="設定を適用できませんでした。実行中の環境は操作できます。";
+    }
   };
   el("capture-reference").onclick=()=>{
     reference={config:structuredClone(activeConfig),condition:activeCondition};
