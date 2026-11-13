@@ -296,6 +296,14 @@ impl World {
                 max_age: p.max_age_ticks,
                 color: if self.config.toxin.experimental_inherited_plant_colors {
                     self.plants.items[i].color
+                } else if p.color_inheritance_enabled {
+                    crate::plants::seed_color(
+                        self.plants.items[i].color,
+                        self.config.seed,
+                        id,
+                        p.color_mutation_probability,
+                        p.color_mutation_scale,
+                    )
                 } else {
                     crate::plants::visible_color(self.config.toxin.experimental_plant_toxicity_colors, produces_toxin)
                 },

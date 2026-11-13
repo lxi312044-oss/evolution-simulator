@@ -89,7 +89,7 @@ export function drawAnimalSprite(ctx:CanvasRenderingContext2D,species:SpeciesSpr
  ctx.restore();
 }
 
-/** Growth-stage plant sprite. Body color is presentation-only until plant color genetics is implemented. */
+/** Growth-stage plant sprite. Uses the visible RGB stored on the plant. */
 export function drawPlantSprite(ctx:CanvasRenderingContext2D,x:number,y:number,growth:number,size:number,bodyColor?:BodyRGB):void {
  const kind:SpeciesSprite=growth<0.33?'plant-seedling':growth<0.85?'plant-young':'plant-mature';
  const img=sprite(kind,bodyColor);

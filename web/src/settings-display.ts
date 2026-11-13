@@ -17,6 +17,9 @@ initial_population.herbivores|初期草食数|開始時の草食個体数です�
 initial_population.carnivores|初期肉食数|開始時の肉食個体数です。肉食がONなら1体以上必要です。|u 個体
 simulation.decision_interval_ticks|判断間隔（互換項目）|互換性のため読み取り専用で表示します。現行の生態更新では参照されません。|ui Tick
 simulation.max_steps_per_call|1回の更新で進める上限|Webやバッチからの1回の更新呼び出しのTick数を制限します。|ui Tick
+plants.color_inheritance_enabled|植物の色の継承・変異|種子は親のRGBを引き継ぎます。初期株と土壌発芽は緑です。実験配色2種とは併用できません。|b
+plants.color_mutation_probability|植物の色が変異する確率|種子の出生時にRGB各成分を独立に判定します。毒性・毒型の判定とは独立です。|p
+plants.color_mutation_scale|植物の色変異の最大幅|変異した成分に最大幅の範囲で増減を加え、0〜1に収めて8ビット色に丸めます。|0〜1 正規化RGB
 plants.initial_soil_nutrients_per_cell|初期土壌栄養|各土壌セルに配置する栄養です。|n N／セル
 plants.initial_detritus_per_cell|初期有機物|各セルの有機物に配置する栄養です。|n N／セル
 plants.initial_body_nutrients|初期植物の身体栄養|開始時の植物に配る身体Nです。成体身体N以下にします。|n N

@@ -3,7 +3,7 @@ type Values = Record<string, unknown>;
 const groups: [string, string[], string][] = [
   ["環境・初期集団", ["seed", "world", "initial_population", "simulation"], "初期配置はseedに従うコード内の手順です。"],
   ["植物・色", ["plants", "toxin.plant_", "toxin.initial_toxic_", "toxin.initial_type", "toxin.experimental_"],
-    "固定配色モードは相互排他です。植物RGBの独立変異率や自由な色配置は未実装です。"],
+    "固定配色モードは相互排他です。通常の色継承・変異と実験配色は併用できません。"],
   ["毒・耐性", ["toxin", "animal_toxin"],
     "toxin.enabled は植物毒の作用と草食の被毒処理を切り替えます。植物の配色・継承と動物毒・耐性の設定は個別です。動物の生成上限・生成費と身体N割合に基づく移送はコード内固定です。"],
   ["学習・判断", ["herbivores.color_learning", "herbivores.hungry_color", "animal_toxin.color_learning"],
@@ -20,6 +20,10 @@ export function editor(container: HTMLElement, dirty: () => void) {
     load(value: Values) {
       const draft = structuredClone(value);
       if (!draft.animal_toxin) draft.animal_toxin = {enabled:false,color_learning_enabled:false};
+      const plants = draft.plants as Values;
+      plants.color_inheritance_enabled ??= false;
+      plants.color_mutation_probability ??= 0;
+      plants.color_mutation_scale ??= 0;
       const toxin = draft.toxin as Values;
       const herbivores = draft.herbivores as Values;
       for (const key of ["experimental_plant_toxicity_colors", "experimental_inherited_plant_colors"]) toxin[key] ??= false;

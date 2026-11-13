@@ -146,6 +146,15 @@ pub struct SimulationSettings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PlantSettings {
+    /// Seed offspring inherit and can mutate the parent's visible RGB.
+    #[serde(skip_serializing_if = "is_false")]
+    pub color_inheritance_enabled: bool,
+    /// Mutation probability per RGB channel at seed birth.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub color_mutation_probability: f32,
+    /// Maximum absolute mutation step per channel in normalized RGB.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub color_mutation_scale: f32,
     pub initial_soil_nutrients_per_cell: f64,
     pub initial_detritus_per_cell: f64,
     pub initial_body_nutrients: f64,
@@ -432,6 +441,9 @@ impl Default for SimulationSettings {
 impl Default for PlantSettings {
     fn default() -> Self {
         Self {
+            color_inheritance_enabled: false,
+            color_mutation_probability: 0.,
+            color_mutation_scale: 0.,
             initial_soil_nutrients_per_cell: 200.,
             initial_detritus_per_cell: 30.,
             initial_body_nutrients: 9.,
@@ -587,6 +599,22 @@ impl SimulationConfig {
             return Err("invalid plant toxin type settings".into());
         }
         let p = &self.plants;
+        if p.color_inheritance_enabled
+            && (t.experimental_plant_toxicity_colors || t.experimental_inherited_plant_colors)
+        {
+            return Err(concat!(
+                "plants.color_inheritance_enabled は実験配色と同時に使えません。",
+                " 通常の色継承を使う場合は toxin.experimental_plant_toxicity_colors と ",
+                "toxin.experimental_inherited_plant_colors を両方OFFにしてください。",
+                " 実験配色を使う場合は plants.color_inheritance_enabled をOFFにしてください。"
+            ).into());
+        }
+        if !(0.0..=1.0).contains(&p.color_mutation_probability) {
+            return Err("plants.color_mutation_probability は0〜1で指定してください。".into());
+        }
+        if !(0.0..=1.0).contains(&p.color_mutation_scale) {
+            return Err("plants.color_mutation_scale は0〜1で指定してください。".into());
+        }
         let nums = [
             p.initial_soil_nutrients_per_cell,
             p.initial_detritus_per_cell,
@@ -817,4 +845,8 @@ impl SimulationConfig {
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+fn is_zero_f32(value: &f32) -> bool {
+    *value == 0.
 }

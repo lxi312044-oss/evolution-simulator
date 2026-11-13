@@ -40,3 +40,22 @@ pub(crate) fn visible_color(experimental: bool, toxic: bool) -> u32 {
         0x4ecb70ff
     }
 }
+
+/// Mutate the stored visible RGB using the animal per-channel rule and a
+/// plant-specific seed domain. The complete child ID distinguishes reused slots.
+pub(crate) fn seed_color(parent: u32, seed: u64, id: EntityId, probability: f32, scale: f32) -> u32 {
+    if probability == 0. || scale == 0. {
+        return parent;
+    }
+    let [r, g, b] = [24, 16, 8].map(|shift| ((parent >> shift) & 255) as f32 / 255.);
+    let child_key = (u64::from(id.generation) << 32) | u64::from(id.index);
+    let color = crate::animals::color::inherit(
+        crate::animals::color::BodyColor::new(r, g, b),
+        seed ^ 0x42e7_9d03_6b8a_15cf,
+        child_key,
+        probability,
+        scale,
+    );
+    let [r, g, b] = color.rgb().map(|value| (value * 255.).round() as u32);
+    (r << 24) | (g << 16) | (b << 8) | 255
+}
