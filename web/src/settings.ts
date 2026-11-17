@@ -24,6 +24,7 @@ export function editor(container: HTMLElement, dirty: () => void) {
       plants.color_inheritance_enabled ??= false;
       plants.color_mutation_probability ??= 0;
       plants.color_mutation_scale ??= 0;
+      (draft.carnivores as Values).reproduction_parent_reserve_energy ??= 0;
       const toxin = draft.toxin as Values;
       const herbivores = draft.herbivores as Values;
       for (const key of ["experimental_plant_toxicity_colors", "experimental_inherited_plant_colors"]) toxin[key] ??= false;

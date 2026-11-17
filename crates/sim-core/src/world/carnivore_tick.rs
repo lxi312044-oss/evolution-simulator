@@ -10,6 +10,8 @@ fn ambush_bin(gene: f32) -> usize {
 impl World {
     pub fn update_carnivores(&mut self) -> Result<(), String> {
         let c = self.config.carnivores.clone();
+        let required_birth_energy =
+            c.offspring_energy + c.reproduction_work_energy + c.reproduction_parent_reserve_energy;
         // Fixed-duration demographic observation; one sample for all predators in this tick.
         // This only affects births when explicitly enabled, and never changes resource totals.
         if c.prey_trend_reproduction_enabled
@@ -74,6 +76,11 @@ impl World {
                         .map_err(|e| format!("carnivore body N repair: {e:?}"))?;
                 }
             }
+            let observe = self.behavior_trace_window
+                .is_some_and(|(start, end)| (start..=end).contains(&self.tick));
+            let feeding_before = self.carnivores[i].feeding_active;
+            let nutrients_before = self.carnivore_debug.hunt_nutrients;
+            let energy_before_bite = self.carnivore_debug.hunt_energy;
             if c.digestion_enabled {
                 let stomach = self.carnivores[i].stomach;
                 let reserve_e = self.resources.energy_balance(reserve).unwrap_or(0.);
@@ -122,6 +129,7 @@ impl World {
                     self.carnivores[i].feeding_active = true;
                 }
             }
+            let resumed = !feeding_before && self.carnivores[i].feeding_active;
             // Optional energy-aware hunting. Never bypass the physical stomach capacity.
             // Mode 0 preserves the phase06.2.11 behavior and RNG sequence.
             let stomach = self.carnivores[i].stomach;
@@ -733,7 +741,7 @@ impl World {
                     && self.resources.nutrient_balance(a.reserve).unwrap_or(0.)
                         >= c.offspring_reserve_nutrients
                     && self.resources.energy_balance(a.reserve).unwrap_or(0.)
-                        >= c.offspring_energy + c.reproduction_work_energy
+                        >= required_birth_energy
                     && self.plants.len() + self.animals.items.len() + self.carnivores.len()
                         < self.config.world.max_living_entities as usize
             };
@@ -750,7 +758,7 @@ impl World {
                 if self.resources.nutrient_balance(a.reserve).unwrap_or(0.)
                     >= c.offspring_body_nutrients + c.offspring_reserve_nutrients
                     && self.resources.energy_balance(a.reserve).unwrap_or(0.)
-                        >= c.offspring_energy + c.reproduction_work_energy
+                        >= required_birth_energy
                 {
                     self.carnivore_debug.phase17_repro_resource_ready_ticks += 1;
                 }
@@ -776,7 +784,7 @@ impl World {
                 {
                     self.carnivore_debug.reproduction_reserve_n_blocked += 1;
                 } else if self.resources.energy_balance(a.reserve).unwrap_or(0.)
-                    < c.offspring_energy + c.reproduction_work_energy
+                    < required_birth_energy
                 {
                     self.carnivore_debug.reproduction_energy_blocked += 1;
                 } else if self.plants.len() + self.animals.items.len() + self.carnivores.len()
@@ -854,6 +862,30 @@ impl World {
             } else {
                 true
             };
+            if observe {
+                let a = &self.carnivores[i];
+                let reserve_e = self.resources.energy_balance(a.reserve).unwrap_or(0.);
+                let reserve_n = self.resources.nutrient_balance(a.reserve).unwrap_or(0.);
+                let stomach_e = self.resources.energy_balance(a.stomach).unwrap_or(0.);
+                let stomach_n = self.resources.nutrient_balance(a.stomach).unwrap_or(0.);
+                self.focal_trace.push(serde_json::json!({
+                    "phase":"predator_reproduction","tick":self.tick, "id":[a.id.index,a.id.generation],
+                    "parent":a.parent_id.map(|id| [id.index,id.generation]),
+                    "age":a.age,"cooldown":a.cooldown,"attack_cd":a.attack_cooldown,
+                    "reserve_e":reserve_e,"reserve_n":reserve_n,"stomach_e":stomach_e,"stomach_n":stomach_n,
+                    "fullness":(stomach_e/c.stomach_capacity_energy).max(stomach_n/c.stomach_capacity_nutrients),
+                    "population":self.plants.len()+self.animals.items.len()+self.carnivores.len(),
+                    "resumed":resumed,"bite_e":self.carnivore_debug.hunt_energy-energy_before_bite,"feeding":a.feeding_active,"bite_n":self.carnivore_debug.hunt_nutrients-nutrients_before,
+                    "fail":[!c.reproduction_enabled,toxin_dead,a.cooldown!=0,a.age<=c.reproduction_cooldown_ticks,
+                        reserve_n<c.offspring_body_nutrients+c.offspring_reserve_nutrients,
+                        reserve_e<required_birth_energy,
+                        self.plants.len()+self.animals.items.len()+self.carnivores.len()>=self.config.world.max_living_entities as usize],
+                    "ready":ready,"food":(ready && c.food_limited_reproduction_enabled).then_some(food_allows_birth),
+                    "trend":(ready && food_allows_birth && c.prey_trend_reproduction_enabled).then_some(trend_allows_birth),
+                    "stomach":(ready && c.digestion_enabled).then_some(stomach_allows_birth),
+                    "sustainable":(ready && c.sustainable_reproduction_enabled).then_some(sustainable_birth)
+                }));
+            }
             if ready
                 && food_allows_birth
                 && trend_allows_birth

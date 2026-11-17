@@ -396,6 +396,21 @@ impl Simulation {
     pub fn animal_toxin_snapshot_json(&self) -> String {
         self.world.animal_toxin_snapshot_json()
     }
+    /// Collect a bounded batch of carnivore diagnostics, using the normal step entry point.
+    #[cfg(feature = "state-audit")]
+    pub fn carnivore_baseline_batch(&mut self, count: u32) -> Result<String, JsValue> {
+        if count > 100 || count == 0 {
+            return Err(JsValue::from_str("expected 1–100 ticks"));
+        }
+        let first = self.world.tick + 1;
+        self.world.behavior_trace_window = Some((first, first + u64::from(count) - 1));
+        let result = self.step(count);
+        self.world.behavior_trace_window = None;
+        let events = std::mem::take(&mut self.world.focal_trace);
+        result?;
+        Ok(serde_json::json!({"events":events,"deaths":&self.world.p42_life_events}).to_string())
+    }
+
     /// Test-only snapshot. The observer's output queues are not simulation inputs.
     #[cfg(feature = "state-audit")]
     pub fn audit_state(&self, legacy: bool, section: Option<u32>) -> Vec<u8> {

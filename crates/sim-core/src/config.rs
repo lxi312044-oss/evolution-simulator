@@ -291,6 +291,8 @@ pub struct CarnivoreSettings {
     pub offspring_reserve_nutrients: f64,
     pub offspring_energy: f64,
     pub reproduction_work_energy: f64,
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub reproduction_parent_reserve_energy: f64,
     pub mutation_probability: f32,
     pub mutation_scale: f32,
 }
@@ -352,6 +354,7 @@ impl Default for CarnivoreSettings {
             offspring_reserve_nutrients: 3.,
             offspring_energy: 22.,
             reproduction_work_energy: 2.,
+            reproduction_parent_reserve_energy: 0.,
             mutation_probability: 0.05,
             mutation_scale: 0.1,
         }
@@ -750,6 +753,7 @@ impl SimulationConfig {
             c.offspring_reserve_nutrients,
             c.offspring_energy,
             c.reproduction_work_energy,
+            c.reproduction_parent_reserve_energy,
         ];
         if amounts.iter().any(|v| !v.is_finite() || *v < 0.)
             || c.speed <= 0.
@@ -848,5 +852,9 @@ fn is_false(value: &bool) -> bool {
 }
 
 fn is_zero_f32(value: &f32) -> bool {
+    *value == 0.
+}
+
+fn is_zero_f64(value: &f64) -> bool {
     *value == 0.
 }

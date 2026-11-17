@@ -170,6 +170,7 @@ carnivores.reproduction_cooldown_ticks|肉食の繁殖待機時間|出生後の�
 carnivores.offspring_body_nutrients|肉食の子に渡す身体栄養|出生時に子の身体に移す栄養です。|n N
 carnivores.offspring_reserve_nutrients|肉食の子に渡す予備栄養|出生時に子の予備に移す栄養です。|n N
 carnivores.offspring_energy|肉食の子に渡すエネルギー|出生時に子へ渡す予備Eです。|n E
+carnivores.reproduction_parent_reserve_energy|肉食の繁殖後に親が残す予備E|出生費を払った直後に親が保持する予備Eの下限です。胃Eは含みません。|n E
 carnivores.reproduction_work_energy|肉食の繁殖作業費|子への移送に加えて繁殖時に消費するエネルギーです。|n E
 carnivores.mutation_probability|肉食の形質変異確率|体色と、探索方式4での待ち伏せ形質の変異判定に使います。|p
 carnivores.mutation_scale|肉食の形質変異幅|体色や待ち伏せ形質が変異するときの変化幅を調整します。|p
