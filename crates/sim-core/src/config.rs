@@ -551,11 +551,14 @@ impl SimulationConfig {
                 || t.plant_toxin_type_count != 2
                 || t.plant_toxic_mutation_probability != 0.
                 || t.plant_toxin_type_mutation_probability != 0.
-                || self.initial_population.plants != 300)
+                // Founders are assigned in blocks of 10 plants (4/1/1/4); 300 is the
+                // 20x20 stage 4 setting and its multiples keep the same density.
+                || self.initial_population.plants == 0
+                || !self.initial_population.plants.is_multiple_of(10))
         {
             return Err(concat!(
                 "継承配色（toxin.experimental_inherited_plant_colors）の設定が不整合です。",
-                " 継承配色を使うには initial_population.plants=300、",
+                " 継承配色を使うには initial_population.plants を10の倍数（20×20の段階4では300）、",
                 "toxin.plant_variation_enabled と toxin.plant_toxin_type_variation_enabled をON、",
                 "toxin.plant_toxin_type_count=2、toxin.plant_toxic_mutation_probability と ",
                 "toxin.plant_toxin_type_mutation_probability を0にしてください。",

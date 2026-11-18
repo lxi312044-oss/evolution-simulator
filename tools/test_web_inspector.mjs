@@ -21,7 +21,7 @@ assert.deepEqual(onAgain.audit_state(false), fresh.audit_state(false));
 assert.deepEqual(off.map_entity_ids(), fresh.map_entity_ids());
 assert.equal(off.plant_color_snapshot_json(), fresh.plant_color_snapshot_json());
 plantToxinOff.initial_population.plants = 299;
-assert.throws(() => new Simulation(JSON.stringify(plantToxinOff)), /initial_population.plants=300/);
+assert.throws(() => new Simulation(JSON.stringify(plantToxinOff)), /initial_population.plants を10の倍数/);
 for (const sim of [off, offReloaded, onAgain, fresh]) sim.free();
 const control = create(), observed = create(), lineage = create();
 const ids = observed.map_entity_ids();

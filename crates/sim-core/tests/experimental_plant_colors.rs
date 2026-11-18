@@ -153,7 +153,7 @@ fn disabled_toxin_does_not_bypass_color_profile_validation() {
     assert!(config
         .validate()
         .unwrap_err()
-        .contains("initial_population.plants=300"));
+        .contains("initial_population.plants を10の倍数"));
     config.initial_population.plants = 300;
     config.toxin.experimental_plant_toxicity_colors = true;
     assert!(config.validate().unwrap_err().contains("同時に使えません"));
