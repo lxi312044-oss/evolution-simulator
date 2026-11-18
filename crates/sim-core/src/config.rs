@@ -345,6 +345,11 @@ pub struct CarnivoreSettings {
     /// Opt-in: fraction of learned color harm (toxin or counterattack) that fades per tick.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub color_memory_decay_per_tick: f64,
+    /// Opt-in: after this many hunting ticks, a carnivore compares the energy it gained from
+    /// bites with the energy it spent (basal + movement); if it lost energy it rests for the
+    /// same number of ticks. Zero disables.
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub hunt_bout_ticks: u32,
 }
 impl Default for CarnivoreSettings {
     fn default() -> Self {
@@ -413,6 +418,7 @@ impl Default for CarnivoreSettings {
             speed_mutation_scale: 0.,
             speed_upkeep_slope: 0.,
             color_memory_decay_per_tick: 0.,
+            hunt_bout_ticks: 0,
         }
     }
 }

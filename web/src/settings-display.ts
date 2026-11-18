@@ -188,6 +188,7 @@ carnivores.speed_mutation_probability|実験用：肉食の速さの変異確率
 carnivores.speed_mutation_scale|実験用：肉食の速さの変異幅|速さが変異するとき、親の速さの±この割合で一様に変えます。範囲は0.5〜8です。|p
 carnivores.speed_upkeep_slope|実験用：肉食の速さの維持コスト|速い肉食ほど基礎代謝を多く払います。基礎代謝×（1＋この値×（速さ÷肉食の移動速度−1））です。0で無効です。|n
 carnivores.color_memory_decay_per_tick|実験用：肉食の色の危険記憶の時間減衰|肉食が覚えた色の危険度（毒・反撃）を毎Tickこの割合だけ下げます。0で無効です。|p ／Tick
+carnivores.hunt_bout_ticks|実験用：肉食の狩りの区切り|狩りをしたTickがこの数に達するたびに、噛みつきで得たエネルギーと使ったエネルギー（基礎代謝＋移動）を比べ、損をしていたら同じTick数だけ休みます。0で無効です。|n Tick
 observation.interval|観測ログの記録間隔|指定したTick間隔でCSV用の統計を記録します。|1以上の整数 Tick
 observation.stopAt|観測の終了Tick|指定したTickで進行を止めます。0は無制限です。系譜記録を有効にする場合は正の値が必要です。|0以上の整数 Tick
 observation.lineage|草食動物の系譜記録|新規開始から草食動物の系譜イベントを記録します。終了Tickの指定が必要です。|b

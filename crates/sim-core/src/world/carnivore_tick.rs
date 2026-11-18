@@ -197,8 +197,14 @@ impl World {
                 .carnivore_retreats
                 .get(&predator_id)
                 .map(|(prey, _)| *prey);
+            // Opt-in hunting bouts: after a losing bout the carnivore rests (no search).
+            let bout_resting = c.hunt_bout_ticks > 0
+                && self
+                    .carnivore_hunt_bouts
+                    .get(&predator_id)
+                    .is_some_and(|b| b.rest_left > 0);
             for (j, h) in self.animals.items.iter().enumerate() {
-                if satiated {
+                if satiated || bout_resting {
                     break;
                 }
                 if avoided == Some(h.id) {
@@ -382,7 +388,7 @@ impl World {
             if !resting_without_prey && nearest.is_none() && !satiated && c.movement_strategy == 2 {
                 self.carnivore_debug.strategy_roaming_ticks += 1;
             }
-            let distance = if satiated || resting_without_prey {
+            let distance = if satiated || resting_without_prey || bout_resting {
                 0.
             } else if nearest.is_some() {
                 dist.sqrt().min(speed)
@@ -478,6 +484,25 @@ impl World {
             // basal + (available - basal) can exceed `available` by one rounding step.
             // Clamping only changes the result in that case, which previously aborted the run.
             let burn = (basal + movement).min(available);
+            if c.hunt_bout_ticks > 0 {
+                let bout = self.carnivore_hunt_bouts.entry(predator_id).or_default();
+                if bout.rest_left > 0 {
+                    bout.rest_left -= 1;
+                } else if !satiated && !resting_without_prey {
+                    bout.hunting_ticks += 1;
+                    bout.spent += basal + movement;
+                    if bout.hunting_ticks >= c.hunt_bout_ticks {
+                        self.defense.hunt_bouts_completed += 1;
+                        if bout.gained < bout.spent {
+                            bout.rest_left = c.hunt_bout_ticks;
+                            self.defense.hunt_bouts_rested += 1;
+                        }
+                        bout.hunting_ticks = 0;
+                        bout.gained = 0.;
+                        bout.spent = 0.;
+                    }
+                }
+            }
             if nearest.is_some() {
                 self.carnivore_debug.p41_chase_basal_energy += basal;
                 self.carnivore_debug.p41_chase_movement_energy += movement;
@@ -625,6 +650,12 @@ impl World {
                         self.carnivore_debug.hunt_contacts += 1;
                         self.carnivore_debug.hunt_nutrients += n;
                         self.carnivore_debug.hunt_energy += e;
+                        if c.hunt_bout_ticks > 0 {
+                            self.carnivore_hunt_bouts
+                                .entry(self.carnivores[i].id)
+                                .or_default()
+                                .gained += e;
+                        }
                         let hp_before = self.animals.items[j].hp;
                         // Standing ground is a defensive posture: it mitigates injury but does not create E/N.
                         // Bite nutrient and energy transfers remain unchanged in this initial experiment.
@@ -1140,6 +1171,7 @@ impl World {
                 self.carnivore_debug.gene_deaths[bin] += 1;
                 let a = self.carnivores.swap_remove(i);
                 self.carnivore_retreats.remove(&a.id);
+                self.carnivore_hunt_bouts.remove(&a.id);
                 if self.config.animal_toxin.enabled {
                     let reason = if toxin_dead {
                         "toxin_hp_zero"

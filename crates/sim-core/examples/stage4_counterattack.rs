@@ -11,6 +11,8 @@
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6978567155
 //! Issue 11 speed-evolution control arms (s_*, 40x40):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6980802991
+//! Issue 11 hunting-bout arms (h_*, 40x40):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6982012880
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -39,6 +41,8 @@ struct Arm {
     field40: bool,
     /// Herbivore speed control: (fixed initial speed, speed mutation on).
     speed: (Option<f32>, bool),
+    /// Carnivore hunting bout length (0 = off).
+    hunt_bout: u32,
 }
 
 const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
@@ -51,6 +55,7 @@ const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
         retreat: 0,
         field40: false,
         speed: (None, true),
+        hunt_bout: 0,
     }
 }
 
@@ -64,6 +69,7 @@ const fn t_arm(name: &'static str, counterattack: f64, threshold: f64, decay: f6
         retreat: 0,
         field40: false,
         speed: (None, true),
+        hunt_bout: 0,
     }
 }
 
@@ -77,6 +83,7 @@ const fn r_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u32)
         retreat,
         field40: false,
         speed: (None, true),
+        hunt_bout: 0,
     }
 }
 
@@ -92,7 +99,20 @@ const fn s_arm(name: &'static str, fixed: Option<f32>, mutation: bool) -> Arm {
     a
 }
 
-const ARMS: [Arm; 21] = [
+const fn h_arm(name: &'static str, bout: u32, defense: bool, fixed_speed: bool) -> Arm {
+    let mut a = if defense {
+        f40_arm(name, 2., 0., 300)
+    } else {
+        f40_arm(name, 0., 0., 0)
+    };
+    if fixed_speed {
+        a.speed = (Some(2.5), false);
+    }
+    a.hunt_bout = bout;
+    a
+}
+
+const ARMS: [Arm; 26] = [
     arm("d_ctrl", 0., true),
     arm("d_c2", 2., true),
     arm("d_c5", 5., true),
@@ -114,6 +134,11 @@ const ARMS: [Arm; 21] = [
     s_arm("s_ctrl", None, true),
     s_arm("s_mutoff", None, false),
     s_arm("s_fix25", Some(2.5), false),
+    h_arm("h_ctrl", 0, false, false),
+    h_arm("h_b100", 100, false, false),
+    h_arm("h_b300", 300, false, false),
+    h_arm("h_b300_def", 300, true, false),
+    h_arm("h_fix25_b300", 300, false, true),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
@@ -308,6 +333,7 @@ fn main() -> Result<(), String> {
                 config.herbivores.speed_max = v;
             }
             config.herbivores.speed_mutation_enabled = a.speed.1;
+            config.carnivores.hunt_bout_ticks = a.hunt_bout;
             let radius = config.herbivores.predator_detection_radius;
             let mut world = World::new(config.clone())?;
             let mut seen: HashMap<EntityId, Value> = world

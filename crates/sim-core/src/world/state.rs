@@ -39,6 +39,8 @@ pub struct World {
     pub carnivore_debug: super::CarnivoreDebug,
     pub defense: super::DefenseCounters,
     /// Opt-in counterattack retreat: carnivore -> (herbivore it will not target, ticks left).
+    /// Opt-in hunting bouts (Issue 11), per carnivore.
+    pub carnivore_hunt_bouts: std::collections::BTreeMap<crate::entity::EntityId, super::HuntBout>,
     pub carnivore_retreats:
         std::collections::BTreeMap<crate::entity::EntityId, (crate::entity::EntityId, u32)>,
     pub prey_trend_snapshot: super::PreyTrendSnapshot,
@@ -131,6 +133,7 @@ impl World {
             carnivore_debug: super::CarnivoreDebug::default(),
             defense: super::DefenseCounters::default(),
             carnivore_retreats: std::collections::BTreeMap::new(),
+            carnivore_hunt_bouts: std::collections::BTreeMap::new(),
             prey_trend_snapshot: super::PreyTrendSnapshot::default(),
             resistance_event_logging: false,
             resistance_birth_events: Vec::new(),

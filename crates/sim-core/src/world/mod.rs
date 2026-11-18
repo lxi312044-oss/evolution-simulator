@@ -146,6 +146,17 @@ pub struct PreyTrendSnapshot {
     pub deaths_in_window: u64,
 }
 
+/// Opt-in hunting bout of one carnivore (Issue 11): energy gained from bites and spent on
+/// basal metabolism and movement while hunting, and rest ticks left after a losing bout.
+#[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
+pub struct HuntBout {
+    pub hunting_ticks: u32,
+    pub gained: f64,
+    pub spent: f64,
+    pub rest_left: u32,
+}
+
 /// Cumulative counters for the opt-in herbivore counterattack (Issue 54). Diagnostic only;
 /// never an input to the ecology, so the state audit does not emit them.
 #[derive(Debug, Default, Clone, serde::Serialize)]
@@ -154,6 +165,8 @@ pub struct DefenseCounters {
     pub counterattack_energy: f64,
     pub counterattack_learning_events: u64,
     pub counterattack_retreats: u64,
+    pub hunt_bouts_completed: u64,
+    pub hunt_bouts_rested: u64,
 }
 
 /// Cumulative, read-only diagnostics for the predator/prey balance investigation.

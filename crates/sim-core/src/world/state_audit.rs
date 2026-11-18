@@ -32,6 +32,7 @@ impl World {
             carnivore_debug,
             defense: _,
             carnivore_retreats,
+            carnivore_hunt_bouts,
             prey_trend_snapshot,
             resistance_event_logging,
             resistance_birth_events,
@@ -123,6 +124,10 @@ impl World {
         // audit baselines are unchanged.
         if !carnivore_retreats.is_empty() {
             emit!(26, carnivore_retreats);
+        }
+        // Opt-in hunting bouts (Issue 11); empty unless that option is used.
+        if !carnivore_hunt_bouts.is_empty() {
+            emit!(27, carnivore_hunt_bouts);
         }
         bytes
     }
