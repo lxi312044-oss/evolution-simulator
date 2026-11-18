@@ -350,7 +350,16 @@ impl World {
             body,
             reserve,
             color: crate::animals::color::initial(self.config.seed ^ 0xabcdef, id.index as u64),
-            speed: c.speed,
+            speed: if c.speed_evolution_enabled {
+                crate::animals::carnivore::initial_speed(
+                    c.speed,
+                    c.initial_speed_spread,
+                    self.config.seed,
+                    id.index as u64,
+                )
+            } else {
+                c.speed
+            },
             vision: c.vision,
             ambush_gene: 0.15
                 + 0.70

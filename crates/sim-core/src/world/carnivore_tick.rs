@@ -140,7 +140,7 @@ impl World {
             let stomach_has_capacity = stomach_e < c.stomach_capacity_energy - 1e-9
                 && stomach_n < c.stomach_capacity_nutrients - 1e-9;
             let predicted_need = (c.basal_energy_per_tick
-                + c.movement_energy_per_unit * c.speed as f64)
+                + c.movement_energy_per_unit * speed as f64)
                 * c.hunting_forecast_ticks as f64;
             let hunger_override = c.digestion_enabled
                 && !self.carnivores[i].feeding_active
@@ -941,6 +941,18 @@ impl World {
                     c.mutation_probability,
                     c.mutation_scale,
                 );
+                let child_speed = if c.speed_evolution_enabled {
+                    crate::animals::carnivore::inherit_speed(
+                        pspeed,
+                        c.speed_mutation_probability,
+                        c.speed_mutation_scale,
+                        self.config.seed ^ self.tick.rotate_left(29),
+                        id.index as u64,
+                    )
+                    .0
+                } else {
+                    pspeed
+                };
                 let stomach = self.resources.open(0., 0.).map_err(|e| format!("{e:?}"))?;
                 if self.config.animal_toxin.enabled {
                     self.inherit_carnivore_toxin(parent_id, id);
@@ -959,7 +971,7 @@ impl World {
                     body,
                     reserve: child_reserve,
                     color: child_color,
-                    speed: pspeed,
+                    speed: child_speed,
                     vision: pvision,
                     ambush_gene: child_gene,
                     p42: Default::default(),

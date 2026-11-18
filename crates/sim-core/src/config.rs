@@ -302,6 +302,19 @@ pub struct CarnivoreSettings {
     pub reproduction_parent_reserve_energy: f64,
     pub mutation_probability: f32,
     pub mutation_scale: f32,
+    /// Opt-in: each carnivore carries its own heritable speed. OFF keeps every
+    /// carnivore at `speed`.
+    #[serde(skip_serializing_if = "is_false")]
+    pub speed_evolution_enabled: bool,
+    /// Initial speed = `speed` x (1 +/- spread), uniform. Used only when speed evolution is on.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub initial_speed_spread: f32,
+    /// Probability that a child's speed mutates. Used only when speed evolution is on.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub speed_mutation_probability: f32,
+    /// Child speed = parent speed x (1 +/- scale), uniform, clamped to 0.5..=8 like herbivores.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub speed_mutation_scale: f32,
 }
 impl Default for CarnivoreSettings {
     fn default() -> Self {
@@ -364,6 +377,10 @@ impl Default for CarnivoreSettings {
             reproduction_parent_reserve_energy: 0.,
             mutation_probability: 0.05,
             mutation_scale: 0.1,
+            speed_evolution_enabled: false,
+            initial_speed_spread: 0.,
+            speed_mutation_probability: 0.,
+            speed_mutation_scale: 0.,
         }
     }
 }
@@ -798,6 +815,21 @@ impl SimulationConfig {
             || !(0.0..=1.0).contains(&c.mutation_scale)
         {
             return Err("invalid carnivore settings".into());
+        }
+        if [
+            c.initial_speed_spread,
+            c.speed_mutation_probability,
+            c.speed_mutation_scale,
+        ]
+        .iter()
+        .any(|v| !(0.0..1.0).contains(v))
+        {
+            return Err(concat!(
+                "肉食の速さの遺伝の設定（carnivores.initial_speed_spread、",
+                "carnivores.speed_mutation_probability、carnivores.speed_mutation_scale）は",
+                "0以上1未満で指定してください。使わない場合は0にしてください。"
+            )
+            .into());
         }
         if !c.prey_per_predator_target.is_finite() || c.prey_per_predator_target <= 0. {
             return Err("invalid prey_per_predator_target".into());

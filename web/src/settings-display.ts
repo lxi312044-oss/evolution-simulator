@@ -176,6 +176,10 @@ carnivores.reproduction_parent_reserve_energy|肉食の繁殖後に親が残す�
 carnivores.reproduction_work_energy|肉食の繁殖作業費|子への移送に加えて繁殖時に消費するエネルギーです。|n E
 carnivores.mutation_probability|肉食の形質変異確率|体色と、探索方式4での待ち伏せ形質の変異判定に使います。|p
 carnivores.mutation_scale|肉食の形質変異幅|体色や待ち伏せ形質が変異するときの変化幅を調整します。|p
+carnivores.speed_evolution_enabled|実験用：肉食の速さの遺伝|有効にすると、肉食の速さが個体ごとに異なり、子へ受け継がれます。無効では全個体が「肉食の移動速度」です。|b
+carnivores.initial_speed_spread|実験用：肉食の初期の速さのばらつき|速さの遺伝が有効なとき、初期個体の速さを「肉食の移動速度」の±この割合で一様に決めます。0でばらつきなしです。|p
+carnivores.speed_mutation_probability|実験用：肉食の速さの変異確率|速さの遺伝が有効なとき、子の速さが変異する確率です。0で変異なしです。|p
+carnivores.speed_mutation_scale|実験用：肉食の速さの変異幅|速さが変異するとき、親の速さの±この割合で一様に変えます。範囲は0.5〜8です。|p
 observation.interval|観測ログの記録間隔|指定したTick間隔でCSV用の統計を記録します。|1以上の整数 Tick
 observation.stopAt|観測の終了Tick|指定したTickで進行を止めます。0は無制限です。系譜記録を有効にする場合は正の値が必要です。|0以上の整数 Tick
 observation.lineage|草食動物の系譜記録|新規開始から草食動物の系譜イベントを記録します。終了Tickの指定が必要です。|b
