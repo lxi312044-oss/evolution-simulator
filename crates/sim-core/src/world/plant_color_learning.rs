@@ -57,6 +57,22 @@ impl PlantColorMemory {
         }
     }
 
+    /// Opt-in extinction of avoidance: a toxin-free meal weakens learned harm for
+    /// similar colors, using the same generalization width as `allows`.
+    pub(crate) fn relieve_safe_meal(&mut self, color: u32, relief: f64) {
+        for entry in &mut self.experiences {
+            let similarity = (1. - color_distance(color, entry.color) / 0.25).max(0.);
+            entry.damage *= 1. - relief * similarity;
+        }
+    }
+
+    /// Opt-in forgetting: learned harm fades by a fixed fraction per tick.
+    pub(crate) fn decay(&mut self, rate: f64) {
+        for entry in &mut self.experiences {
+            entry.damage *= 1. - rate;
+        }
+    }
+
     pub(super) fn harm_scores(&self) -> Vec<(u32, f64)> {
         self.experiences
             .iter()
@@ -125,6 +141,53 @@ mod tests {
         memory.observe_damage(0, 4., 2., 0.08);
         assert!(memory.allows(0xff0000ff, 1.));
         assert!(!memory.allows(0x0000ffff, 1.));
+    }
+
+    fn learned(color: u32) -> PlantColorMemory {
+        let mut memory = PlantColorMemory::default();
+        memory.ingest(color, 0, 1.);
+        memory.observe_damage(0, 1., 0.5, 0.1);
+        memory
+    }
+
+    #[test]
+    fn safe_meal_relief_scales_with_color_similarity() {
+        let mut memory = learned(0xff0000ff);
+        assert_eq!(memory.harm_scores(), vec![(0xff000000, 0.1)]);
+        memory.relieve_safe_meal(0xff0000ff, 0.5);
+        assert_eq!(memory.harm_scores()[0].1, 0.05);
+        // A distant color carries no evidence about the learned one.
+        memory.relieve_safe_meal(0x0000ffff, 0.5);
+        assert_eq!(memory.harm_scores()[0].1, 0.05);
+        // Half of the generalization width gives half of the relief.
+        let half = 0xff000000 - ((0.125_f64 * 255.).round() as u32) * 0x0100_0000;
+        let similarity = 1. - color_distance(half, 0xff000000) / 0.25;
+        memory.relieve_safe_meal(half | 0xff, 0.5);
+        assert!((memory.harm_scores()[0].1 - 0.05 * (1. - 0.5 * similarity)).abs() < 1e-12);
+        assert!(similarity > 0.45 && similarity < 0.55);
+    }
+
+    #[test]
+    fn zero_relief_and_decay_leave_memory_unchanged() {
+        let mut memory = learned(0xff0000ff);
+        memory.relieve_safe_meal(0xff0000ff, 0.);
+        memory.decay(0.);
+        assert_eq!(memory.harm_scores(), vec![(0xff000000, 0.1)]);
+        assert!(!memory.allows(0xff0000ff, 0.5));
+    }
+
+    #[test]
+    fn decay_restores_acceptance_over_time() {
+        let mut memory = learned(0xff0000ff);
+        assert!(!memory.allows(0xff0000ff, 1.));
+        for _ in 0..1000 {
+            memory.decay(0.001);
+        }
+        let harm = memory.harm_scores()[0].1;
+        assert!((harm - 0.1 * 0.999_f64.powi(1000)).abs() < 1e-12);
+        // risk = 10 * harm ~= 0.368 <= tolerance 1 - 0.75 * 0.8 = 0.4
+        assert!(memory.allows(0xff0000ff, 0.8));
+        assert!(!memory.allows(0xff0000ff, 1.));
     }
 
     #[test]

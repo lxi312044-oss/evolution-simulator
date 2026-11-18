@@ -72,6 +72,8 @@ animal_toxin.carnivore_hp_damage_per_excess_unit|肉食専用の毒損傷係数|
 herbivores.color_learning_enabled|草食の色学習|植物の可視色と摂食後の毒損傷を結びつけ、餌の選択に使います。|b
 herbivores.hungry_color_recheck_enabled|実験用：低エネルギー時の餌の再評価|予備Eが最大の25%未満で可食候補が色だけで全除外されたとき、餌を再評価します。|b
 herbivores.hungry_color_recovery_enabled|実験用：餌の再評価を回復まで継続|草食の色学習と低エネルギー時の再評価が有効なとき、予備Eが30%以上になるまで回復状態を維持します。|b
+herbivores.color_memory_safe_meal_relief|実験用：安全な摂食で色の危険記憶を弱める|草食の色学習が有効なとき、毒を摂らずに植物を食べたTickごとに、その色に近い記憶の危険度を色の近さに応じてこの割合だけ下げます。0で無効です。|p ／摂食Tick
+herbivores.color_memory_decay_per_tick|実験用：色の危険記憶の時間減衰|草食の色学習が有効なとき、記憶した危険度を毎Tickこの割合だけ下げます。0で無効です。|p ／Tick
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p

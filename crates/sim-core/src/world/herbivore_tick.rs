@@ -585,6 +585,20 @@ impl World {
                         self.diagnostics.toxin_exposure_events += 1;
                         self.diagnostics.toxin_exposure_total += dose;
                     }
+                    // Opt-in: eating plant matter without ingesting toxin is safe evidence
+                    // for the visible color. Only the herbivore's own experience is used.
+                    if h.color_learning_enabled
+                        && h.color_memory_safe_meal_relief > 0.
+                        && eaten > 0.
+                        && !(self.config.toxin.enabled && self.plants.items[pi].produces_toxin)
+                    {
+                        let color = self.plants.items[pi].color;
+                        if let Some(memory) =
+                            self.plant_color_learning.get_mut(&self.animals.items[i].id)
+                        {
+                            memory.relieve_safe_meal(color, h.color_memory_safe_meal_relief);
+                        }
+                    }
                     if eaten > 0. {
                         self.diagnostics.herbivore_feeding_events += 1;
                         self.diagnostics.plant_consumed_n += eaten;
@@ -662,6 +676,12 @@ impl World {
                 );
                 event["reserve_e_after_feeding"] = serde_json::json!(self.resources.energy_balance(reserve).unwrap_or(0.));
                 self.foraging_trace.as_mut().unwrap().events.push(event);
+            }
+            // Opt-in forgetting of learned plant-color harm, before this tick's damage.
+            if h.color_learning_enabled && h.color_memory_decay_per_tick > 0. {
+                if let Some(memory) = self.plant_color_learning.get_mut(&self.animals.items[i].id) {
+                    memory.decay(h.color_memory_decay_per_tick);
+                }
             }
             // Clearance and physiological damage; HP is a health state, not a resource balance.
             if self.config.toxin.enabled {

@@ -188,6 +188,13 @@ pub struct HerbivoreSettings {
     /// Keep the opt-in recovery active until reserve reaches 30 percent.
     #[serde(skip_serializing_if = "is_false")]
     pub hungry_color_recovery_enabled: bool,
+    /// Opt-in: fraction of learned plant-color harm removed, scaled by color
+    /// similarity, on each tick a herbivore eats plant matter without ingesting toxin.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub color_memory_safe_meal_relief: f64,
+    /// Opt-in: fraction of learned plant-color harm that fades each tick.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub color_memory_decay_per_tick: f64,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -401,6 +408,8 @@ impl Default for HerbivoreSettings {
             color_learning_enabled: false,
             hungry_color_recheck_enabled: false,
             hungry_color_recovery_enabled: false,
+            color_memory_safe_meal_relief: 0.,
+            color_memory_decay_per_tick: 0.,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -738,6 +747,20 @@ impl SimulationConfig {
             || h.speed_min > h.speed_max
         {
             return Err("invalid herbivore settings".into());
+        }
+        if [
+            h.color_memory_safe_meal_relief,
+            h.color_memory_decay_per_tick,
+        ]
+        .iter()
+        .any(|v| !(0.0..=1.0).contains(v))
+        {
+            return Err(concat!(
+                "草食の色記憶の更新設定（herbivores.color_memory_safe_meal_relief と ",
+                "herbivores.color_memory_decay_per_tick）は0から1の範囲で指定してください。",
+                " 使わない場合は0にしてください。"
+            )
+            .into());
         }
         let c = &self.carnivores;
         let amounts = [
