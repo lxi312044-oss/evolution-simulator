@@ -3,6 +3,8 @@
 //! Plan (fixed before the run) and its pre-run revision:
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6970763006
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6970805102
+//! f40_E / f40_noFT_E (halved carnivore basal energy):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6971981987
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_field40 -- \
@@ -22,32 +24,53 @@ struct Arm {
     speed: f32,
     decay: f64,
     resume_fraction: f64,
+    /// `None` keeps food-limited and prey-trend reproduction and basal energy from the config.
+    brakes_and_basal: Option<(bool, bool, f64)>,
 }
 
-const ARMS: [Arm; 4] = [
+const ARMS: [Arm; 6] = [
     Arm {
         name: "f40_base",
         speed: 3.2,
         decay: 0.,
         resume_fraction: 0.4,
+        brakes_and_basal: None,
     },
     Arm {
         name: "f40_decay",
         speed: 3.2,
         decay: 0.0007,
         resume_fraction: 0.4,
+        brakes_and_basal: None,
     },
     Arm {
         name: "f40_v42_rest",
         speed: 4.2,
         decay: 0.0007,
         resume_fraction: 0.2,
+        brakes_and_basal: None,
     },
     Arm {
         name: "f40_v525_rest",
         speed: 5.25,
         decay: 0.0007,
         resume_fraction: 0.2,
+        brakes_and_basal: None,
+    },
+    // Round 3 settings with halved carnivore basal energy (20x20: w_E, w_noFT_E).
+    Arm {
+        name: "f40_E",
+        speed: 5.25,
+        decay: 0.0007,
+        resume_fraction: 0.2,
+        brakes_and_basal: Some((true, true, 0.0072)),
+    },
+    Arm {
+        name: "f40_noFT_E",
+        speed: 5.25,
+        decay: 0.0007,
+        resume_fraction: 0.2,
+        brakes_and_basal: Some((false, false, 0.0072)),
     },
 ];
 
@@ -157,6 +180,11 @@ fn main() -> Result<(), String> {
             config.carnivores.speed = a.speed;
             config.herbivores.color_memory_decay_per_tick = a.decay;
             config.carnivores.feeding_resume_fraction = a.resume_fraction;
+            if let Some((food_limited, prey_trend, basal)) = a.brakes_and_basal {
+                config.carnivores.food_limited_reproduction_enabled = food_limited;
+                config.carnivores.prey_trend_reproduction_enabled = prey_trend;
+                config.carnivores.basal_energy_per_tick = basal;
+            }
             let mut world = World::new(config.clone())?;
             let initial_plants = plant_classes(&world);
             let (mut prev_n, mut prev_e) = (counts(&world), energy(&world));
