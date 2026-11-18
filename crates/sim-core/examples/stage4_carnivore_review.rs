@@ -3,6 +3,7 @@
 //! Plans (fixed before each run):
 //! round 1 (s* arms): https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968323277
 //! round 2 (v* arms): https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968964204
+//! round 3 (w* arms, 40000 ticks): https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6971350554
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_carnivore_review -- \
@@ -21,6 +22,9 @@ struct Arm {
     decay: f64,
     sustainable: Option<bool>,
     resume_fraction: Option<f64>,
+    food_limited: Option<bool>,
+    prey_trend: Option<bool>,
+    basal: Option<f64>,
 }
 
 const fn arm(name: &'static str, speed: f32, decay: f64) -> Arm {
@@ -30,6 +34,9 @@ const fn arm(name: &'static str, speed: f32, decay: f64) -> Arm {
         decay,
         sustainable: None,
         resume_fraction: None,
+        food_limited: None,
+        prey_trend: None,
+        basal: None,
     }
 }
 
@@ -40,10 +47,28 @@ const fn round2(name: &'static str, speed: f32, sustainable: bool, resume: f64) 
         decay: 0.0007,
         sustainable: Some(sustainable),
         resume_fraction: Some(resume),
+        food_limited: None,
+        prey_trend: None,
+        basal: None,
     }
 }
 
-const ARMS: [Arm; 14] = [
+/// Round 3: speed 5.25, resume 0.2 and herbivore decay 0.0007 (round 2 v525_rest), with
+/// the carnivore reproduction brakes and basal metabolism varied.
+const fn round3(name: &'static str, food_limited: bool, prey_trend: bool, basal: f64) -> Arm {
+    Arm {
+        name,
+        speed: 5.25,
+        decay: 0.0007,
+        sustainable: Some(false),
+        resume_fraction: Some(0.2),
+        food_limited: Some(food_limited),
+        prey_trend: Some(prey_trend),
+        basal: Some(basal),
+    }
+}
+
+const ARMS: [Arm; 22] = [
     // Round 1: carnivore speed x herbivore color memory decay.
     arm("s32", 3.2, 0.),
     arm("s42", 4.2, 0.),
@@ -61,6 +86,16 @@ const ARMS: [Arm; 14] = [
     round2("v525_sustain", 5.25, true, 0.4),
     round2("v525_rest", 5.25, false, 0.2),
     round2("v525_both", 5.25, true, 0.2),
+    // Round 3: F = food-limited reproduction, T = prey-trend reproduction penalty,
+    // E = carnivore basal energy per tick (0.0144 -> 0.0072).
+    round3("w_base", true, true, 0.0144),
+    round3("w_noF", false, true, 0.0144),
+    round3("w_noT", true, false, 0.0144),
+    round3("w_noFT", false, false, 0.0144),
+    round3("w_E", true, true, 0.0072),
+    round3("w_noF_E", false, true, 0.0072),
+    round3("w_noT_E", true, false, 0.0072),
+    round3("w_noFT_E", false, false, 0.0072),
 ];
 
 /// Integer counters, in this order.
@@ -158,6 +193,15 @@ fn main() -> Result<(), String> {
             }
             if let Some(fraction) = a.resume_fraction {
                 config.carnivores.feeding_resume_fraction = fraction;
+            }
+            if let Some(on) = a.food_limited {
+                config.carnivores.food_limited_reproduction_enabled = on;
+            }
+            if let Some(on) = a.prey_trend {
+                config.carnivores.prey_trend_reproduction_enabled = on;
+            }
+            if let Some(basal) = a.basal {
+                config.carnivores.basal_energy_per_tick = basal;
             }
             let mut world = World::new(config.clone())?;
             let initial_plants = plant_classes(&world);
