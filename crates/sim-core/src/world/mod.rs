@@ -146,6 +146,15 @@ pub struct PreyTrendSnapshot {
     pub deaths_in_window: u64,
 }
 
+/// Cumulative counters for the opt-in herbivore counterattack (Issue 54). Diagnostic only;
+/// never an input to the ecology, so the state audit does not emit them.
+#[derive(Debug, Default, Clone, serde::Serialize)]
+pub struct DefenseCounters {
+    pub counterattacks: u64,
+    pub counterattack_energy: f64,
+    pub counterattack_learning_events: u64,
+}
+
 /// Cumulative, read-only diagnostics for the predator/prey balance investigation.
 #[derive(Debug, Default, Clone, serde::Serialize)]
 pub struct CarnivoreDebug {

@@ -610,6 +610,30 @@ impl World {
                             5.
                         };
                         self.animals.items[j].hp = (hp_before - damage).max(0.);
+                        let h = &self.config.herbivores;
+                        if h.counterattack_energy > 0. && self.animals.items[j].defense_active {
+                            let genes = &self.animals.items[j].genes;
+                            let requested = h.counterattack_energy
+                                * f64::from(genes.aggression)
+                                * f64::from(genes.adult_max_hp)
+                                / 60.;
+                            let available = self.resources.energy_balance(reserve).unwrap_or(0.);
+                            let injury = requested.min(available);
+                            if injury > 0. {
+                                self.ledger
+                                    .dissipate_heat(&mut self.resources, reserve, injury)
+                                    .map_err(|e| format!("carnivore counterattack: {e:?}"))?;
+                            }
+                            self.defense.counterattacks += 1;
+                            self.defense.counterattack_energy += injury;
+                            if h.counterattack_learning_enabled
+                                && self.config.animal_toxin.color_learning_enabled
+                                && requested > 0.
+                            {
+                                self.learn_counterattack(i, j, requested / 60.);
+                                self.defense.counterattack_learning_events += 1;
+                            }
+                        }
                         if let Some(trace) = &mut self.health_trace {
                             if trace.watched.contains(&self.animals.items[j].id) {
                                 trace.record(self.tick,&self.animals.items[j],&self.resources,"predation",Some(hp_before),

@@ -30,6 +30,7 @@ impl World {
             carnivore_hunts,
             diagnostics,
             carnivore_debug,
+            defense: _,
             prey_trend_snapshot,
             resistance_event_logging,
             resistance_birth_events,
@@ -49,6 +50,8 @@ impl World {
             p42_life_events,
         } = self;
 
+        // `defense` holds diagnostic counters only (never an ecology input); not emitted so
+        // existing audit baselines are unchanged.
         // The lineage observer alone enables these two output queues and drains
         // them within each tick. They are never inputs to the ecology.
         assert_eq!(resistance_event_logging, herbivore_terminal_logging);

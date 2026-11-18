@@ -57,6 +57,31 @@ impl PlantColorMemory {
         }
     }
 
+    /// Harm experienced directly from an encounter with this color (e.g. a counterattack),
+    /// without a toxin load. Uses the same 0.1 cap as toxin damage.
+    pub(crate) fn observe_injury(&mut self, color: u32, harm: f64) {
+        if harm <= 0. {
+            return;
+        }
+        let color = color & 0xffffff00;
+        if let Some(entry) = self
+            .experiences
+            .iter_mut()
+            .find(|entry| entry.color == color)
+        {
+            entry.damage = (entry.damage + harm).min(0.1);
+            return;
+        }
+        if self.experiences.len() == Self::CAPACITY {
+            self.experiences.remove(0);
+        }
+        self.experiences.push(Experience {
+            color,
+            loads: [0.; 16],
+            damage: harm.min(0.1),
+        });
+    }
+
     /// Opt-in extinction of avoidance: a toxin-free meal weakens learned harm for
     /// similar colors, using the same generalization width as `allows`.
     pub(crate) fn relieve_safe_meal(&mut self, color: u32, relief: f64) {

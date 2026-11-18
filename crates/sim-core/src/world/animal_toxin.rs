@@ -421,6 +421,19 @@ impl World {
                 .is_none_or(|p| p.memory.allows(visible_color(color), reserve_e / 60.))
     }
 
+    /// A counterattack teaches the carnivore that this prey color is harmful.
+    pub(super) fn learn_counterattack(&mut self, predator_index: usize, prey_index: usize, harm: f64) {
+        let id = self.carnivores[predator_index].id;
+        let color = visible_color(self.animals.items[prey_index].genes.body_color);
+        let t = &self.config.toxin;
+        self.animal_toxins
+            .predators
+            .entry(id)
+            .or_insert_with(|| PredatorToxin::founder(self.config.seed, id, t))
+            .memory
+            .observe_injury(color, harm);
+    }
+
     pub(super) fn record_carnivore_color_skips(
         &mut self,
         predator: EntityId,

@@ -199,6 +199,14 @@ pub struct HerbivoreSettings {
     /// Reference = (speed_min + speed_max) / 2. Zero keeps basal energy independent of speed.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub speed_upkeep_slope: f64,
+    /// Opt-in: a herbivore standing ground drains this x aggression x (adult_max_hp / 60)
+    /// energy from a carnivore that bites it (dissipated as heat). Zero disables.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub counterattack_energy: f64,
+    /// When carnivore color learning is on, a counterattack also records harm for the
+    /// prey's color (counterattack energy / 60). Off only to separate learning in experiments.
+    #[serde(skip_serializing_if = "is_true")]
+    pub counterattack_learning_enabled: bool,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -436,6 +444,8 @@ impl Default for HerbivoreSettings {
             color_memory_safe_meal_relief: 0.,
             color_memory_decay_per_tick: 0.,
             speed_upkeep_slope: 0.,
+            counterattack_energy: 0.,
+            counterattack_learning_enabled: true,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -795,6 +805,13 @@ impl SimulationConfig {
             )
             .into());
         }
+        if !h.counterattack_energy.is_finite() || !(0.0..=100.0).contains(&h.counterattack_energy) {
+            return Err(concat!(
+                "草食の反撃量（herbivores.counterattack_energy）は0から100の範囲で指定してください。",
+                "使わない場合は0にしてください。"
+            )
+            .into());
+        }
         if [h.speed_upkeep_slope, self.carnivores.speed_upkeep_slope]
             .iter()
             .any(|v| !(0.0..=5.0).contains(v))
@@ -931,6 +948,10 @@ impl SimulationConfig {
 
 fn is_false(value: &bool) -> bool {
     !*value
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 fn is_zero_f32(value: &f32) -> bool {

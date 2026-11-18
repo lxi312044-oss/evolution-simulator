@@ -31,7 +31,8 @@ export function editor(container: HTMLElement, dirty: () => void) {
       const herbivores = draft.herbivores as Values;
       for (const key of ["experimental_plant_toxicity_colors", "experimental_inherited_plant_colors"]) toxin[key] ??= false;
       for (const key of ["hungry_color_recheck_enabled", "hungry_color_recovery_enabled"]) herbivores[key] ??= false;
-      for (const key of ["color_memory_safe_meal_relief", "color_memory_decay_per_tick", "speed_upkeep_slope"]) herbivores[key] ??= 0;
+      for (const key of ["color_memory_safe_meal_relief", "color_memory_decay_per_tick", "speed_upkeep_slope", "counterattack_energy"]) herbivores[key] ??= 0;
+      herbivores.counterattack_learning_enabled ??= true;
       const original = JSON.stringify(draft);
       const lists = [...groups, ["その他"]].map(() => document.createElement("div"));
       lists.forEach(list => list.className = "tuning-grid");
