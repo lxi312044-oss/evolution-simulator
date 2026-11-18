@@ -215,6 +215,10 @@ pub struct HerbivoreSettings {
     /// this many ticks (it breaks off and the prey can escape). Zero disables.
     #[serde(skip_serializing_if = "is_zero_u32")]
     pub counterattack_retreat_ticks: u32,
+    /// Experimental control: false keeps a child's speed equal to its parent's. The mutation
+    /// draw still happens and is discarded, so the RNG sequence is unchanged.
+    #[serde(skip_serializing_if = "is_true")]
+    pub speed_mutation_enabled: bool,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -460,6 +464,7 @@ impl Default for HerbivoreSettings {
             counterattack_learning_enabled: true,
             counterattack_strength_threshold: 0.,
             counterattack_retreat_ticks: 0,
+            speed_mutation_enabled: true,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,

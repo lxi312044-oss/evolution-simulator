@@ -9,6 +9,8 @@
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6977713545
 //! 40x40 arms (f40r_*, seeds 90001-90008):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6978567155
+//! Issue 11 speed-evolution control arms (s_*, 40x40):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6980802991
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -35,6 +37,8 @@ struct Arm {
     retreat: u32,
     /// 40x40 at the same density (like `stage4_field40`), seeds 90001-90008.
     field40: bool,
+    /// Herbivore speed control: (fixed initial speed, speed mutation on).
+    speed: (Option<f32>, bool),
 }
 
 const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
@@ -46,6 +50,7 @@ const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
         carnivore_decay: 0.,
         retreat: 0,
         field40: false,
+        speed: (None, true),
     }
 }
 
@@ -58,6 +63,7 @@ const fn t_arm(name: &'static str, counterattack: f64, threshold: f64, decay: f6
         carnivore_decay: decay,
         retreat: 0,
         field40: false,
+        speed: (None, true),
     }
 }
 
@@ -70,6 +76,7 @@ const fn r_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u32)
         carnivore_decay: decay,
         retreat,
         field40: false,
+        speed: (None, true),
     }
 }
 
@@ -79,7 +86,13 @@ const fn f40_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u3
     a
 }
 
-const ARMS: [Arm; 18] = [
+const fn s_arm(name: &'static str, fixed: Option<f32>, mutation: bool) -> Arm {
+    let mut a = f40_arm(name, 0., 0., 0);
+    a.speed = (fixed, mutation);
+    a
+}
+
+const ARMS: [Arm; 21] = [
     arm("d_ctrl", 0., true),
     arm("d_c2", 2., true),
     arm("d_c5", 5., true),
@@ -98,6 +111,9 @@ const ARMS: [Arm; 18] = [
     f40_arm("f40r_ctrl", 0., 0., 0),
     f40_arm("f40r_c2_th_ret", 2., 0., 300),
     f40_arm("f40r_c2_th_dec_ret", 2., 0.0007, 300),
+    s_arm("s_ctrl", None, true),
+    s_arm("s_mutoff", None, false),
+    s_arm("s_fix25", Some(2.5), false),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
@@ -287,6 +303,11 @@ fn main() -> Result<(), String> {
             config.herbivores.counterattack_strength_threshold = a.threshold;
             config.carnivores.color_memory_decay_per_tick = a.carnivore_decay;
             config.herbivores.counterattack_retreat_ticks = a.retreat;
+            if let Some(v) = a.speed.0 {
+                config.herbivores.speed_min = v;
+                config.herbivores.speed_max = v;
+            }
+            config.herbivores.speed_mutation_enabled = a.speed.1;
             let radius = config.herbivores.predator_detection_radius;
             let mut world = World::new(config.clone())?;
             let mut seen: HashMap<EntityId, Value> = world

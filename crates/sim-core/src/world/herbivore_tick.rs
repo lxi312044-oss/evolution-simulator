@@ -1287,7 +1287,13 @@ impl World {
                 &mut self.rng,
                 &mut self.diagnostics,
             );
-            let speed = mutate(genes.speed, 0.5, 8., &mut self.rng, &mut self.diagnostics);
+            let mutated_speed = mutate(genes.speed, 0.5, 8., &mut self.rng, &mut self.diagnostics);
+            // Experimental control: discard the drawn speed so the RNG sequence is unchanged.
+            let speed = if h.speed_mutation_enabled {
+                mutated_speed
+            } else {
+                genes.speed
+            };
             let vision = mutate(
                 genes.vision,
                 20.,
