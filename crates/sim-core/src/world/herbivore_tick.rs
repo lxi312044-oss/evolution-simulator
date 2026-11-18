@@ -150,7 +150,13 @@ impl World {
             {
                 self.diagnostics.phase21_live_energy_gate_ready_samples += 1;
             }
-            let basal = h.basal_energy_per_tick * (hp_max as f64 / 60.).powf(0.75);
+            let basal = h.basal_energy_per_tick
+                * (hp_max as f64 / 60.).powf(0.75)
+                * crate::animals::speed_upkeep_factor(
+                    h.speed_upkeep_slope,
+                    speed,
+                    (h.speed_min + h.speed_max) / 2.,
+                );
             let current = self.resources.energy_balance(reserve).unwrap_or(0.);
             self.ledger
                 .dissipate_heat(&mut self.resources, reserve, basal.min(current))

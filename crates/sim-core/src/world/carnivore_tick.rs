@@ -446,7 +446,9 @@ impl World {
             self.carnivores[i].x = nx;
             self.carnivores[i].y = ny;
             let available = self.resources.energy_balance(reserve).unwrap_or(0.);
-            let basal = c.basal_energy_per_tick.min(available);
+            let basal = (c.basal_energy_per_tick
+                * crate::animals::speed_upkeep_factor(c.speed_upkeep_slope, speed, c.speed))
+            .min(available);
             let movement =
                 (c.movement_energy_per_unit * moved as f64).min((available - basal).max(0.));
             let burn = basal + movement;

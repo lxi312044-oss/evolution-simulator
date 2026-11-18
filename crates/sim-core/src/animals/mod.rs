@@ -62,3 +62,12 @@ impl Herbivore {
         crate::toxin::legacy_resistance(self.genes.toxin_resistance)
     }
 }
+
+/// Basal-energy multiplier for speed upkeep: 1 + slope x (speed / reference - 1), floored
+/// at 0. Exactly 1 when `slope` is 0, so the opt-in leaves basal energy unchanged.
+pub fn speed_upkeep_factor(slope: f64, speed: f32, reference: f32) -> f64 {
+    if slope == 0. {
+        return 1.;
+    }
+    (1. + slope * (f64::from(speed) / f64::from(reference) - 1.)).max(0.)
+}

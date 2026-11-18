@@ -195,6 +195,10 @@ pub struct HerbivoreSettings {
     /// Opt-in: fraction of learned plant-color harm that fades each tick.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub color_memory_decay_per_tick: f64,
+    /// Opt-in: basal energy x (1 + slope x (speed / reference - 1)), floored at 0.
+    /// Reference = (speed_min + speed_max) / 2. Zero keeps basal energy independent of speed.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub speed_upkeep_slope: f64,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -315,6 +319,9 @@ pub struct CarnivoreSettings {
     /// Child speed = parent speed x (1 +/- scale), uniform, clamped to 0.5..=8 like herbivores.
     #[serde(skip_serializing_if = "is_zero_f32")]
     pub speed_mutation_scale: f32,
+    /// Opt-in: basal energy x (1 + slope x (speed / `speed` - 1)), floored at 0.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub speed_upkeep_slope: f64,
 }
 impl Default for CarnivoreSettings {
     fn default() -> Self {
@@ -381,6 +388,7 @@ impl Default for CarnivoreSettings {
             initial_speed_spread: 0.,
             speed_mutation_probability: 0.,
             speed_mutation_scale: 0.,
+            speed_upkeep_slope: 0.,
         }
     }
 }
@@ -427,6 +435,7 @@ impl Default for HerbivoreSettings {
             hungry_color_recovery_enabled: false,
             color_memory_safe_meal_relief: 0.,
             color_memory_decay_per_tick: 0.,
+            speed_upkeep_slope: 0.,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -783,6 +792,17 @@ impl SimulationConfig {
                 "草食の色記憶の更新設定（herbivores.color_memory_safe_meal_relief と ",
                 "herbivores.color_memory_decay_per_tick）は0から1の範囲で指定してください。",
                 " 使わない場合は0にしてください。"
+            )
+            .into());
+        }
+        if [h.speed_upkeep_slope, self.carnivores.speed_upkeep_slope]
+            .iter()
+            .any(|v| !(0.0..=5.0).contains(v))
+        {
+            return Err(concat!(
+                "速さの維持コスト（herbivores.speed_upkeep_slope と ",
+                "carnivores.speed_upkeep_slope）は0から5の範囲で指定してください。",
+                "使わない場合は0にしてください。"
             )
             .into());
         }

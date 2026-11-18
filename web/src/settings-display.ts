@@ -74,6 +74,7 @@ herbivores.hungry_color_recheck_enabled|実験用：低エネルギー時の餌�
 herbivores.hungry_color_recovery_enabled|実験用：餌の再評価を回復まで継続|草食の色学習と低エネルギー時の再評価が有効なとき、予備Eが30%以上になるまで回復状態を維持します。|b
 herbivores.color_memory_safe_meal_relief|実験用：安全な摂食で色の危険記憶を弱める|草食の色学習が有効なとき、毒を摂らずに植物を食べたTickごとに、その色に近い記憶の危険度を色の近さに応じてこの割合だけ下げます。0で無効です。|p ／摂食Tick
 herbivores.color_memory_decay_per_tick|実験用：色の危険記憶の時間減衰|草食の色学習が有効なとき、記憶した危険度を毎Tickこの割合だけ下げます。0で無効です。|p ／Tick
+herbivores.speed_upkeep_slope|実験用：草食の速さの維持コスト|速い草食ほど基礎代謝を多く払います。基礎代謝×（1＋この値×（速さ÷基準の速さ−1））で、基準は初期の速さの範囲の中央です。0で無効です。|n
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p
@@ -180,6 +181,7 @@ carnivores.speed_evolution_enabled|実験用：肉食の速さの遺伝|有効�
 carnivores.initial_speed_spread|実験用：肉食の初期の速さのばらつき|速さの遺伝が有効なとき、初期個体の速さを「肉食の移動速度」の±この割合で一様に決めます。0でばらつきなしです。|p
 carnivores.speed_mutation_probability|実験用：肉食の速さの変異確率|速さの遺伝が有効なとき、子の速さが変異する確率です。0で変異なしです。|p
 carnivores.speed_mutation_scale|実験用：肉食の速さの変異幅|速さが変異するとき、親の速さの±この割合で一様に変えます。範囲は0.5〜8です。|p
+carnivores.speed_upkeep_slope|実験用：肉食の速さの維持コスト|速い肉食ほど基礎代謝を多く払います。基礎代謝×（1＋この値×（速さ÷肉食の移動速度−1））です。0で無効です。|n
 observation.interval|観測ログの記録間隔|指定したTick間隔でCSV用の統計を記録します。|1以上の整数 Tick
 observation.stopAt|観測の終了Tick|指定したTickで進行を止めます。0は無制限です。系譜記録を有効にする場合は正の値が必要です。|0以上の整数 Tick
 observation.lineage|草食動物の系譜記録|新規開始から草食動物の系譜イベントを記録します。終了Tickの指定が必要です。|b
