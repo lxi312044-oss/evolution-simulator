@@ -1,18 +1,25 @@
 """Analyze the Issue #11 stage 4 carnivore settings review.
 
-Criteria are fixed in the plan before the run:
-https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968323277
+Criteria are fixed in the plans before each run:
+round 1: https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968323277
+round 2: https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968964204
 
-Usage: python tools/analyze_stage4_carnivore_review.py <result-dir>
+Usage: python tools/analyze_stage4_carnivore_review.py <result-dir> [1|2]
 """
 import json
 import math
 import sys
 from pathlib import Path
 
-ARMS = ["s32", "s42", "s525", "s32_decay", "s42_decay", "s525_decay"]
+ROUNDS = {
+    "1": ["s32", "s42", "s525", "s32_decay", "s42_decay", "s525_decay"],
+    "2": ["v42", "v42_sustain", "v42_rest", "v42_both", "v525", "v525_sustain", "v525_rest", "v525_both"],
+}
+ARMS = ROUNDS["1"]
 SEEDS = range(90001, 90017)
 SPEED_ORDER = {"s32": 0, "s42": 1, "s525": 2}
+# Round 2 herbivore criterion: round 1 s32_decay had 2/16 herbivore extinctions (+2 allowed).
+ROUND1_S32_DECAY_HERBIVORE_EXTINCT = 2
 
 
 def load(directory):
@@ -81,22 +88,39 @@ def summarize(runs, arm):
     }
 
 
+def rank_round2(result, arm):
+    mechanisms = int("sustain" in arm or "both" in arm) + int("rest" in arm or "both" in arm)
+    speed = 0 if arm.startswith("v42") else 1
+    return (-result[arm]["coexist_count"], mechanisms, speed)
+
+
 def main():
+    global ARMS
+    round_ = sys.argv[2] if len(sys.argv) > 2 else "1"
+    ARMS = ROUNDS[round_]
     runs = load(sys.argv[1])
     result = {arm: summarize(runs, arm) for arm in ARMS}
     candidates = []
     for arm in ARMS:
         r = result[arm]
-        reference = "s32_decay" if arm.endswith("_decay") else "s32"
+        if round_ == "1":
+            reference = "s32_decay" if arm.endswith("_decay") else "s32"
+            herbivore_limit = result[reference]["herbivore_extinct_count"] + 2
+        else:
+            herbivore_limit = ROUND1_S32_DECAY_HERBIVORE_EXTINCT + 2
         c1 = r["carnivore_extinct_count"] <= 4
-        c2 = r["herbivore_extinct_count"] <= result[reference]["herbivore_extinct_count"] + 2
+        c2 = r["herbivore_extinct_count"] <= herbivore_limit
         c3 = r["coexist_count"] >= 12
         r["criteria"] = {"carnivore_extinct_le_4": c1, "herbivore_not_worse_by_more_than_2": c2, "coexist_ge_12": c3}
         if c1 and c2 and c3:
             candidates.append(arm)
-    def rank(arm):
-        speed = SPEED_ORDER[arm.removesuffix("_decay")]
-        return (-result[arm]["coexist_count"], speed, arm.endswith("_decay"))
+    if round_ == "1":
+        def rank(arm):
+            speed = SPEED_ORDER[arm.removesuffix("_decay")]
+            return (-result[arm]["coexist_count"], speed, arm.endswith("_decay"))
+    else:
+        rank = lambda arm: rank_round2(result, arm)
+    result["round"] = round_
     result["candidates"] = candidates
     result["selected"] = min(candidates, key=rank) if candidates else None
     print(json.dumps(result, indent=1, ensure_ascii=False))
