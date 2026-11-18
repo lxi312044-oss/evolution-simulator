@@ -121,32 +121,36 @@ fn plant_classes(world: &World) -> [u64; 4] {
     n
 }
 
+/// Herbivore statistics are recorded even after carnivores die out; carnivore statistics
+/// are NaN (null in JSON) while there are no carnivores.
 fn speeds(world: &World, flee_multiplier: f32) -> Vec<f64> {
     let n = world.carnivores.len();
-    if n == 0 {
-        return vec![f64::NAN; SPEED.len()];
-    }
-    let s: Vec<f32> = world.carnivores.iter().map(|c| c.speed).collect();
-    let mean = s.iter().sum::<f32>() / n as f32;
-    let min = s.iter().copied().fold(f32::INFINITY, f32::min);
-    let max = s.iter().copied().fold(f32::NEG_INFINITY, f32::max);
-    let h: Vec<f32> = world.animals.items.iter().map(|a| a.genes.speed).collect();
-    let (hmean, faster) = if h.is_empty() {
-        (f64::NAN, f64::NAN)
+    let (mean, min, max) = if n == 0 {
+        (f64::NAN, f64::NAN, f64::NAN)
     } else {
-        let k = h.len() as f64;
+        let s: Vec<f32> = world.carnivores.iter().map(|c| c.speed).collect();
         (
-            h.iter().map(|v| f64::from(*v)).sum::<f64>() / k,
-            h.iter().filter(|v| **v * flee_multiplier > mean).count() as f64 / k,
+            f64::from(s.iter().sum::<f32>() / n as f32),
+            f64::from(s.iter().copied().fold(f32::INFINITY, f32::min)),
+            f64::from(s.iter().copied().fold(f32::NEG_INFINITY, f32::max)),
         )
     };
-    vec![
-        f64::from(mean),
-        f64::from(min),
-        f64::from(max),
-        hmean,
-        faster,
-    ]
+    let h: Vec<f32> = world.animals.items.iter().map(|a| a.genes.speed).collect();
+    if h.is_empty() {
+        return vec![mean, min, max, f64::NAN, f64::NAN];
+    }
+    let k = h.len() as f64;
+    let reference = if n == 0 { f64::NAN } else { mean };
+    let faster = if reference.is_nan() {
+        f64::NAN
+    } else {
+        h.iter()
+            .filter(|v| f64::from(**v * flee_multiplier) > reference)
+            .count() as f64
+            / k
+    };
+    let hmean = h.iter().map(|v| f64::from(*v)).sum::<f64>() / k;
+    vec![mean, min, max, hmean, faster]
 }
 
 fn main() -> Result<(), String> {
