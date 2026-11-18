@@ -13,6 +13,8 @@
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6980802991
 //! Issue 11 hunting-bout arms (h_*, 40x40):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6982012880
+//! Issue 11 intermediate carnivore basal energy arms (m_*, 40x40):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6983577403
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -43,6 +45,8 @@ struct Arm {
     speed: (Option<f32>, bool),
     /// Carnivore hunting bout length (0 = off).
     hunt_bout: u32,
+    /// Carnivore basal energy per tick (round 3 w_E / f40_E use 0.0072).
+    basal: f64,
 }
 
 const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
@@ -56,6 +60,7 @@ const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
         field40: false,
         speed: (None, true),
         hunt_bout: 0,
+        basal: 0.0072,
     }
 }
 
@@ -70,6 +75,7 @@ const fn t_arm(name: &'static str, counterattack: f64, threshold: f64, decay: f6
         field40: false,
         speed: (None, true),
         hunt_bout: 0,
+        basal: 0.0072,
     }
 }
 
@@ -84,6 +90,7 @@ const fn r_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u32)
         field40: false,
         speed: (None, true),
         hunt_bout: 0,
+        basal: 0.0072,
     }
 }
 
@@ -112,7 +119,13 @@ const fn h_arm(name: &'static str, bout: u32, defense: bool, fixed_speed: bool) 
     a
 }
 
-const ARMS: [Arm; 26] = [
+const fn m_arm(name: &'static str, basal: f64) -> Arm {
+    let mut a = f40_arm(name, 0., 0., 0);
+    a.basal = basal;
+    a
+}
+
+const ARMS: [Arm; 30] = [
     arm("d_ctrl", 0., true),
     arm("d_c2", 2., true),
     arm("d_c5", 5., true),
@@ -139,6 +152,10 @@ const ARMS: [Arm; 26] = [
     h_arm("h_b300", 300, false, false),
     h_arm("h_b300_def", 300, true, false),
     h_arm("h_fix25_b300", 300, false, true),
+    m_arm("m_0072", 0.0072),
+    m_arm("m_0096", 0.0096),
+    m_arm("m_0120", 0.0120),
+    m_arm("m_0144", 0.0144),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
@@ -321,7 +338,7 @@ fn main() -> Result<(), String> {
             config.carnivores.feeding_resume_fraction = 0.2;
             config.carnivores.food_limited_reproduction_enabled = true;
             config.carnivores.prey_trend_reproduction_enabled = true;
-            config.carnivores.basal_energy_per_tick = 0.0072;
+            config.carnivores.basal_energy_per_tick = a.basal;
             // Counterattack.
             config.herbivores.counterattack_energy = a.counterattack;
             config.herbivores.counterattack_learning_enabled = a.learning;
