@@ -5,7 +5,7 @@
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example eco001_color_memory_update -- \
-//!     config/stage4-inherited-plant-colors.json results/eco001-color-memory-update [ticks]
+//!     config/stage4-inherited-plant-colors.json results/eco001-color-memory-update [ticks] [arm,...]
 //!
 //! Observation is read-only between `step` calls. One JSON file is written per run.
 use serde_json::{json, Value};
@@ -104,7 +104,16 @@ fn main() -> Result<(), String> {
         .map_err(|e| format!("{e}"))?;
     let text = fs::read_to_string(config_path).map_err(|e| e.to_string())?;
     fs::create_dir_all(out).map_err(|e| e.to_string())?;
+    let selected: Option<Vec<&str>> = args.get(4).map(|a| a.split(',').collect());
+    if let Some(names) = &selected {
+        if let Some(bad) = names.iter().find(|n| !ARMS.iter().any(|a| a.0 == **n)) {
+            return Err(format!("unknown arm: {bad}"));
+        }
+    }
     for (arm, learning, relief, decay) in ARMS {
+        if selected.as_ref().is_some_and(|names| !names.contains(&arm)) {
+            continue;
+        }
         for seed in SEEDS {
             let mut config: SimulationConfig =
                 serde_json::from_str(&text).map_err(|e| e.to_string())?;
