@@ -1,7 +1,8 @@
 //! Issue #11: pre-registered review of carnivore settings in the fixed stage 4 environment.
 //!
-//! Plan (fixed before the run):
-//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968323277
+//! Plans (fixed before each run):
+//! round 1 (s* arms): https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968323277
+//! round 2 (v* arms): https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6968964204
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_carnivore_review -- \
@@ -13,14 +14,53 @@ use sim_core::{SimulationConfig, World};
 use std::{env, fs, path::Path};
 
 const SEEDS: std::ops::RangeInclusive<u64> = 90001..=90016;
-/// (name, carnivore speed, herbivore color memory decay per tick)
-const ARMS: [(&str, f32, f64); 6] = [
-    ("s32", 3.2, 0.),
-    ("s42", 4.2, 0.),
-    ("s525", 5.25, 0.),
-    ("s32_decay", 3.2, 0.0007),
-    ("s42_decay", 4.2, 0.0007),
-    ("s525_decay", 5.25, 0.0007),
+/// One compared setting. `None` keeps the value from the base config.
+struct Arm {
+    name: &'static str,
+    speed: f32,
+    decay: f64,
+    sustainable: Option<bool>,
+    resume_fraction: Option<f64>,
+}
+
+const fn arm(name: &'static str, speed: f32, decay: f64) -> Arm {
+    Arm {
+        name,
+        speed,
+        decay,
+        sustainable: None,
+        resume_fraction: None,
+    }
+}
+
+const fn round2(name: &'static str, speed: f32, sustainable: bool, resume: f64) -> Arm {
+    Arm {
+        name,
+        speed,
+        decay: 0.0007,
+        sustainable: Some(sustainable),
+        resume_fraction: Some(resume),
+    }
+}
+
+const ARMS: [Arm; 14] = [
+    // Round 1: carnivore speed x herbivore color memory decay.
+    arm("s32", 3.2, 0.),
+    arm("s42", 4.2, 0.),
+    arm("s525", 5.25, 0.),
+    arm("s32_decay", 3.2, 0.0007),
+    arm("s42_decay", 4.2, 0.0007),
+    arm("s525_decay", 5.25, 0.0007),
+    // Round 2: sustainable reproduction (minimum prey per predator) and a later
+    // hunting restart after a meal (feeding_resume_fraction 0.4 -> 0.2).
+    round2("v42", 4.2, false, 0.4),
+    round2("v42_sustain", 4.2, true, 0.4),
+    round2("v42_rest", 4.2, false, 0.2),
+    round2("v42_both", 4.2, true, 0.2),
+    round2("v525", 5.25, false, 0.4),
+    round2("v525_sustain", 5.25, true, 0.4),
+    round2("v525_rest", 5.25, false, 0.2),
+    round2("v525_both", 5.25, true, 0.2),
 ];
 
 /// Integer counters, in this order.
@@ -96,7 +136,7 @@ fn main() -> Result<(), String> {
         .get(3)
         .map_or(Ok(20_000), |t| t.parse())
         .map_err(|e| format!("{e}"))?;
-    let names: Vec<&str> = ARMS.iter().map(|a| a.0).collect();
+    let names: Vec<&str> = ARMS.iter().map(|a| a.name).collect();
     let selected: Vec<&str> = args
         .get(4)
         .map_or(names.clone(), |a| a.split(',').collect());
@@ -105,13 +145,20 @@ fn main() -> Result<(), String> {
     }
     let text = fs::read_to_string(config_path).map_err(|e| e.to_string())?;
     fs::create_dir_all(out).map_err(|e| e.to_string())?;
-    for (arm, speed, decay) in ARMS.iter().filter(|a| selected.contains(&a.0)) {
+    for a in ARMS.iter().filter(|a| selected.contains(&a.name)) {
+        let arm = a.name;
         for seed in SEEDS {
             let mut config: SimulationConfig =
                 serde_json::from_str(&text).map_err(|e| e.to_string())?;
             config.seed = seed;
-            config.carnivores.speed = *speed;
-            config.herbivores.color_memory_decay_per_tick = *decay;
+            config.carnivores.speed = a.speed;
+            config.herbivores.color_memory_decay_per_tick = a.decay;
+            if let Some(on) = a.sustainable {
+                config.carnivores.sustainable_reproduction_enabled = on;
+            }
+            if let Some(fraction) = a.resume_fraction {
+                config.carnivores.feeding_resume_fraction = fraction;
+            }
             let mut world = World::new(config.clone())?;
             let initial_plants = plant_classes(&world);
             let (mut prev_n, mut prev_e) = (counts(&world), energy(&world));
@@ -135,7 +182,7 @@ fn main() -> Result<(), String> {
             }
             let record = json!({
                 "issue": 11, "arm": arm, "seed": seed, "ticks": ticks,
-                "carnivore_speed": speed, "herbivore_decay": decay,
+                "carnivore_speed": a.speed, "herbivore_decay": a.decay,
                 "effective_config": config,
                 "row_fields": ["tick", "carnivores", "herbivores", "plants", COUNTS, ENERGY],
                 "initial_plants_gn_gt_pn_pt": initial_plants,
