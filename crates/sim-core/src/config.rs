@@ -524,7 +524,9 @@ impl SimulationConfig {
         {
             return Err("invalid carnivore toxin damage threshold".into());
         }
-        if self.animal_toxin.carnivore_hp_damage_per_excess_unit
+        if self
+            .animal_toxin
+            .carnivore_hp_damage_per_excess_unit
             .is_some_and(|value| !value.is_finite() || value < 0.)
         {
             return Err("invalid carnivore toxin damage coefficient".into());
@@ -549,7 +551,8 @@ impl SimulationConfig {
                 "toxin.plant_toxin_type_count=2、toxin.plant_toxic_mutation_probability と ",
                 "toxin.plant_toxin_type_mutation_probability を0にしてください。",
                 " この条件を使わない場合は継承配色をOFFにしてください。"
-            ).into());
+            )
+            .into());
         }
         if t.experimental_plant_toxicity_colors
             && (!t.plant_variation_enabled || self.initial_population.plants % 2 != 0)
@@ -610,7 +613,8 @@ impl SimulationConfig {
                 " 通常の色継承を使う場合は toxin.experimental_plant_toxicity_colors と ",
                 "toxin.experimental_inherited_plant_colors を両方OFFにしてください。",
                 " 実験配色を使う場合は plants.color_inheritance_enabled をOFFにしてください。"
-            ).into());
+            )
+            .into());
         }
         if !(0.0..=1.0).contains(&p.color_mutation_probability) {
             return Err("plants.color_mutation_probability は0〜1で指定してください。".into());

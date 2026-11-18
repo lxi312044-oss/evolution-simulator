@@ -150,7 +150,9 @@ impl World {
             let y = world.rng.unit() * world.config.world.height;
             world.create_initial_plant(x, y)?;
         }
-        if world.config.toxin.experimental_plant_toxicity_colors || world.config.toxin.experimental_inherited_plant_colors {
+        if world.config.toxin.experimental_plant_toxicity_colors
+            || world.config.toxin.experimental_inherited_plant_colors
+        {
             let mut order: Vec<_> = (0..world.plants.items.len()).collect();
             order.sort_by(|&a, &b| {
                 let a = &world.plants.items[a];
@@ -165,9 +167,13 @@ impl World {
                 let mut next_type = [0, 0];
                 for (block, indices) in order.chunks_exact_mut(10).enumerate() {
                     indices.sort_by(|&a, &b| {
-                        let draw = |index| crate::toxin::plant_trait_draw(
-                            world.config.seed, index as u64, 0x53543500 + block as u64,
-                        );
+                        let draw = |index| {
+                            crate::toxin::plant_trait_draw(
+                                world.config.seed,
+                                index as u64,
+                                0x53543500 + block as u64,
+                            )
+                        };
                         draw(a).total_cmp(&draw(b)).then(a.cmp(&b))
                     });
                     for (slot, &index) in indices.iter().enumerate() {
