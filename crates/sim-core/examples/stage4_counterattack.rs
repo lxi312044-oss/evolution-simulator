@@ -15,6 +15,9 @@
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6982012880
 //! Issue 11 intermediate carnivore basal energy arms (m_*, 40x40):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6983577403
+//! Issue 11 carnivores born from herbivores (v_*, 40x40; no early stop on carnivore
+//! extinction because carnivores can arise again):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6985033351
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -47,6 +50,9 @@ struct Arm {
     hunt_bout: u32,
     /// Carnivore basal energy per tick (round 3 w_E / f40_E use 0.0072).
     basal: f64,
+    /// Probability that a herbivore offspring is a carnivore; > 0 also starts with no
+    /// carnivores.
+    emergence: f64,
 }
 
 const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
@@ -61,6 +67,7 @@ const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
         speed: (None, true),
         hunt_bout: 0,
         basal: 0.0072,
+        emergence: 0.,
     }
 }
 
@@ -76,6 +83,7 @@ const fn t_arm(name: &'static str, counterattack: f64, threshold: f64, decay: f6
         speed: (None, true),
         hunt_bout: 0,
         basal: 0.0072,
+        emergence: 0.,
     }
 }
 
@@ -91,6 +99,7 @@ const fn r_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u32)
         speed: (None, true),
         hunt_bout: 0,
         basal: 0.0072,
+        emergence: 0.,
     }
 }
 
@@ -125,7 +134,13 @@ const fn m_arm(name: &'static str, basal: f64) -> Arm {
     a
 }
 
-const ARMS: [Arm; 30] = [
+const fn v_arm(name: &'static str, emergence: f64, basal: f64) -> Arm {
+    let mut a = m_arm(name, basal);
+    a.emergence = emergence;
+    a
+}
+
+const ARMS: [Arm; 34] = [
     arm("d_ctrl", 0., true),
     arm("d_c2", 2., true),
     arm("d_c5", 5., true),
@@ -156,6 +171,10 @@ const ARMS: [Arm; 30] = [
     m_arm("m_0096", 0.0096),
     m_arm("m_0120", 0.0120),
     m_arm("m_0144", 0.0144),
+    v_arm("v_ctrl", 0., 0.0072),
+    v_arm("v_p002", 0.002, 0.0072),
+    v_arm("v_p01", 0.01, 0.0072),
+    v_arm("v_p01_b120", 0.01, 0.0120),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
@@ -351,6 +370,10 @@ fn main() -> Result<(), String> {
             }
             config.herbivores.speed_mutation_enabled = a.speed.1;
             config.carnivores.hunt_bout_ticks = a.hunt_bout;
+            if a.emergence > 0. {
+                config.herbivores.carnivore_offspring_probability = a.emergence;
+                config.initial_population.carnivores = 0;
+            }
             let radius = config.herbivores.predator_detection_radius;
             let mut world = World::new(config.clone())?;
             let mut seen: HashMap<EntityId, Value> = world
@@ -398,8 +421,10 @@ fn main() -> Result<(), String> {
                     de,
                     dx
                 ]));
+                let carnivores_gone = world.carnivores.is_empty() && a.emergence == 0.;
+                let plants_gone = world.plants.items.is_empty() && a.emergence > 0.;
                 if tick >= JUDGE_TICK
-                    && (world.carnivores.is_empty() || world.herbivore_count() == 0)
+                    && (carnivores_gone || world.herbivore_count() == 0 || plants_gone)
                 {
                     break;
                 }
@@ -420,6 +445,7 @@ fn main() -> Result<(), String> {
                 "row_fields": ["tick", "carnivores", "herbivores", "plants", COUNTS, ENERGY, EXTRA],
                 "individual_fields": ["adult_max_hp", "aggression", "fear", "speed", "r", "g", "b",
                                       "age_last_seen", "births_last_seen", "initial", "tick"],
+                "carnivores_born_from_herbivores": world.defense.carnivores_born_from_herbivores,
                 "rows": rows,
                 "deaths": deaths,
                 "alive_at_end": alive,
@@ -430,12 +456,13 @@ fn main() -> Result<(), String> {
             )
             .map_err(|e| e.to_string())?;
             println!(
-                "{} seed={seed} last_tick={tick} carnivores={} herbivores={} plants={} counterattacks={}",
+                "{} seed={seed} last_tick={tick} carnivores={} herbivores={} plants={} counterattacks={} born_from_herbivores={}",
                 a.name,
                 world.carnivores.len(),
                 world.herbivore_count(),
                 world.plants.items.len(),
-                world.defense.counterattacks
+                world.defense.counterattacks,
+                world.defense.carnivores_born_from_herbivores
             );
         }
     }

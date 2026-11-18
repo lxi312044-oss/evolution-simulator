@@ -80,6 +80,7 @@ herbivores.counterattack_learning_enabled|実験用：反撃による肉食の�
 herbivores.counterattack_strength_threshold|実験用：反撃できる強さのしきい値|攻撃性×（体力÷60）がこの値以上の草食だけが反撃します。0で全員が反撃します。|n
 herbivores.counterattack_retreat_ticks|実験用：反撃を受けた肉食が手を引くTick数|反撃を受けた肉食は、このTick数のあいだその草食を狙いません。0で無効です。|n Tick
 herbivores.speed_mutation_enabled|実験用：草食の速さの突然変異|無効にすると、子の速さは親と同じになります（ほかの形質は変異します）。|b
+herbivores.carnivore_offspring_probability|実験用：草食から肉食が生まれる確率|草食が子を産むとき、この確率で子が肉食として生まれます（体の色は親から受け継ぎます）。初期の肉食を0頭にできます。0で無効です。|p
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p

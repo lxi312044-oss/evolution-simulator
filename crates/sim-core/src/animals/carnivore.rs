@@ -80,3 +80,14 @@ pub fn inherit_speed(parent: f32, probability: f32, scale: f32, seed: u64, id: u
         (parent, false)
     }
 }
+
+/// Stateless draw in [0, 1) for a herbivore offspring being born as a carnivore. Separate
+/// from ecology RNG, like body color.
+pub fn offspring_is_carnivore(probability: f64, seed: u64, tick: u64, id: u64) -> bool {
+    if probability <= 0. {
+        return false;
+    }
+    let s =
+        seed ^ tick.rotate_left(41) ^ 0x6361_726e_6976_6f72 ^ id.wrapping_mul(0x517cc1b727220a95);
+    f64::from(crate::animals::color::unit(s)) < probability
+}

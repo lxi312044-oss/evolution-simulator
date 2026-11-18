@@ -1432,6 +1432,60 @@ impl World {
                 .round()
                 .max(1.) as u32;
             let exploration_heading = self.rng.unit() * std::f32::consts::TAU;
+            // Opt-in: the offspring is born as a carnivore with the herbivore child's
+            // resources and inherited body color (Issue 11, simple version).
+            if self.config.carnivores.enabled
+                && crate::animals::carnivore::offspring_is_carnivore(
+                    h.carnivore_offspring_probability,
+                    self.config.seed,
+                    self.tick,
+                    id.index as u64,
+                )
+            {
+                let c = &self.config.carnivores;
+                self.carnivores.push(crate::animals::carnivore::Carnivore {
+                    id,
+                    x,
+                    y,
+                    age: 0,
+                    max_age: c.max_age_ticks,
+                    cooldown: c.reproduction_cooldown_ticks,
+                    attack_cooldown: 0,
+                    satiety_ticks: 0,
+                    stomach: child_stomach,
+                    feeding_active: true,
+                    body: child_body,
+                    reserve: child_reserve,
+                    color: child_genes.body_color,
+                    speed: if c.speed_evolution_enabled {
+                        crate::animals::carnivore::initial_speed(
+                            c.speed,
+                            c.initial_speed_spread,
+                            self.config.seed,
+                            id.index as u64,
+                        )
+                    } else {
+                        c.speed
+                    },
+                    vision: c.vision,
+                    ambush_gene: 0.15
+                        + 0.70
+                            * ((id.index as u64)
+                                .wrapping_mul(0x9e3779b97f4a7c15)
+                                .rotate_left(17) as u32 as f32
+                                / u32::MAX as f32),
+                    p42: Default::default(),
+                    parent_id: None,
+                    search_heading: 0.,
+                    search_ticks_left: 0,
+                    last_prey_heading: 0.,
+                    last_prey_ticks_left: 0,
+                });
+                self.animals.items[i].successful_births += 1;
+                self.carnivore_births += 1;
+                self.defense.carnivores_born_from_herbivores += 1;
+                continue;
+            }
             if self.config.animal_toxin.enabled {
                 self.inherit_herbivore_production(parent_id, id);
             }

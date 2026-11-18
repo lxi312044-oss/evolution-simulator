@@ -219,6 +219,11 @@ pub struct HerbivoreSettings {
     /// draw still happens and is discarded, so the RNG sequence is unchanged.
     #[serde(skip_serializing_if = "is_true")]
     pub speed_mutation_enabled: bool,
+    /// Opt-in: probability that a herbivore's offspring is born as a carnivore (simple
+    /// version of predators arising by mutation). The draw uses a stateless stream, so it
+    /// never shifts ecology RNG and does not depend on whether carnivores exist. Zero disables.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub carnivore_offspring_probability: f64,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -471,6 +476,7 @@ impl Default for HerbivoreSettings {
             counterattack_strength_threshold: 0.,
             counterattack_retreat_ticks: 0,
             speed_mutation_enabled: true,
+            carnivore_offspring_probability: 0.,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -974,7 +980,17 @@ impl SimulationConfig {
         {
             return Err("invalid carnivore digestion settings".into());
         }
-        if c.enabled && self.initial_population.carnivores == 0 {
+        if !(0.0..=1.0).contains(&self.herbivores.carnivore_offspring_probability) {
+            return Err(concat!(
+                "草食から肉食が生まれる確率（herbivores.carnivore_offspring_probability）は",
+                "0から1の範囲で指定してください。使わない場合は0にしてください。"
+            )
+            .into());
+        }
+        if c.enabled
+            && self.initial_population.carnivores == 0
+            && self.herbivores.carnivore_offspring_probability == 0.
+        {
             return Err("enabled carnivores require nonzero initial population".into());
         }
         Ok(())

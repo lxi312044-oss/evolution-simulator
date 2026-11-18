@@ -1,0 +1,76 @@
+//! Issue #11: carnivores born from herbivore offspring (simple version).
+use sim_core::{SimulationConfig, World};
+
+const STAGE4: &str = include_str!("../../../config/stage4-inherited-plant-colors.json");
+
+fn config(probability: f64, initial_carnivores: u32) -> SimulationConfig {
+    let mut c: SimulationConfig = serde_json::from_str(STAGE4).unwrap();
+    c.seed = 90001;
+    c.initial_population.carnivores = initial_carnivores;
+    c.herbivores.carnivore_offspring_probability = probability;
+    c
+}
+
+#[test]
+fn default_is_off_not_serialized_and_still_requires_initial_carnivores() {
+    let text = serde_json::to_string(&SimulationConfig::default()).unwrap();
+    assert!(!text.contains("carnivore_offspring_probability"));
+    let Err(err) = World::new(config(0., 0)) else {
+        panic!("zero carnivores without emergence should be rejected");
+    };
+    assert!(err.contains("nonzero initial population"), "{err}");
+    assert!(World::new(config(0.01, 0)).is_ok());
+    let Err(err) = World::new(config(1.5, 0)) else {
+        panic!("probability above 1 should be rejected");
+    };
+    assert!(err.contains("carnivore_offspring_probability"), "{err}");
+}
+
+#[test]
+fn every_offspring_becomes_a_carnivore_with_the_inherited_color() {
+    let mut w = World::new(config(1., 0)).unwrap();
+    let parent_colors: Vec<[f32; 3]> = w
+        .animals
+        .items
+        .iter()
+        .map(|h| h.genes.body_color.rgb())
+        .collect();
+    // Step checks N/E conservation every tick and errors on a violation.
+    for _ in 0..6 {
+        w.step(500).unwrap();
+    }
+    assert!(w.carnivore_births > 0);
+    assert_eq!(w.diagnostics.herbivore_births, 0);
+    assert_eq!(
+        w.defense.carnivores_born_from_herbivores,
+        w.carnivore_births
+    );
+    // Colors come from herbivore parents (initial herbivores, possibly mutated slightly).
+    let near = |a: [f32; 3]| {
+        parent_colors
+            .iter()
+            .any(|p| p.iter().zip(a).all(|(x, y)| (x - y).abs() <= 0.11))
+    };
+    assert!(w.carnivores.iter().all(|c| near(c.color.rgb())));
+}
+
+#[test]
+fn zero_probability_matches_previous_behavior() {
+    let run = |c: SimulationConfig| {
+        let mut w = World::new(c).unwrap();
+        (0..6)
+            .map(|_| {
+                w.step(500).unwrap();
+                (
+                    w.carnivores.len(),
+                    w.herbivore_count(),
+                    w.plants.items.len(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let base: SimulationConfig = serde_json::from_str(STAGE4).unwrap();
+    let mut explicit = base.clone();
+    explicit.herbivores.carnivore_offspring_probability = 0.;
+    assert_eq!(run(base), run(explicit));
+}

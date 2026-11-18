@@ -167,6 +167,7 @@ pub struct DefenseCounters {
     pub counterattack_retreats: u64,
     pub hunt_bouts_completed: u64,
     pub hunt_bouts_rested: u64,
+    pub carnivores_born_from_herbivores: u64,
 }
 
 /// Cumulative, read-only diagnostics for the predator/prey balance investigation.
