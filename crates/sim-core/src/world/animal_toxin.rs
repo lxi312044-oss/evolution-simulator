@@ -492,7 +492,10 @@ impl World {
     }
 
     pub(super) fn observes_carnivore_opportunities(&self) -> bool {
-        self.animal_toxins.trace.as_ref().is_some_and(|trace| trace.opportunities)
+        self.animal_toxins
+            .trace
+            .as_ref()
+            .is_some_and(|trace| trace.opportunities)
     }
 
     pub(super) fn carnivore_opportunity_snapshot(
@@ -551,13 +554,24 @@ impl World {
             }
             let color = visible_color(prey.genes.body_color);
             if ready && d2 <= c.attack_range * c.attack_range {
-                let risk = scores.iter().filter_map(|&(key, score)| {
-                    let similarity = (1. - super::plant_color_learning::color_distance(color, key) / 0.25).max(0.);
-                    (similarity > 0.).then_some((key, score * 10. * similarity))
-                }).max_by(|a, b| a.1.total_cmp(&b.1));
+                let risk = scores
+                    .iter()
+                    .filter_map(|&(key, score)| {
+                        let similarity = (1.
+                            - super::plant_color_learning::color_distance(color, key) / 0.25)
+                            .max(0.);
+                        (similarity > 0.).then_some((key, score * 10. * similarity))
+                    })
+                    .max_by(|a, b| a.1.total_cmp(&b.1));
                 if let Some((memory_color, risk)) = risk {
-                    let original = self.animal_toxins.trace.as_ref().unwrap()
-                        .first_prey_by_color.get(&(pred.id, memory_color)) == Some(&prey.id);
+                    let original = self
+                        .animal_toxins
+                        .trace
+                        .as_ref()
+                        .unwrap()
+                        .first_prey_by_color
+                        .get(&(pred.id, memory_color))
+                        == Some(&prey.id);
                     learned_ready.push(serde_json::json!({
                         "prey":trace_id(prey.id), "color":color, "memory_color":memory_color,
                         "original":original, "distance":d2.sqrt(), "risk":risk,
