@@ -7,6 +7,8 @@
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6977189837
 //! Retreat arms (r_*):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6977713545
+//! 40x40 arms (f40r_*, seeds 90001-90008):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6978567155
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -21,6 +23,7 @@ use sim_core::{entity::EntityId, SimulationConfig, World};
 use std::{collections::HashMap, env, fs, path::Path};
 
 const SEEDS: std::ops::RangeInclusive<u64> = 90001..=90016;
+const SEEDS_40: std::ops::RangeInclusive<u64> = 90001..=90008;
 const JUDGE_TICK: u64 = 20_000;
 
 struct Arm {
@@ -30,6 +33,8 @@ struct Arm {
     threshold: f64,
     carnivore_decay: f64,
     retreat: u32,
+    /// 40x40 at the same density (like `stage4_field40`), seeds 90001-90008.
+    field40: bool,
 }
 
 const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
@@ -40,6 +45,7 @@ const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
         threshold: 0.,
         carnivore_decay: 0.,
         retreat: 0,
+        field40: false,
     }
 }
 
@@ -51,6 +57,7 @@ const fn t_arm(name: &'static str, counterattack: f64, threshold: f64, decay: f6
         threshold,
         carnivore_decay: decay,
         retreat: 0,
+        field40: false,
     }
 }
 
@@ -62,10 +69,17 @@ const fn r_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u32)
         threshold: if counterattack > 0. { 0.7 } else { 0. },
         carnivore_decay: decay,
         retreat,
+        field40: false,
     }
 }
 
-const ARMS: [Arm; 15] = [
+const fn f40_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u32) -> Arm {
+    let mut a = r_arm(name, counterattack, decay, retreat);
+    a.field40 = true;
+    a
+}
+
+const ARMS: [Arm; 18] = [
     arm("d_ctrl", 0., true),
     arm("d_c2", 2., true),
     arm("d_c5", 5., true),
@@ -81,6 +95,9 @@ const ARMS: [Arm; 15] = [
     r_arm("r_c2_th_dec_ret", 2., 0.0007, 300),
     r_arm("r_c5_th_dec_ret", 5., 0.0007, 300),
     r_arm("r_c2_th_ret", 2., 0., 300),
+    f40_arm("f40r_ctrl", 0., 0., 0),
+    f40_arm("f40r_c2_th_ret", 2., 0., 300),
+    f40_arm("f40r_c2_th_dec_ret", 2., 0.0007, 300),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
@@ -215,6 +232,21 @@ fn observe(h: &sim_core::animals::Herbivore, initial: bool) -> Value {
     ])
 }
 
+/// Scale a 20x20 config to 40x40 at the same density (same as `stage4_field40`).
+fn field40(config: &mut SimulationConfig) {
+    let w = &mut config.world;
+    w.width *= 2.;
+    w.height *= 2.;
+    w.land_columns *= 2;
+    w.land_rows *= 2;
+    w.max_living_entities *= 4;
+    let p = &mut config.initial_population;
+    p.plants *= 4;
+    p.herbivores *= 4;
+    p.carnivores *= 4;
+    config.herbivores.plant_protection_threshold *= 4;
+}
+
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     let config_path = args.get(1).ok_or("config path is required")?;
@@ -233,10 +265,14 @@ fn main() -> Result<(), String> {
     let text = fs::read_to_string(config_path).map_err(|e| e.to_string())?;
     fs::create_dir_all(out).map_err(|e| e.to_string())?;
     for a in ARMS.iter().filter(|a| selected.contains(&a.name)) {
-        for seed in SEEDS {
+        let seeds = if a.field40 { SEEDS_40 } else { SEEDS };
+        for seed in seeds {
             let mut config: SimulationConfig =
                 serde_json::from_str(&text).map_err(|e| e.to_string())?;
             config.seed = seed;
+            if a.field40 {
+                field40(&mut config);
+            }
             // Issue 11 round 3 w_E.
             config.carnivores.speed = 5.25;
             config.herbivores.color_memory_decay_per_tick = 0.0007;
