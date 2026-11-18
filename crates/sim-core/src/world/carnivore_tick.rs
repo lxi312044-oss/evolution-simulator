@@ -451,7 +451,9 @@ impl World {
             .min(available);
             let movement =
                 (c.movement_energy_per_unit * moved as f64).min((available - basal).max(0.));
-            let burn = basal + movement;
+            // basal + (available - basal) can exceed `available` by one rounding step.
+            // Clamping only changes the result in that case, which previously aborted the run.
+            let burn = (basal + movement).min(available);
             if nearest.is_some() {
                 self.carnivore_debug.p41_chase_basal_energy += basal;
                 self.carnivore_debug.p41_chase_movement_energy += movement;
