@@ -2,6 +2,8 @@
 //!
 //! Plan (fixed before the run):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6974443725
+//! 40x40 arms (f40u_*, seeds 90001-90008, `stage4_field40` f40_E settings):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6975171446
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_speed_upkeep -- \
@@ -15,6 +17,7 @@ use sim_core::{SimulationConfig, World};
 use std::{env, fs, path::Path};
 
 const SEEDS: std::ops::RangeInclusive<u64> = 90001..=90016;
+const SEEDS_40: std::ops::RangeInclusive<u64> = 90001..=90008;
 const JUDGE_TICK: u64 = 20_000;
 
 struct Arm {
@@ -22,28 +25,46 @@ struct Arm {
     herbivore_slope: f64,
     /// Carnivore speed evolution (e_var settings) and carnivore slope.
     carnivore: Option<f64>,
+    /// 40x40 at the same density (like `stage4_field40`), seeds 90001-90008.
+    field40: bool,
 }
 
-const ARMS: [Arm; 4] = [
+const ARMS: [Arm; 6] = [
     Arm {
         name: "u_ctrl",
         herbivore_slope: 0.,
         carnivore: None,
+        field40: false,
     },
     Arm {
         name: "u_h05",
         herbivore_slope: 0.5,
         carnivore: None,
+        field40: false,
     },
     Arm {
         name: "u_h10",
         herbivore_slope: 1.,
         carnivore: None,
+        field40: false,
     },
     Arm {
         name: "u_hc10",
         herbivore_slope: 1.,
         carnivore: Some(1.),
+        field40: false,
+    },
+    Arm {
+        name: "f40u_ctrl",
+        herbivore_slope: 0.,
+        carnivore: None,
+        field40: true,
+    },
+    Arm {
+        name: "f40u_h05",
+        herbivore_slope: 0.5,
+        carnivore: None,
+        field40: true,
     },
 ];
 
@@ -153,6 +174,21 @@ fn speeds(world: &World, flee_multiplier: f32) -> Vec<f64> {
     vec![mean, min, max, hmean, faster]
 }
 
+/// Scale a 20x20 config to 40x40 at the same density (same as `stage4_field40`).
+fn field40(config: &mut SimulationConfig) {
+    let w = &mut config.world;
+    w.width *= 2.;
+    w.height *= 2.;
+    w.land_columns *= 2;
+    w.land_rows *= 2;
+    w.max_living_entities *= 4;
+    let p = &mut config.initial_population;
+    p.plants *= 4;
+    p.herbivores *= 4;
+    p.carnivores *= 4;
+    config.herbivores.plant_protection_threshold *= 4;
+}
+
 fn main() -> Result<(), String> {
     let args: Vec<String> = env::args().collect();
     let config_path = args.get(1).ok_or("config path is required")?;
@@ -171,10 +207,14 @@ fn main() -> Result<(), String> {
     let text = fs::read_to_string(config_path).map_err(|e| e.to_string())?;
     fs::create_dir_all(out).map_err(|e| e.to_string())?;
     for a in ARMS.iter().filter(|a| selected.contains(&a.name)) {
-        for seed in SEEDS {
+        let seeds = if a.field40 { SEEDS_40 } else { SEEDS };
+        for seed in seeds {
             let mut config: SimulationConfig =
                 serde_json::from_str(&text).map_err(|e| e.to_string())?;
             config.seed = seed;
+            if a.field40 {
+                field40(&mut config);
+            }
             // Round 3 w_E.
             config.carnivores.speed = 5.25;
             config.herbivores.color_memory_decay_per_tick = 0.0007;
