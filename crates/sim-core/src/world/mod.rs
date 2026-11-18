@@ -1,6 +1,6 @@
+mod state;
 #[cfg(feature = "state-audit")]
 mod state_audit;
-mod state;
 mod tick;
 pub use state::{SpontaneousGermination, World};
 
