@@ -201,7 +201,8 @@ impl World {
             };
             let mut hungry_color_recheck = false;
             let recovery_enabled = h.hungry_color_recheck_enabled
-                && h.hungry_color_recovery_enabled && h.color_learning_enabled;
+                && h.hungry_color_recovery_enabled
+                && h.color_learning_enabled;
             let id = self.animals.items[i].id;
             let mut recovery_active = recovery_enabled && self.hungry_color_recovery.contains(&id);
             let mut recovery_released = false;
@@ -219,14 +220,22 @@ impl World {
                     let fraction = self.resources.energy_balance(reserve).unwrap_or(0.)
                         / (f64::from(hp_max) * h.max_energy_per_hp);
                     let edible = |j: usize| {
-                        self.resources.nutrient_balance(self.plants.items[j].body).unwrap_or(0.) > 0.
+                        self.resources
+                            .nutrient_balance(self.plants.items[j].body)
+                            .unwrap_or(0.)
+                            > 0.
                     };
                     if (fraction < 0.25 || recovery_active) && !target.is_some_and(edible) {
-                        let nearest_edible = self.plant_grid.nearest_where(&self.plants, x, y, vision, edible);
+                        let nearest_edible =
+                            self.plant_grid
+                                .nearest_where(&self.plants, x, y, vision, edible);
                         if nearest_edible.is_some()
-                            && self.plant_grid.nearest_where(&self.plants, x, y, vision, |j| {
-                                edible(j) && memory.allows(self.plants.items[j].color, fraction)
-                            }).is_none()
+                            && self
+                                .plant_grid
+                                .nearest_where(&self.plants, x, y, vision, |j| {
+                                    edible(j) && memory.allows(self.plants.items[j].color, fraction)
+                                })
+                                .is_none()
                         {
                             // Tolerance 1 for the selected edible target in this tick only.
                             target = nearest_edible;
@@ -430,18 +439,25 @@ impl World {
                 let mut color_visible = [0_u64; 2];
                 let mut color_in_range = [0_u64; 2];
                 let mut color_rejected = [0_u64; 2];
-                let stomach_n = self.resources.nutrient_balance(self.animals.items[i].stomach).unwrap_or(0.);
+                let stomach_n = self
+                    .resources
+                    .nutrient_balance(self.animals.items[i].stomach)
+                    .unwrap_or(0.);
                 let can_ingest = h.feeding_nutrients_per_tick > 0.
-                    && (!h.satiety_enabled || h.feeding_nutrient_absorption == 0. || stomach_n < h.stomach_capacity_n);
+                    && (!h.satiety_enabled
+                        || h.feeding_nutrient_absorption == 0.
+                        || stomach_n < h.stomach_capacity_n);
                 let mut visible_by_toxicity = [0_u64; 2];
                 let mut rejected_by_toxicity = [0_u64; 2];
                 let mut in_range_by_toxicity = [0_u64; 2];
-                let memory = h.color_learning_enabled
+                let memory = h
+                    .color_learning_enabled
                     .then(|| self.plant_color_learning.get(&self.animals.items[i].id))
                     .flatten();
                 for p in &self.plants.items {
                     let in_vision = (p.x - x).powi(2) + (p.y - y).powi(2) <= vision * vision;
-                    if mixed_observation && (p.x - ax).powi(2) + (p.y - ay).powi(2) <= range * range
+                    if mixed_observation
+                        && (p.x - ax).powi(2) + (p.y - ay).powi(2) <= range * range
                         && self.resources.nutrient_balance(p.body).unwrap_or(0.) > 0.
                     {
                         in_range_by_toxicity[usize::from(p.produces_toxin)] += 1;
@@ -455,17 +471,24 @@ impl World {
                             if inherited {
                                 let color = usize::from(p.color == 0xb86be3ff);
                                 color_visible[color] += 1;
-                                if can_ingest && may_feed && (p.x-x).powi(2) + (p.y-y).powi(2) <= range*range {
+                                if can_ingest
+                                    && may_feed
+                                    && (p.x - x).powi(2) + (p.y - y).powi(2) <= range * range
+                                {
                                     color_in_range[color] += 1;
                                 }
-                                if memory.is_some_and(|m| !m.allows(p.color, observed_reserve_fraction.unwrap())) {
+                                if memory.is_some_and(|m| {
+                                    !m.allows(p.color, observed_reserve_fraction.unwrap())
+                                }) {
                                     color_rejected[color] += 1;
                                 }
                             }
                             if mixed_observation {
                                 visible_by_toxicity[usize::from(p.produces_toxin)] += 1;
                             }
-                            if memory.is_some_and(|m| !m.allows(p.color, observed_reserve_fraction.unwrap())) {
+                            if memory.is_some_and(|m| {
+                                !m.allows(p.color, observed_reserve_fraction.unwrap())
+                            }) {
                                 color_rejected_n += 1;
                                 if mixed_observation {
                                     rejected_by_toxicity[usize::from(p.produces_toxin)] += 1;
@@ -674,7 +697,8 @@ impl World {
                 event["feeding"] = feeding_outcome.unwrap_or_else(
                     || serde_json::json!({"attempted":false,"eaten_n":0.,"gained_e":0.}),
                 );
-                event["reserve_e_after_feeding"] = serde_json::json!(self.resources.energy_balance(reserve).unwrap_or(0.));
+                event["reserve_e_after_feeding"] =
+                    serde_json::json!(self.resources.energy_balance(reserve).unwrap_or(0.));
                 self.foraging_trace.as_mut().unwrap().events.push(event);
             }
             // Opt-in forgetting of learned plant-color harm, before this tick's damage.

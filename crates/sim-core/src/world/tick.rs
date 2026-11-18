@@ -305,7 +305,10 @@ impl World {
                         p.color_mutation_scale,
                     )
                 } else {
-                    crate::plants::visible_color(self.config.toxin.experimental_plant_toxicity_colors, produces_toxin)
+                    crate::plants::visible_color(
+                        self.config.toxin.experimental_plant_toxicity_colors,
+                        produces_toxin,
+                    )
                 },
                 produces_toxin,
                 toxin_type,
@@ -315,7 +318,10 @@ impl World {
         }
         // Phase 07.2.19: optional soil-funded spontaneous germination.
         // Use a separate deterministic hash, leaving the baseline RNG stream unchanged.
-        if let Some(g) = self.spontaneous_germination.filter(|_| !self.config.toxin.experimental_inherited_plant_colors) {
+        if let Some(g) = self
+            .spontaneous_germination
+            .filter(|_| !self.config.toxin.experimental_inherited_plant_colors)
+        {
             if self.tick.is_multiple_of(g.check_interval) {
                 let needed = self.config.plants.initial_body_nutrients;
                 let initial_energy = self.config.plants.initial_energy;
@@ -378,7 +384,10 @@ impl World {
                         age: 0,
                         seed_cooldown: p.seed_cooldown_ticks,
                         max_age: p.max_age_ticks,
-                        color: crate::plants::visible_color(self.config.toxin.experimental_plant_toxicity_colors, produces_toxin),
+                        color: crate::plants::visible_color(
+                            self.config.toxin.experimental_plant_toxicity_colors,
+                            produces_toxin,
+                        ),
                         produces_toxin,
                         toxin_type: crate::toxin::founder_plant_toxin_type_biased(
                             self.config.seed,

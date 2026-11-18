@@ -76,7 +76,8 @@ impl World {
                         .map_err(|e| format!("carnivore body N repair: {e:?}"))?;
                 }
             }
-            let observe = self.behavior_trace_window
+            let observe = self
+                .behavior_trace_window
                 .is_some_and(|(start, end)| (start..=end).contains(&self.tick));
             let feeding_before = self.carnivores[i].feeding_active;
             let nutrients_before = self.carnivore_debug.hunt_nutrients;
@@ -462,9 +463,9 @@ impl World {
                 .map_err(|e| format!("carnivore metabolism: {e:?}"))?;
             let attacks_before = self.carnivore_debug.hunt_attempts;
             let mut attack_color_rejected = false;
-            let attack_reserve_e = opportunity.as_ref().map(|_| {
-                self.resources.energy_balance(reserve).unwrap_or(0.)
-            });
+            let attack_reserve_e = opportunity
+                .as_ref()
+                .map(|_| self.resources.energy_balance(reserve).unwrap_or(0.));
             if let Some(j) = nearest {
                 let prey = &self.animals.items[j];
                 let learned_target = self.config.animal_toxin.color_learning_enabled
