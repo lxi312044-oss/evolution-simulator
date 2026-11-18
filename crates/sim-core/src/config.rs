@@ -211,6 +211,10 @@ pub struct HerbivoreSettings {
     /// strength fight back. Zero lets every bitten herbivore fight back.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub counterattack_strength_threshold: f64,
+    /// Opt-in: after a counterattack, the carnivore does not target that herbivore for
+    /// this many ticks (it breaks off and the prey can escape). Zero disables.
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub counterattack_retreat_ticks: u32,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -455,6 +459,7 @@ impl Default for HerbivoreSettings {
             counterattack_energy: 0.,
             counterattack_learning_enabled: true,
             counterattack_strength_threshold: 0.,
+            counterattack_retreat_ticks: 0,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -971,6 +976,10 @@ fn is_false(value: &bool) -> bool {
 
 fn is_true(value: &bool) -> bool {
     *value
+}
+
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
 }
 
 fn is_zero_f32(value: &f32) -> bool {

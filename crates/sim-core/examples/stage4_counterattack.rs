@@ -5,6 +5,8 @@
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6976559257
 //! Threshold, carnivore memory decay and small counterattack arms (t_*):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6977189837
+//! Retreat arms (r_*):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6977713545
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -27,6 +29,7 @@ struct Arm {
     learning: bool,
     threshold: f64,
     carnivore_decay: f64,
+    retreat: u32,
 }
 
 const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
@@ -36,6 +39,7 @@ const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
         learning,
         threshold: 0.,
         carnivore_decay: 0.,
+        retreat: 0,
     }
 }
 
@@ -46,10 +50,22 @@ const fn t_arm(name: &'static str, counterattack: f64, threshold: f64, decay: f6
         learning: true,
         threshold,
         carnivore_decay: decay,
+        retreat: 0,
     }
 }
 
-const ARMS: [Arm; 10] = [
+const fn r_arm(name: &'static str, counterattack: f64, decay: f64, retreat: u32) -> Arm {
+    Arm {
+        name,
+        counterattack,
+        learning: true,
+        threshold: if counterattack > 0. { 0.7 } else { 0. },
+        carnivore_decay: decay,
+        retreat,
+    }
+}
+
+const ARMS: [Arm; 15] = [
     arm("d_ctrl", 0., true),
     arm("d_c2", 2., true),
     arm("d_c5", 5., true),
@@ -60,6 +76,11 @@ const ARMS: [Arm; 10] = [
     t_arm("t_c5_th", 5., 0.7, 0.),
     t_arm("t_c2_th_dec", 2., 0.7, 0.0007),
     t_arm("t_c5_th_dec", 5., 0.7, 0.0007),
+    r_arm("r_ctrl", 0., 0., 0),
+    r_arm("r_c2_th_dec", 2., 0.0007, 0),
+    r_arm("r_c2_th_dec_ret", 2., 0.0007, 300),
+    r_arm("r_c5_th_dec_ret", 5., 0.0007, 300),
+    r_arm("r_c2_th_ret", 2., 0., 300),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
@@ -229,6 +250,7 @@ fn main() -> Result<(), String> {
             config.herbivores.counterattack_learning_enabled = a.learning;
             config.herbivores.counterattack_strength_threshold = a.threshold;
             config.carnivores.color_memory_decay_per_tick = a.carnivore_decay;
+            config.herbivores.counterattack_retreat_ticks = a.retreat;
             let radius = config.herbivores.predator_detection_radius;
             let mut world = World::new(config.clone())?;
             let mut seen: HashMap<EntityId, Value> = world

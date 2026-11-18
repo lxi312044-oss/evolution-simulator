@@ -60,6 +60,15 @@ impl World {
             self.carnivores[i].cooldown = self.carnivores[i].cooldown.saturating_sub(1);
             self.carnivores[i].attack_cooldown =
                 self.carnivores[i].attack_cooldown.saturating_sub(1);
+            {
+                let id = self.carnivores[i].id;
+                if let Some((_, left)) = self.carnivore_retreats.get_mut(&id) {
+                    *left = left.saturating_sub(1);
+                    if *left == 0 {
+                        self.carnivore_retreats.remove(&id);
+                    }
+                }
+            }
             self.carnivores[i].satiety_ticks = self.carnivores[i].satiety_ticks.saturating_sub(1);
             // Phase 06.2.28: conservative reserve -> body nutrient repair.
             // Unlike herbivores, carnivore reproduction currently takes offspring body N
@@ -184,9 +193,16 @@ impl World {
             let mut last_color_skip = None;
             let mut selection_color_skips = Vec::new();
             let observe_opportunities = self.observes_carnivore_opportunities();
+            let avoided = self
+                .carnivore_retreats
+                .get(&predator_id)
+                .map(|(prey, _)| *prey);
             for (j, h) in self.animals.items.iter().enumerate() {
                 if satiated {
                     break;
+                }
+                if avoided == Some(h.id) {
+                    continue;
                 }
                 let d = (h.x - x).powi(2) + (h.y - y).powi(2);
                 if d < dist {
@@ -643,6 +659,14 @@ impl World {
                             {
                                 self.learn_counterattack(i, j, requested / 60.);
                                 self.defense.counterattack_learning_events += 1;
+                            }
+                            let retreat = self.config.herbivores.counterattack_retreat_ticks;
+                            if retreat > 0 {
+                                self.carnivore_retreats.insert(
+                                    self.carnivores[i].id,
+                                    (self.animals.items[j].id, retreat),
+                                );
+                                self.defense.counterattack_retreats += 1;
                             }
                         }
                         if let Some(trace) = &mut self.health_trace {
@@ -1115,6 +1139,7 @@ impl World {
                 let bin = ambush_bin(self.carnivores[i].ambush_gene);
                 self.carnivore_debug.gene_deaths[bin] += 1;
                 let a = self.carnivores.swap_remove(i);
+                self.carnivore_retreats.remove(&a.id);
                 if self.config.animal_toxin.enabled {
                     let reason = if toxin_dead {
                         "toxin_hp_zero"

@@ -31,6 +31,7 @@ impl World {
             diagnostics,
             carnivore_debug,
             defense: _,
+            carnivore_retreats,
             prey_trend_snapshot,
             resistance_event_logging,
             resistance_birth_events,
@@ -117,6 +118,11 @@ impl World {
         } else {
             emit!(24, animal_toxins);
             emit!(25, hungry_color_recovery);
+        }
+        // Opt-in counterattack retreat state; empty unless that option is used, so existing
+        // audit baselines are unchanged.
+        if !carnivore_retreats.is_empty() {
+            emit!(26, carnivore_retreats);
         }
         bytes
     }

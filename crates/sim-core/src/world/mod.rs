@@ -153,6 +153,7 @@ pub struct DefenseCounters {
     pub counterattacks: u64,
     pub counterattack_energy: f64,
     pub counterattack_learning_events: u64,
+    pub counterattack_retreats: u64,
 }
 
 /// Cumulative, read-only diagnostics for the predator/prey balance investigation.

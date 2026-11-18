@@ -38,6 +38,9 @@ pub struct World {
     pub diagnostics: super::Diagnostics,
     pub carnivore_debug: super::CarnivoreDebug,
     pub defense: super::DefenseCounters,
+    /// Opt-in counterattack retreat: carnivore -> (herbivore it will not target, ticks left).
+    pub carnivore_retreats:
+        std::collections::BTreeMap<crate::entity::EntityId, (crate::entity::EntityId, u32)>,
     pub prey_trend_snapshot: super::PreyTrendSnapshot,
     pub resistance_event_logging: bool,
     pub resistance_birth_events: Vec<super::ResistanceBirthEvent>,
@@ -127,6 +130,7 @@ impl World {
             diagnostics: super::Diagnostics::default(),
             carnivore_debug: super::CarnivoreDebug::default(),
             defense: super::DefenseCounters::default(),
+            carnivore_retreats: std::collections::BTreeMap::new(),
             prey_trend_snapshot: super::PreyTrendSnapshot::default(),
             resistance_event_logging: false,
             resistance_birth_events: Vec::new(),

@@ -78,6 +78,7 @@ herbivores.speed_upkeep_slope|実験用：草食の速さの維持コスト|速�
 herbivores.counterattack_energy|実験用：草食の反撃量|草食が噛まれたとき（踏みとどまっているかに関係なく）、肉食のエネルギーをこの値×攻撃性×（体力÷60）だけ減らします。0で無効です。|n E
 herbivores.counterattack_learning_enabled|実験用：反撃による肉食の色の学習|肉食の色の学習が有効なとき、反撃を受けた肉食がその草食の色を危険として覚えます。|b
 herbivores.counterattack_strength_threshold|実験用：反撃できる強さのしきい値|攻撃性×（体力÷60）がこの値以上の草食だけが反撃します。0で全員が反撃します。|n
+herbivores.counterattack_retreat_ticks|実験用：反撃を受けた肉食が手を引くTick数|反撃を受けた肉食は、このTick数のあいだその草食を狙いません。0で無効です。|n Tick
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p

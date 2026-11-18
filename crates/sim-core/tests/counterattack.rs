@@ -186,3 +186,37 @@ fn new_settings_default_to_previous_behavior() {
     };
     assert!(err.contains("color_memory_decay_per_tick"), "{err}");
 }
+
+#[test]
+fn carnivore_breaks_off_from_a_prey_that_fought_back() {
+    let mut w = duel(2., false);
+    w.config.herbivores.counterattack_retreat_ticks = 50;
+    let prey = w.animals.items[0].id;
+    let predator = w.carnivores[0].id;
+    let mut ticks = 0;
+    while w.defense.counterattacks == 0 {
+        w.step(1).unwrap();
+        ticks += 1;
+        assert!(ticks < 20, "no counterattack happened");
+    }
+    assert_eq!(w.defense.counterattack_retreats, 1);
+    assert_eq!(w.carnivore_retreats.get(&predator).map(|r| r.0), Some(prey));
+    // While retreating, the carnivore does not bite that prey again.
+    w.step(45).unwrap();
+    assert_eq!(w.defense.counterattacks, 1);
+    // The retreat expires: either the entry is gone, or the carnivore attacked the prey
+    // again and a new retreat started.
+    w.step(10).unwrap();
+    assert!(!w.carnivore_retreats.contains_key(&predator) || w.defense.counterattacks > 1);
+    assert!(w.carnivore_retreats.get(&predator).is_none_or(|r| r.1 > 40));
+}
+
+#[test]
+fn retreat_defaults_to_off() {
+    let text = serde_json::to_string(&SimulationConfig::default()).unwrap();
+    assert!(!text.contains("counterattack_retreat_ticks"));
+    let mut w = duel(2., false);
+    w.step(20).unwrap();
+    assert!(w.defense.counterattacks > 1);
+    assert!(w.carnivore_retreats.is_empty());
+}
