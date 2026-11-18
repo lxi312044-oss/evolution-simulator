@@ -3,6 +3,8 @@
 //!
 //! Plan (fixed before the run):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6976559257
+//! Threshold, carnivore memory decay and small counterattack arms (t_*):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/54#issuecomment-6977189837
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -23,33 +25,45 @@ struct Arm {
     name: &'static str,
     counterattack: f64,
     learning: bool,
+    threshold: f64,
+    carnivore_decay: f64,
 }
 
-const ARMS: [Arm; 4] = [
+const fn arm(name: &'static str, counterattack: f64, learning: bool) -> Arm {
     Arm {
-        name: "d_ctrl",
-        counterattack: 0.,
+        name,
+        counterattack,
+        learning,
+        threshold: 0.,
+        carnivore_decay: 0.,
+    }
+}
+
+const fn t_arm(name: &'static str, counterattack: f64, threshold: f64, decay: f64) -> Arm {
+    Arm {
+        name,
+        counterattack,
         learning: true,
-    },
-    Arm {
-        name: "d_c2",
-        counterattack: 2.,
-        learning: true,
-    },
-    Arm {
-        name: "d_c5",
-        counterattack: 5.,
-        learning: true,
-    },
-    Arm {
-        name: "d_c5_nolearn",
-        counterattack: 5.,
-        learning: false,
-    },
+        threshold,
+        carnivore_decay: decay,
+    }
+}
+
+const ARMS: [Arm; 10] = [
+    arm("d_ctrl", 0., true),
+    arm("d_c2", 2., true),
+    arm("d_c5", 5., true),
+    arm("d_c5_nolearn", 5., false),
+    t_arm("t_ctrl", 0., 0., 0.),
+    t_arm("t_c05", 0.5, 0., 0.),
+    t_arm("t_c2_th", 2., 0.7, 0.),
+    t_arm("t_c5_th", 5., 0.7, 0.),
+    t_arm("t_c2_th_dec", 2., 0.7, 0.0007),
+    t_arm("t_c5_th_dec", 5., 0.7, 0.0007),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
-const EXTRA: [&str; 9] = [
+const EXTRA: [&str; 10] = [
     "counterattacks",
     "counterattack_energy",
     "counterattack_learning_events",
@@ -59,6 +73,7 @@ const EXTRA: [&str; 9] = [
     "speed_mean",
     "threatened",
     "standing_ground",
+    "strong_fraction_0_7",
 ];
 
 /// Integer counters, in this order.
@@ -127,7 +142,7 @@ fn extra(w: &World, prev: &[f64; 3], radius: f32) -> (Vec<f64>, [f64; 3]) {
     let n = w.animals.items.len();
     if n == 0 {
         out.extend([f64::NAN; 4]);
-        out.extend([0., 0.]);
+        out.extend([0., 0., f64::NAN]);
     } else {
         let k = n as f64;
         let mean = |f: fn(&sim_core::animals::Herbivore) -> f32| {
@@ -149,6 +164,15 @@ fn extra(w: &World, prev: &[f64; 3], radius: f32) -> (Vec<f64>, [f64; 3]) {
             .collect();
         out.push(threatened.len() as f64);
         out.push(threatened.iter().filter(|h| h.defense_active).count() as f64);
+        let strong = w
+            .animals
+            .items
+            .iter()
+            .filter(|h| {
+                f64::from(h.genes.aggression) * f64::from(h.genes.adult_max_hp) / 60. >= 0.7
+            })
+            .count();
+        out.push(strong as f64 / k);
     }
     (out, now)
 }
@@ -203,6 +227,8 @@ fn main() -> Result<(), String> {
             // Counterattack.
             config.herbivores.counterattack_energy = a.counterattack;
             config.herbivores.counterattack_learning_enabled = a.learning;
+            config.herbivores.counterattack_strength_threshold = a.threshold;
+            config.carnivores.color_memory_decay_per_tick = a.carnivore_decay;
             let radius = config.herbivores.predator_detection_radius;
             let mut world = World::new(config.clone())?;
             let mut seen: HashMap<EntityId, Value> = world

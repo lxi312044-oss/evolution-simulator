@@ -439,6 +439,14 @@ impl World {
             .observe_injury(color, harm);
     }
 
+    /// Opt-in forgetting of a carnivore's learned color harm.
+    pub(super) fn decay_carnivore_color_memory(&mut self, predator_index: usize, rate: f64) {
+        let id = self.carnivores[predator_index].id;
+        if let Some(predator) = self.animal_toxins.predators.get_mut(&id) {
+            predator.memory.decay(rate);
+        }
+    }
+
     pub(super) fn record_carnivore_color_skips(
         &mut self,
         predator: EntityId,

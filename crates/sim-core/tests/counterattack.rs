@@ -142,3 +142,47 @@ fn invalid_counterattack_is_rejected() {
         assert!(err.contains("counterattack_energy"), "{err}");
     }
 }
+
+#[test]
+fn herbivores_below_the_strength_threshold_do_not_fight_back() {
+    // The duel herbivore has strength 1 x (120 / 60) = 2.
+    let mut weak = duel(2., true);
+    weak.config.herbivores.counterattack_strength_threshold = 2.5;
+    let mut strong = duel(2., true);
+    strong.config.herbivores.counterattack_strength_threshold = 1.5;
+    weak.step(5).unwrap();
+    strong.step(5).unwrap();
+    assert_eq!(weak.defense.counterattacks, 0);
+    assert!(strong.defense.counterattacks > 0);
+}
+
+#[test]
+fn carnivore_color_memory_decay_reduces_avoidance() {
+    let skips = |decay: f64| -> u64 {
+        let mut w = duel(2., true);
+        w.config.carnivores.color_memory_decay_per_tick = decay;
+        w.step(25).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&w.animal_toxin_snapshot_json()).unwrap();
+        v["color_skips"].as_u64().unwrap()
+    };
+    let kept = skips(0.);
+    let fading = skips(0.9);
+    assert!(kept > 0);
+    assert!(
+        fading < kept,
+        "decay did not reduce avoidance: {fading} vs {kept}"
+    );
+}
+
+#[test]
+fn new_settings_default_to_previous_behavior() {
+    let text = serde_json::to_string(&SimulationConfig::default()).unwrap();
+    assert!(!text.contains("counterattack_strength_threshold"));
+    assert!(!text.contains("\"color_memory_decay_per_tick\":0"));
+    let mut cfg: SimulationConfig = serde_json::from_str(STAGE4).unwrap();
+    cfg.carnivores.color_memory_decay_per_tick = 1.5;
+    let Err(err) = World::new(cfg) else {
+        panic!("should be rejected");
+    };
+    assert!(err.contains("color_memory_decay_per_tick"), "{err}");
+}

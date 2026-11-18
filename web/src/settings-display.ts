@@ -77,6 +77,7 @@ herbivores.color_memory_decay_per_tick|実験用：色の危険記憶の時間�
 herbivores.speed_upkeep_slope|実験用：草食の速さの維持コスト|速い草食ほど基礎代謝を多く払います。基礎代謝×（1＋この値×（速さ÷基準の速さ−1））で、基準は初期の速さの範囲の中央です。0で無効です。|n
 herbivores.counterattack_energy|実験用：草食の反撃量|草食が噛まれたとき（踏みとどまっているかに関係なく）、肉食のエネルギーをこの値×攻撃性×（体力÷60）だけ減らします。0で無効です。|n E
 herbivores.counterattack_learning_enabled|実験用：反撃による肉食の色の学習|肉食の色の学習が有効なとき、反撃を受けた肉食がその草食の色を危険として覚えます。|b
+herbivores.counterattack_strength_threshold|実験用：反撃できる強さのしきい値|攻撃性×（体力÷60）がこの値以上の草食だけが反撃します。0で全員が反撃します。|n
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p
@@ -184,6 +185,7 @@ carnivores.initial_speed_spread|実験用：肉食の初期の速さのばらつ
 carnivores.speed_mutation_probability|実験用：肉食の速さの変異確率|速さの遺伝が有効なとき、子の速さが変異する確率です。0で変異なしです。|p
 carnivores.speed_mutation_scale|実験用：肉食の速さの変異幅|速さが変異するとき、親の速さの±この割合で一様に変えます。範囲は0.5〜8です。|p
 carnivores.speed_upkeep_slope|実験用：肉食の速さの維持コスト|速い肉食ほど基礎代謝を多く払います。基礎代謝×（1＋この値×（速さ÷肉食の移動速度−1））です。0で無効です。|n
+carnivores.color_memory_decay_per_tick|実験用：肉食の色の危険記憶の時間減衰|肉食が覚えた色の危険度（毒・反撃）を毎Tickこの割合だけ下げます。0で無効です。|p ／Tick
 observation.interval|観測ログの記録間隔|指定したTick間隔でCSV用の統計を記録します。|1以上の整数 Tick
 observation.stopAt|観測の終了Tick|指定したTickで進行を止めます。0は無制限です。系譜記録を有効にする場合は正の値が必要です。|0以上の整数 Tick
 observation.lineage|草食動物の系譜記録|新規開始から草食動物の系譜イベントを記録します。終了Tickの指定が必要です。|b

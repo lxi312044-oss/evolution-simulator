@@ -207,6 +207,10 @@ pub struct HerbivoreSettings {
     /// prey's color (counterattack energy / 60). Off only to separate learning in experiments.
     #[serde(skip_serializing_if = "is_true")]
     pub counterattack_learning_enabled: bool,
+    /// Opt-in: only herbivores with aggression x (adult_max_hp / 60) at or above this
+    /// strength fight back. Zero lets every bitten herbivore fight back.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub counterattack_strength_threshold: f64,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -330,6 +334,9 @@ pub struct CarnivoreSettings {
     /// Opt-in: basal energy x (1 + slope x (speed / `speed` - 1)), floored at 0.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub speed_upkeep_slope: f64,
+    /// Opt-in: fraction of learned color harm (toxin or counterattack) that fades per tick.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub color_memory_decay_per_tick: f64,
 }
 impl Default for CarnivoreSettings {
     fn default() -> Self {
@@ -397,6 +404,7 @@ impl Default for CarnivoreSettings {
             speed_mutation_probability: 0.,
             speed_mutation_scale: 0.,
             speed_upkeep_slope: 0.,
+            color_memory_decay_per_tick: 0.,
         }
     }
 }
@@ -446,6 +454,7 @@ impl Default for HerbivoreSettings {
             speed_upkeep_slope: 0.,
             counterattack_energy: 0.,
             counterattack_learning_enabled: true,
+            counterattack_strength_threshold: 0.,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -802,6 +811,16 @@ impl SimulationConfig {
                 "草食の色記憶の更新設定（herbivores.color_memory_safe_meal_relief と ",
                 "herbivores.color_memory_decay_per_tick）は0から1の範囲で指定してください。",
                 " 使わない場合は0にしてください。"
+            )
+            .into());
+        }
+        if !(0.0..=10.0).contains(&h.counterattack_strength_threshold)
+            || !(0.0..=1.0).contains(&self.carnivores.color_memory_decay_per_tick)
+        {
+            return Err(concat!(
+                "反撃のしきい値（herbivores.counterattack_strength_threshold）は0から10、",
+                "肉食の色の記憶の減衰（carnivores.color_memory_decay_per_tick）は0から1の範囲で",
+                "指定してください。使わない場合は0にしてください。"
             )
             .into());
         }

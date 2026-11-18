@@ -49,6 +49,14 @@ impl World {
                 (a.x, a.y, a.vision, a.speed, a.reserve)
             };
             self.carnivores[i].age = self.carnivores[i].age.saturating_add(1);
+            if self.config.carnivores.color_memory_decay_per_tick > 0.
+                && self.config.animal_toxin.color_learning_enabled
+            {
+                self.decay_carnivore_color_memory(
+                    i,
+                    self.config.carnivores.color_memory_decay_per_tick,
+                );
+            }
             self.carnivores[i].cooldown = self.carnivores[i].cooldown.saturating_sub(1);
             self.carnivores[i].attack_cooldown =
                 self.carnivores[i].attack_cooldown.saturating_sub(1);
@@ -612,12 +620,14 @@ impl World {
                         self.animals.items[j].hp = (hp_before - damage).max(0.);
                         let h = &self.config.herbivores;
                         // Any bitten herbivore fights back, standing ground or not (Issue 54).
-                        if h.counterattack_energy > 0. {
+                        let strength = {
                             let genes = &self.animals.items[j].genes;
-                            let requested = h.counterattack_energy
-                                * f64::from(genes.aggression)
-                                * f64::from(genes.adult_max_hp)
-                                / 60.;
+                            f64::from(genes.aggression) * f64::from(genes.adult_max_hp) / 60.
+                        };
+                        if h.counterattack_energy > 0.
+                            && strength >= h.counterattack_strength_threshold
+                        {
+                            let requested = h.counterattack_energy * strength;
                             let available = self.resources.energy_balance(reserve).unwrap_or(0.);
                             let injury = requested.min(available);
                             if injury > 0. {
