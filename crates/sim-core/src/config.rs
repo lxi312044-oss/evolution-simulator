@@ -555,7 +555,7 @@ impl SimulationConfig {
             .into());
         }
         if t.experimental_plant_toxicity_colors
-            && (!t.plant_variation_enabled || self.initial_population.plants % 2 != 0)
+            && (!t.plant_variation_enabled || !self.initial_population.plants.is_multiple_of(2))
         {
             return Err("毒性連動配色（toxin.experimental_plant_toxicity_colors）には toxin.plant_variation_enabled=ON と偶数の initial_population.plants が必要です。これらを確認するか、毒性連動配色をOFFにしてください。".into());
         }
