@@ -3,8 +3,9 @@ use sim_core::{animals::color::BodyColor, SimulationConfig, World};
 
 const STAGE4: &str = include_str!("../../../config/stage4-inherited-plant-colors.json");
 
-/// One defending herbivore next to one hungry carnivore.
-fn duel(counterattack: f64, learning: bool) -> World {
+/// One herbivore next to one hungry carnivore. `defending` sets genes that make it stand
+/// ground; otherwise it flees.
+fn duel_with(counterattack: f64, learning: bool, defending: bool) -> World {
     let mut cfg = SimulationConfig {
         seed: 12345,
         ..Default::default()
@@ -35,7 +36,7 @@ fn duel(counterattack: f64, learning: bool) -> World {
     cfg.animal_toxin.color_learning_enabled = true;
     let mut w = World::new(cfg).unwrap();
     let h = &mut w.animals.items[0];
-    h.genes.fear = 0.;
+    h.genes.fear = if defending { 0. } else { 1. };
     h.genes.aggression = 1.;
     h.genes.adult_max_hp = 120.;
     h.hp = 120.;
@@ -45,6 +46,10 @@ fn duel(counterattack: f64, learning: bool) -> World {
     w.carnivores[0].x = x + 3.;
     w.carnivores[0].y = y;
     w
+}
+
+fn duel(counterattack: f64, learning: bool) -> World {
+    duel_with(counterattack, learning, true)
 }
 
 fn reserve_energy(w: &World) -> f64 {
@@ -65,6 +70,20 @@ fn defending_herbivore_drains_carnivore_energy() {
     let expected = 4. * on.defense.counterattacks as f64;
     assert!((on.defense.counterattack_energy - expected).abs() < 1e-9);
     assert!((reserve_energy(&off) - reserve_energy(&on) - expected).abs() < 1e-6);
+}
+
+#[test]
+fn fleeing_herbivore_also_fights_back_when_bitten() {
+    let mut w = duel_with(2., true, false);
+    let mut bitten = false;
+    for _ in 0..20 {
+        let hunts = w.carnivore_debug.hunt_contacts;
+        w.step(1).unwrap();
+        bitten |= w.carnivore_debug.hunt_contacts > hunts;
+        assert!(!w.animals.items.first().is_some_and(|h| h.defense_active));
+    }
+    assert!(bitten, "the slow fleeing herbivore was never bitten");
+    assert!(w.defense.counterattacks > 0);
 }
 
 #[test]

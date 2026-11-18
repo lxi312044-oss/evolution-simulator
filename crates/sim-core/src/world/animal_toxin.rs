@@ -422,7 +422,12 @@ impl World {
     }
 
     /// A counterattack teaches the carnivore that this prey color is harmful.
-    pub(super) fn learn_counterattack(&mut self, predator_index: usize, prey_index: usize, harm: f64) {
+    pub(super) fn learn_counterattack(
+        &mut self,
+        predator_index: usize,
+        prey_index: usize,
+        harm: f64,
+    ) {
         let id = self.carnivores[predator_index].id;
         let color = visible_color(self.animals.items[prey_index].genes.body_color);
         let t = &self.config.toxin;

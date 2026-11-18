@@ -611,7 +611,8 @@ impl World {
                         };
                         self.animals.items[j].hp = (hp_before - damage).max(0.);
                         let h = &self.config.herbivores;
-                        if h.counterattack_energy > 0. && self.animals.items[j].defense_active {
+                        // Any bitten herbivore fights back, standing ground or not (Issue 54).
+                        if h.counterattack_energy > 0. {
                             let genes = &self.animals.items[j].genes;
                             let requested = h.counterattack_energy
                                 * f64::from(genes.aggression)

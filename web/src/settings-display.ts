@@ -75,7 +75,7 @@ herbivores.hungry_color_recovery_enabled|実験用：餌の再評価を回復ま
 herbivores.color_memory_safe_meal_relief|実験用：安全な摂食で色の危険記憶を弱める|草食の色学習が有効なとき、毒を摂らずに植物を食べたTickごとに、その色に近い記憶の危険度を色の近さに応じてこの割合だけ下げます。0で無効です。|p ／摂食Tick
 herbivores.color_memory_decay_per_tick|実験用：色の危険記憶の時間減衰|草食の色学習が有効なとき、記憶した危険度を毎Tickこの割合だけ下げます。0で無効です。|p ／Tick
 herbivores.speed_upkeep_slope|実験用：草食の速さの維持コスト|速い草食ほど基礎代謝を多く払います。基礎代謝×（1＋この値×（速さ÷基準の速さ−1））で、基準は初期の速さの範囲の中央です。0で無効です。|n
-herbivores.counterattack_energy|実験用：草食の反撃量|踏みとどまった草食が噛まれたとき、肉食のエネルギーをこの値×攻撃性×（体力÷60）だけ減らします。0で無効です。|n E
+herbivores.counterattack_energy|実験用：草食の反撃量|草食が噛まれたとき（踏みとどまっているかに関係なく）、肉食のエネルギーをこの値×攻撃性×（体力÷60）だけ減らします。0で無効です。|n E
 herbivores.counterattack_learning_enabled|実験用：反撃による肉食の色の学習|肉食の色の学習が有効なとき、反撃を受けた肉食がその草食の色を危険として覚えます。|b
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N

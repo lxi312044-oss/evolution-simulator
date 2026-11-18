@@ -199,8 +199,8 @@ pub struct HerbivoreSettings {
     /// Reference = (speed_min + speed_max) / 2. Zero keeps basal energy independent of speed.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub speed_upkeep_slope: f64,
-    /// Opt-in: a herbivore standing ground drains this x aggression x (adult_max_hp / 60)
-    /// energy from a carnivore that bites it (dissipated as heat). Zero disables.
+    /// Opt-in: a bitten herbivore (standing ground or not) drains this x aggression x
+    /// (adult_max_hp / 60) energy from the carnivore (dissipated as heat). Zero disables.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub counterattack_energy: f64,
     /// When carnivore color learning is on, a counterattack also records harm for the
