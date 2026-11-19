@@ -1,0 +1,7 @@
+{
+ "name": "diet-s2",
+ "check": true,
+ "builds": [{"id": "diet", "sha": "", "example": "diet_goal"}],
+ "runs": [{"build": "diet", "arms": ["std", "DE_H20_M15_K50", "DE_H20_M20_K50", "DE_H20_M15_K25"],
+           "seeds": [90001, 90002, 90003, 90004, 90005, 90006, 90007, 90008], "ticks": 30000, "extra": ["500"]}]
+}
