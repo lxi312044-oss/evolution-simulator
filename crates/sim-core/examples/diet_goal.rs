@@ -49,6 +49,12 @@ fn config_for(arm: &str) -> SimulationConfig {
 }
 
 const BODIES: [&str; 2] = ["herbivore", "carnivore"];
+const LOST: [&str; 4] = [
+    "herbivore_nutrients",
+    "herbivore_energy",
+    "carnivore_nutrients",
+    "carnivore_energy",
+];
 const BIRTHS: [&str; 4] = [
     "herbivore_to_herbivore",
     "herbivore_to_carnivore",
@@ -78,6 +84,7 @@ fn header() -> String {
         h.extend((0..10).map(|i| format!("{b}_diet_hist{i}")));
     }
     h.extend(BIRTHS.map(|k| format!("births_{k}")));
+    h.extend(LOST.map(|k| format!("lost_{k}")));
     h.join(",")
 }
 
@@ -117,6 +124,7 @@ fn main() {
                 row.extend((0..10).map(|i| d[b]["hist"][i].to_string()));
             }
             row.extend(BIRTHS.map(|k| d["births"][k].to_string()));
+            row.extend(LOST.map(|k| f(&d["lost"][k])));
             println!("{}", row.join(","));
         }
         if w.tick >= ticks {
