@@ -295,7 +295,15 @@ impl World {
                 seed_cooldown: p.seed_cooldown_ticks,
                 max_age: p.max_age_ticks,
                 color: if self.config.toxin.experimental_inherited_plant_colors {
-                    self.plants.items[i].color
+                    // Issue #70: optional color mutation for inherited experimental colors
+                    // (stateless hash; probability or scale 0 keeps the parent color).
+                    crate::plants::seed_color(
+                        self.plants.items[i].color,
+                        self.config.seed,
+                        id,
+                        p.color_mutation_probability,
+                        p.color_mutation_scale,
+                    )
                 } else if p.color_inheritance_enabled {
                     crate::plants::seed_color(
                         self.plants.items[i].color,
