@@ -1,0 +1,11 @@
+{
+  "name": "r3-food",
+  "check": false,
+  "builds": [
+    {"id": "new", "sha": "", "example": "mimicry_goal"}
+  ],
+  "runs": [
+    {"build": "new", "arms": ["std", "B_T01_D01_F40_NL", "B_T01_D01_F40_G100", "B_T01_D01_F120_NL", "B_T01_D01_F120_G100", "B_T01_D01_F120_G300"],
+     "seeds": [90006, 90001, 90002, 90003], "ticks": 30000, "extra": [500]}
+  ]
+}
