@@ -1,6 +1,7 @@
 use super::EntityId;
 
 #[derive(Default, Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct EntityAllocator {
     generations: Vec<u32>,
     alive: Vec<bool>,

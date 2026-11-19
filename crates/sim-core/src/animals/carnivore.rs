@@ -1,5 +1,6 @@
 use crate::{animals::color::BodyColor, entity::EntityId, resources::AccountId};
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct Carnivore {
     pub id: EntityId,
     pub x: f32,
@@ -29,6 +30,7 @@ pub struct Carnivore {
 }
 
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct CarnivoreTrace {
     pub visible_ticks: u64,
     pub approach_ticks: u64,
@@ -51,4 +53,41 @@ pub struct CarnivoreTrace {
     pub relative_unchanged: u64,
     pub longest_no_positive_attack_ticks: u64,
     pub low_energy_visible_ticks: u64,
+}
+
+/// Heritable carnivore speed bounds (same as herbivore speed genes).
+pub const SPEED_MIN: f32 = 0.5;
+pub const SPEED_MAX: f32 = 8.;
+const SPEED_SALT: u64 = 0x5bee_d5ee_d5ee_d001;
+
+/// Initial speed = `base` x (1 +/- `spread`), uniform, from a stateless stream that does
+/// not consume ecology RNG.
+pub fn initial_speed(base: f32, spread: f32, seed: u64, id: u64) -> f32 {
+    let s = seed ^ SPEED_SALT ^ id.wrapping_mul(0x517cc1b727220a95);
+    let u = crate::animals::color::unit(s);
+    (base * (1. + (u * 2. - 1.) * spread)).clamp(SPEED_MIN, SPEED_MAX)
+}
+
+/// Child speed: with `probability`, parent x (1 +/- `scale`), uniform; otherwise the
+/// parent's speed. Stateless stream; returns whether a mutation happened.
+pub fn inherit_speed(parent: f32, probability: f32, scale: f32, seed: u64, id: u64) -> (f32, bool) {
+    let s = seed ^ SPEED_SALT.rotate_left(7) ^ id.wrapping_mul(0x517cc1b727220a95);
+    if crate::animals::color::unit(s) < probability {
+        let u = crate::animals::color::unit(s ^ 0xa5a5_a5a5);
+        let child = (parent * (1. + (u * 2. - 1.) * scale)).clamp(SPEED_MIN, SPEED_MAX);
+        (child, true)
+    } else {
+        (parent, false)
+    }
+}
+
+/// Stateless draw in [0, 1) for a herbivore offspring being born as a carnivore. Separate
+/// from ecology RNG, like body color.
+pub fn offspring_is_carnivore(probability: f64, seed: u64, tick: u64, id: u64) -> bool {
+    if probability <= 0. {
+        return false;
+    }
+    let s =
+        seed ^ tick.rotate_left(41) ^ 0x6361_726e_6976_6f72 ^ id.wrapping_mul(0x517cc1b727220a95);
+    f64::from(crate::animals::color::unit(s)) < probability
 }

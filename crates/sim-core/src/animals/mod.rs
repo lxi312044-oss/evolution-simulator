@@ -3,6 +3,7 @@ pub mod carnivore;
 pub mod color;
 use color::BodyColor;
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct HerbivoreGenes {
     pub adult_max_hp: f32,
     pub speed: f32,
@@ -15,6 +16,7 @@ pub struct HerbivoreGenes {
     pub typed_resistance: [f32; 16],
 }
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct Herbivore {
     pub id: EntityId,
     pub x: f32,
@@ -46,6 +48,7 @@ pub struct Herbivore {
     pub target: Option<EntityId>,
 }
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct AnimalStore {
     pub items: Vec<Herbivore>,
 }
@@ -58,4 +61,13 @@ impl Herbivore {
     pub fn toxin_resistance(&self) -> crate::toxin::ToxinResistance {
         crate::toxin::legacy_resistance(self.genes.toxin_resistance)
     }
+}
+
+/// Basal-energy multiplier for speed upkeep: 1 + slope x (speed / reference - 1), floored
+/// at 0. Exactly 1 when `slope` is 0, so the opt-in leaves basal energy unchanged.
+pub fn speed_upkeep_factor(slope: f64, speed: f32, reference: f32) -> f64 {
+    if slope == 0. {
+        return 1.;
+    }
+    (1. + slope * (f64::from(speed) / f64::from(reference) - 1.)).max(0.)
 }

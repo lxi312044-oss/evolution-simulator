@@ -173,7 +173,10 @@ impl World {
         // 5. Seed dispersal: asexual, immediate germination, all matter/energy from parent.
         let mut offspring = Vec::new();
         for i in 0..self.plants.len() {
-            if self.plants.len() + self.animals.items.len() + offspring.len()
+            if self.plants.len()
+                + self.animals.items.len()
+                + self.carnivores.len()
+                + offspring.len()
                 >= self.config.world.max_living_entities as usize
             {
                 self.diagnostics.seed_capacity_blocked += 1;
@@ -272,6 +275,14 @@ impl World {
                 self.config.toxin.plant_toxin_type_count,
                 self.config.toxin.plant_toxin_type_mutation_probability,
             );
+            if self.config.toxin.experimental_inherited_plant_colors {
+                if let Some(trace) = &mut self.foraging_trace {
+                    let parent = &self.plants.items[i];
+                    trace.events.push(serde_json::json!({"plant_event":"birth","color":parent.color,
+                        "toxic":produces_toxin,"type":toxin_type.0,"parent_toxic":parent.produces_toxin,
+                        "parent_type":parent.toxin_type.0}));
+                }
+            }
             self.plants.items.push(Plant {
                 id,
                 x,
@@ -283,16 +294,50 @@ impl World {
                 age: 0,
                 seed_cooldown: p.seed_cooldown_ticks,
                 max_age: p.max_age_ticks,
-                color: 0x4ecb70ff,
+                color: if self.config.toxin.experimental_inherited_plant_colors {
+                    // Issue #70: optional color mutation for inherited experimental colors
+                    // (stateless hash; probability or scale 0 keeps the parent color).
+                    crate::plants::seed_color(
+                        self.plants.items[i].color,
+                        self.config.seed,
+                        id,
+                        p.color_mutation_probability,
+                        p.color_mutation_scale,
+                    )
+                } else if p.color_inheritance_enabled {
+                    crate::plants::seed_color(
+                        self.plants.items[i].color,
+                        self.config.seed,
+                        id,
+                        p.color_mutation_probability,
+                        p.color_mutation_scale,
+                    )
+                } else {
+                    crate::plants::visible_color(
+                        self.config.toxin.experimental_plant_toxicity_colors,
+                        produces_toxin,
+                    )
+                },
                 produces_toxin,
                 toxin_type,
             });
+            super::species::plant_birth(
+                &mut self.species,
+                &self.plants.items,
+                self.config.seed,
+                self.tick,
+                self.plants.items.len() - 1,
+                Some(i),
+            );
             self.births += 1;
             self.diagnostics.plant_births += 1;
         }
         // Phase 07.2.19: optional soil-funded spontaneous germination.
         // Use a separate deterministic hash, leaving the baseline RNG stream unchanged.
-        if let Some(g) = self.spontaneous_germination {
+        if let Some(g) = self
+            .spontaneous_germination
+            .filter(|_| !self.config.toxin.experimental_inherited_plant_colors)
+        {
             if self.tick.is_multiple_of(g.check_interval) {
                 let needed = self.config.plants.initial_body_nutrients;
                 let initial_energy = self.config.plants.initial_energy;
@@ -338,6 +383,12 @@ impl World {
                     self.ledger
                         .capture_sunlight(&mut self.resources, reserve, initial_energy)
                         .map_err(|e| format!("germination sunlight: {e:?}"))?;
+                    let produces_toxin = crate::toxin::founder_plant_toxic(
+                        self.config.seed,
+                        id.index as u64,
+                        self.config.toxin.plant_variation_enabled,
+                        self.config.toxin.initial_toxic_plant_fraction,
+                    );
                     self.plants.items.push(Plant {
                         id,
                         x,
@@ -349,13 +400,11 @@ impl World {
                         age: 0,
                         seed_cooldown: p.seed_cooldown_ticks,
                         max_age: p.max_age_ticks,
-                        color: 0x4ecb70ff,
-                        produces_toxin: crate::toxin::founder_plant_toxic(
-                            self.config.seed,
-                            id.index as u64,
-                            self.config.toxin.plant_variation_enabled,
-                            self.config.toxin.initial_toxic_plant_fraction,
+                        color: crate::plants::visible_color(
+                            self.config.toxin.experimental_plant_toxicity_colors,
+                            produces_toxin,
                         ),
+                        produces_toxin,
                         toxin_type: crate::toxin::founder_plant_toxin_type_biased(
                             self.config.seed,
                             id.index as u64,
@@ -364,6 +413,14 @@ impl World {
                             self.config.toxin.initial_type0_fraction,
                         ),
                     });
+                    super::species::plant_birth(
+                        &mut self.species,
+                        &self.plants.items,
+                        self.config.seed,
+                        self.tick,
+                        self.plants.items.len() - 1,
+                        None,
+                    );
                     if self.plants.items.last().unwrap().produces_toxin {
                         self.diagnostics.toxic_plant_births += 1;
                     } else {
@@ -384,6 +441,11 @@ impl World {
                 continue;
             }
             let plant = self.plants.items.swap_remove(i);
+            if self.config.toxin.experimental_inherited_plant_colors {
+                if let Some(trace) = &mut self.foraging_trace {
+                    trace.events.push(serde_json::json!({"plant_event":"age","color":plant.color,"toxic":plant.produces_toxin}));
+                }
+            }
             let detritus = self.land.cells[plant.cell].detritus;
             for account in [plant.body, plant.reserve] {
                 let n = self.resources.nutrient_balance(account).unwrap_or(0.);
@@ -406,9 +468,13 @@ impl World {
         }
         // Phase 04: herbivore movement, feeding, starvation and death.
         self.update_herbivores()?;
+        if self.config.animal_toxin.enabled {
+            self.produce_herbivore_toxins()?;
+        }
         if self.config.carnivores.enabled {
             self.update_carnivores()?;
         }
+        self.species_census_if_due();
         self.baseline.check(&self.resources,&self.ledger,1e-3,1e-9).map_err(|e|format!(
             "conservation at tick {}: {e:?}; energy_current={:.12}, energy_initial={:.12}, sunlight_in={:.12}, heat_out={:.12}, energy_tolerance={:.12}",
             self.tick, self.resources.total_energy(), self.baseline.energy,

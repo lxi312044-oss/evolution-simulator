@@ -11,7 +11,31 @@ pub struct SimulationConfig {
     pub herbivores: HerbivoreSettings,
     pub carnivores: CarnivoreSettings,
     pub toxin: ToxinSettings,
+    #[serde(skip_serializing_if = "AnimalToxinSettings::is_off")]
+    pub animal_toxin: AnimalToxinSettings,
 }
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AnimalToxinSettings {
+    pub enabled: bool,
+    pub color_learning_enabled: bool,
+    /// Override the shared poison damage threshold for carnivores only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carnivore_damage_threshold: Option<f64>,
+    /// Override HP damage per excess toxin unit per Tick for carnivores only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carnivore_hp_damage_per_excess_unit: Option<f64>,
+}
+
+impl AnimalToxinSettings {
+    fn is_off(&self) -> bool {
+        !self.enabled
+            && !self.color_learning_enabled
+            && self.carnivore_damage_threshold.is_none()
+            && self.carnivore_hp_damage_per_excess_unit.is_none()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ToxinSettings {
@@ -29,6 +53,12 @@ pub struct ToxinSettings {
     pub plant_energy_cost_per_tick: f64,
     /// Phase 07.4.1 opt-in heritable toxic/non-toxic plant phenotype.
     pub plant_variation_enabled: bool,
+    /// Experiment only: pair founders 50/50 and display the resolved toxicity as color.
+    #[serde(skip_serializing_if = "is_false")]
+    pub experimental_plant_toxicity_colors: bool,
+    /// Fixed Stage 4 founder mix with independently inherited visible color.
+    #[serde(skip_serializing_if = "is_false")]
+    pub experimental_inherited_plant_colors: bool,
     /// Fraction of initially created / spontaneously germinated plants that are toxic.
     pub initial_toxic_plant_fraction: f64,
     /// Probability that a seed flips its parent's toxic phenotype.
@@ -70,6 +100,8 @@ impl Default for ToxinSettings {
             hp_damage_per_excess_unit: 0.001,
             plant_energy_cost_per_tick: 0.002,
             plant_variation_enabled: false,
+            experimental_plant_toxicity_colors: false,
+            experimental_inherited_plant_colors: false,
             initial_toxic_plant_fraction: 1.0,
             plant_toxic_mutation_probability: 0.0,
             plant_toxin_type_variation_enabled: false,
@@ -95,6 +127,7 @@ pub struct WorldConfig {
     pub height: f32,
     pub land_columns: u32,
     pub land_rows: u32,
+    /// Shared cap across registered plants, herbivores, and carnivores.
     pub max_living_entities: u32,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -113,6 +146,15 @@ pub struct SimulationSettings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct PlantSettings {
+    /// Seed offspring inherit and can mutate the parent's visible RGB.
+    #[serde(skip_serializing_if = "is_false")]
+    pub color_inheritance_enabled: bool,
+    /// Mutation probability per RGB channel at seed birth.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub color_mutation_probability: f32,
+    /// Maximum absolute mutation step per channel in normalized RGB.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub color_mutation_scale: f32,
     pub initial_soil_nutrients_per_cell: f64,
     pub initial_detritus_per_cell: f64,
     pub initial_body_nutrients: f64,
@@ -138,6 +180,50 @@ pub struct PlantSettings {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HerbivoreSettings {
+    /// Let herbivores use visible plant colors and learned adverse experiences.
+    pub color_learning_enabled: bool,
+    /// Experimental one-tick rescue when low reserve and all edible plants are rejected.
+    #[serde(skip_serializing_if = "is_false")]
+    pub hungry_color_recheck_enabled: bool,
+    /// Keep the opt-in recovery active until reserve reaches 30 percent.
+    #[serde(skip_serializing_if = "is_false")]
+    pub hungry_color_recovery_enabled: bool,
+    /// Opt-in: fraction of learned plant-color harm removed, scaled by color
+    /// similarity, on each tick a herbivore eats plant matter without ingesting toxin.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub color_memory_safe_meal_relief: f64,
+    /// Opt-in: fraction of learned plant-color harm that fades each tick.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub color_memory_decay_per_tick: f64,
+    /// Opt-in: basal energy x (1 + slope x (speed / reference - 1)), floored at 0.
+    /// Reference = (speed_min + speed_max) / 2. Zero keeps basal energy independent of speed.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub speed_upkeep_slope: f64,
+    /// Opt-in: a bitten herbivore (standing ground or not) drains this x aggression x
+    /// (adult_max_hp / 60) energy from the carnivore (dissipated as heat). Zero disables.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub counterattack_energy: f64,
+    /// When carnivore color learning is on, a counterattack also records harm for the
+    /// prey's color (counterattack energy / 60). Off only to separate learning in experiments.
+    #[serde(skip_serializing_if = "is_true")]
+    pub counterattack_learning_enabled: bool,
+    /// Opt-in: only herbivores with aggression x (adult_max_hp / 60) at or above this
+    /// strength fight back. Zero lets every bitten herbivore fight back.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub counterattack_strength_threshold: f64,
+    /// Opt-in: after a counterattack, the carnivore does not target that herbivore for
+    /// this many ticks (it breaks off and the prey can escape). Zero disables.
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub counterattack_retreat_ticks: u32,
+    /// Experimental control: false keeps a child's speed equal to its parent's. The mutation
+    /// draw still happens and is discarded, so the RNG sequence is unchanged.
+    #[serde(skip_serializing_if = "is_true")]
+    pub speed_mutation_enabled: bool,
+    /// Opt-in: probability that a herbivore's offspring is born as a carnivore (simple
+    /// version of predators arising by mutation). The draw uses a stateless stream, so it
+    /// never shifts ecology RNG and does not depend on whether carnivores exist. Zero disables.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub carnivore_offspring_probability: f64,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -241,8 +327,34 @@ pub struct CarnivoreSettings {
     pub offspring_reserve_nutrients: f64,
     pub offspring_energy: f64,
     pub reproduction_work_energy: f64,
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub reproduction_parent_reserve_energy: f64,
     pub mutation_probability: f32,
     pub mutation_scale: f32,
+    /// Opt-in: each carnivore carries its own heritable speed. OFF keeps every
+    /// carnivore at `speed`.
+    #[serde(skip_serializing_if = "is_false")]
+    pub speed_evolution_enabled: bool,
+    /// Initial speed = `speed` x (1 +/- spread), uniform. Used only when speed evolution is on.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub initial_speed_spread: f32,
+    /// Probability that a child's speed mutates. Used only when speed evolution is on.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub speed_mutation_probability: f32,
+    /// Child speed = parent speed x (1 +/- scale), uniform, clamped to 0.5..=8 like herbivores.
+    #[serde(skip_serializing_if = "is_zero_f32")]
+    pub speed_mutation_scale: f32,
+    /// Opt-in: basal energy x (1 + slope x (speed / `speed` - 1)), floored at 0.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub speed_upkeep_slope: f64,
+    /// Opt-in: fraction of learned color harm (toxin or counterattack) that fades per tick.
+    #[serde(skip_serializing_if = "is_zero_f64")]
+    pub color_memory_decay_per_tick: f64,
+    /// Opt-in: after this many hunting ticks, a carnivore compares the energy it gained from
+    /// bites with the energy it spent (basal + movement); if it lost energy it rests for the
+    /// same number of ticks. Zero disables.
+    #[serde(skip_serializing_if = "is_zero_u32")]
+    pub hunt_bout_ticks: u32,
 }
 impl Default for CarnivoreSettings {
     fn default() -> Self {
@@ -302,8 +414,16 @@ impl Default for CarnivoreSettings {
             offspring_reserve_nutrients: 3.,
             offspring_energy: 22.,
             reproduction_work_energy: 2.,
+            reproduction_parent_reserve_energy: 0.,
             mutation_probability: 0.05,
             mutation_scale: 0.1,
+            speed_evolution_enabled: false,
+            initial_speed_spread: 0.,
+            speed_mutation_probability: 0.,
+            speed_mutation_scale: 0.,
+            speed_upkeep_slope: 0.,
+            color_memory_decay_per_tick: 0.,
+            hunt_bout_ticks: 0,
         }
     }
 }
@@ -345,6 +465,18 @@ impl Default for HerbivoreSettings {
             reproduction_food_target: 8,
             reproduction_enabled: true,
             reproduction_cooldown_ticks: 600,
+            color_learning_enabled: false,
+            hungry_color_recheck_enabled: false,
+            hungry_color_recovery_enabled: false,
+            color_memory_safe_meal_relief: 0.,
+            color_memory_decay_per_tick: 0.,
+            speed_upkeep_slope: 0.,
+            counterattack_energy: 0.,
+            counterattack_learning_enabled: true,
+            counterattack_strength_threshold: 0.,
+            counterattack_retreat_ticks: 0,
+            speed_mutation_enabled: true,
+            carnivore_offspring_probability: 0.,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -388,6 +520,9 @@ impl Default for SimulationSettings {
 impl Default for PlantSettings {
     fn default() -> Self {
         Self {
+            color_inheritance_enabled: false,
+            color_mutation_probability: 0.,
+            color_mutation_scale: 0.,
             initial_soil_nutrients_per_cell: 200.,
             initial_detritus_per_cell: 30.,
             initial_body_nutrients: 9.,
@@ -424,6 +559,7 @@ impl Default for SimulationConfig {
             herbivores: HerbivoreSettings::default(),
             carnivores: CarnivoreSettings::default(),
             toxin: ToxinSettings::default(),
+            animal_toxin: AnimalToxinSettings::default(),
         }
     }
 }
@@ -454,7 +590,54 @@ impl SimulationConfig {
         if self.simulation.decision_interval_ticks == 0 || self.simulation.max_steps_per_call == 0 {
             return Err("invalid tick settings".into());
         }
+        if self.animal_toxin.color_learning_enabled && !self.animal_toxin.enabled {
+            return Err("carnivore color learning requires animal toxin".into());
+        }
+        if self
+            .animal_toxin
+            .carnivore_damage_threshold
+            .is_some_and(|value| !value.is_finite() || value < 0.)
+        {
+            return Err("invalid carnivore toxin damage threshold".into());
+        }
+        if self
+            .animal_toxin
+            .carnivore_hp_damage_per_excess_unit
+            .is_some_and(|value| !value.is_finite() || value < 0.)
+        {
+            return Err("invalid carnivore toxin damage coefficient".into());
+        }
         let t = &self.toxin;
+        if t.experimental_inherited_plant_colors && t.experimental_plant_toxicity_colors {
+            return Err("配色設定 toxin.experimental_inherited_plant_colors と toxin.experimental_plant_toxicity_colors は同時に使えません。片方をOFFにしてください。".into());
+        }
+        // Founder colors and inherited traits are independent of active plant toxin effects.
+        if t.experimental_inherited_plant_colors
+            && (!t.plant_variation_enabled
+                || !t.plant_toxin_type_variation_enabled
+                || t.plant_toxin_type_count != 2
+                || t.plant_toxic_mutation_probability != 0.
+                || t.plant_toxin_type_mutation_probability != 0.
+                // Founders are assigned in blocks of 10 plants (4/1/1/4); 300 is the
+                // 20x20 stage 4 setting and its multiples keep the same density.
+                || self.initial_population.plants == 0
+                || !self.initial_population.plants.is_multiple_of(10))
+        {
+            return Err(concat!(
+                "継承配色（toxin.experimental_inherited_plant_colors）の設定が不整合です。",
+                " 継承配色を使うには initial_population.plants を10の倍数（20×20の段階4では300）、",
+                "toxin.plant_variation_enabled と toxin.plant_toxin_type_variation_enabled をON、",
+                "toxin.plant_toxin_type_count=2、toxin.plant_toxic_mutation_probability と ",
+                "toxin.plant_toxin_type_mutation_probability を0にしてください。",
+                " この条件を使わない場合は継承配色をOFFにしてください。"
+            )
+            .into());
+        }
+        if t.experimental_plant_toxicity_colors
+            && (!t.plant_variation_enabled || !self.initial_population.plants.is_multiple_of(2))
+        {
+            return Err("毒性連動配色（toxin.experimental_plant_toxicity_colors）には toxin.plant_variation_enabled=ON と偶数の initial_population.plants が必要です。これらを確認するか、毒性連動配色をOFFにしてください。".into());
+        }
         if [
             t.dose_per_nutrient,
             t.clearance_fraction_per_tick,
@@ -501,6 +684,23 @@ impl SimulationConfig {
             return Err("invalid plant toxin type settings".into());
         }
         let p = &self.plants;
+        if p.color_inheritance_enabled
+            && (t.experimental_plant_toxicity_colors || t.experimental_inherited_plant_colors)
+        {
+            return Err(concat!(
+                "plants.color_inheritance_enabled は実験配色と同時に使えません。",
+                " 通常の色継承を使う場合は toxin.experimental_plant_toxicity_colors と ",
+                "toxin.experimental_inherited_plant_colors を両方OFFにしてください。",
+                " 実験配色を使う場合は plants.color_inheritance_enabled をOFFにしてください。"
+            )
+            .into());
+        }
+        if !(0.0..=1.0).contains(&p.color_mutation_probability) {
+            return Err("plants.color_mutation_probability は0〜1で指定してください。".into());
+        }
+        if !(0.0..=1.0).contains(&p.color_mutation_scale) {
+            return Err("plants.color_mutation_scale は0〜1で指定してください。".into());
+        }
         let nums = [
             p.initial_soil_nutrients_per_cell,
             p.initial_detritus_per_cell,
@@ -622,6 +822,48 @@ impl SimulationConfig {
         {
             return Err("invalid herbivore settings".into());
         }
+        if [
+            h.color_memory_safe_meal_relief,
+            h.color_memory_decay_per_tick,
+        ]
+        .iter()
+        .any(|v| !(0.0..=1.0).contains(v))
+        {
+            return Err(concat!(
+                "草食の色記憶の更新設定（herbivores.color_memory_safe_meal_relief と ",
+                "herbivores.color_memory_decay_per_tick）は0から1の範囲で指定してください。",
+                " 使わない場合は0にしてください。"
+            )
+            .into());
+        }
+        if !(0.0..=10.0).contains(&h.counterattack_strength_threshold)
+            || !(0.0..=1.0).contains(&self.carnivores.color_memory_decay_per_tick)
+        {
+            return Err(concat!(
+                "反撃のしきい値（herbivores.counterattack_strength_threshold）は0から10、",
+                "肉食の色の記憶の減衰（carnivores.color_memory_decay_per_tick）は0から1の範囲で",
+                "指定してください。使わない場合は0にしてください。"
+            )
+            .into());
+        }
+        if !h.counterattack_energy.is_finite() || !(0.0..=100.0).contains(&h.counterattack_energy) {
+            return Err(concat!(
+                "草食の反撃量（herbivores.counterattack_energy）は0から100の範囲で指定してください。",
+                "使わない場合は0にしてください。"
+            )
+            .into());
+        }
+        if [h.speed_upkeep_slope, self.carnivores.speed_upkeep_slope]
+            .iter()
+            .any(|v| !(0.0..=5.0).contains(v))
+        {
+            return Err(concat!(
+                "速さの維持コスト（herbivores.speed_upkeep_slope と ",
+                "carnivores.speed_upkeep_slope）は0から5の範囲で指定してください。",
+                "使わない場合は0にしてください。"
+            )
+            .into());
+        }
         let c = &self.carnivores;
         let amounts = [
             c.body_n_repair_per_tick,
@@ -636,6 +878,7 @@ impl SimulationConfig {
             c.offspring_reserve_nutrients,
             c.offspring_energy,
             c.reproduction_work_energy,
+            c.reproduction_parent_reserve_energy,
         ];
         if amounts.iter().any(|v| !v.is_finite() || *v < 0.)
             || c.speed <= 0.
@@ -650,6 +893,21 @@ impl SimulationConfig {
             || !(0.0..=1.0).contains(&c.mutation_scale)
         {
             return Err("invalid carnivore settings".into());
+        }
+        if [
+            c.initial_speed_spread,
+            c.speed_mutation_probability,
+            c.speed_mutation_scale,
+        ]
+        .iter()
+        .any(|v| !(0.0..1.0).contains(v))
+        {
+            return Err(concat!(
+                "肉食の速さの遺伝の設定（carnivores.initial_speed_spread、",
+                "carnivores.speed_mutation_probability、carnivores.speed_mutation_scale）は",
+                "0以上1未満で指定してください。使わない場合は0にしてください。"
+            )
+            .into());
         }
         if !c.prey_per_predator_target.is_finite() || c.prey_per_predator_target <= 0. {
             return Err("invalid prey_per_predator_target".into());
@@ -722,9 +980,39 @@ impl SimulationConfig {
         {
             return Err("invalid carnivore digestion settings".into());
         }
-        if c.enabled && self.initial_population.carnivores == 0 {
+        if !(0.0..=1.0).contains(&self.herbivores.carnivore_offspring_probability) {
+            return Err(concat!(
+                "草食から肉食が生まれる確率（herbivores.carnivore_offspring_probability）は",
+                "0から1の範囲で指定してください。使わない場合は0にしてください。"
+            )
+            .into());
+        }
+        if c.enabled
+            && self.initial_population.carnivores == 0
+            && self.herbivores.carnivore_offspring_probability == 0.
+        {
             return Err("enabled carnivores require nonzero initial population".into());
         }
         Ok(())
     }
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
+fn is_zero_u32(value: &u32) -> bool {
+    *value == 0
+}
+
+fn is_zero_f32(value: &f32) -> bool {
+    *value == 0.
+}
+
+fn is_zero_f64(value: &f64) -> bool {
+    *value == 0.
 }

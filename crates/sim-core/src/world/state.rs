@@ -11,6 +11,12 @@ use crate::{
 #[derive(Debug)]
 pub struct World {
     pub tick: u64,
+    pub(super) hungry_color_recovery: std::collections::BTreeSet<crate::entity::EntityId>,
+    pub(super) animal_toxins: super::animal_toxin::AnimalToxins,
+    pub plant_color_learning: std::collections::BTreeMap<
+        crate::entity::EntityId,
+        super::plant_color_learning::PlantColorMemory,
+    >,
     pub config: SimulationConfig,
     pub spontaneous_germination: Option<SpontaneousGermination>,
     pub spontaneous_births: u64,
@@ -31,15 +37,36 @@ pub struct World {
     pub carnivore_hunts: u64,
     pub diagnostics: super::Diagnostics,
     pub carnivore_debug: super::CarnivoreDebug,
+    pub defense: super::DefenseCounters,
+    /// Issue #66/#67: species and events for display (observation only, not audited).
+    pub species: super::SpeciesBook,
+    /// Opt-in counterattack retreat: carnivore -> (herbivore it will not target, ticks left).
+    /// Opt-in hunting bouts (Issue 11), per carnivore.
+    pub carnivore_hunt_bouts: std::collections::BTreeMap<crate::entity::EntityId, super::HuntBout>,
+    pub carnivore_retreats:
+        std::collections::BTreeMap<crate::entity::EntityId, (crate::entity::EntityId, u32)>,
     pub prey_trend_snapshot: super::PreyTrendSnapshot,
     pub resistance_event_logging: bool,
     pub resistance_birth_events: Vec<super::ResistanceBirthEvent>,
+    pub herbivore_terminal_logging: bool,
+    pub herbivore_terminal_events: Vec<super::HerbivoreTerminalEvent>,
+    /// Optional focal-only diagnostic trace; never consumes random numbers.
+    pub focal_trace_id: Option<crate::entity::EntityId>,
+    pub focal_upkeep_override: Option<(crate::entity::EntityId, f32)>,
+    pub resistance_upkeep_exempt: Option<crate::entity::EntityId>,
+    pub focal_trace: Vec<serde_json::Value>,
+    pub behavior_trace_window: Option<(u64, u64)>,
+    pub behavior_trace_subject: Option<crate::entity::EntityId>,
+    pub health_trace: Option<super::HealthTrace>,
+    pub energy_trace: Option<super::EnergyTrace>,
+    pub foraging_trace: Option<super::ForagingTrace>,
     pub color_event_logging: bool,
     pub color_events: Vec<super::ColorBirthEvent>,
     pub p42_life_events: Vec<super::CarnivoreLifeEvent>,
 }
 /// Phase 07.2.19 opt-in experimental soil-driven germination.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct SpontaneousGermination {
     pub soil_threshold: f64,
     pub probability_per_cell: f64,
@@ -76,6 +103,9 @@ impl World {
         }
         let mut world = Self {
             tick: 0,
+            plant_color_learning: Default::default(),
+            hungry_color_recovery: Default::default(),
+            animal_toxins: Default::default(),
             rng: SimulationRng::new(config.seed),
             config,
             spontaneous_germination: None,
@@ -103,9 +133,24 @@ impl World {
             carnivore_hunts: 0,
             diagnostics: super::Diagnostics::default(),
             carnivore_debug: super::CarnivoreDebug::default(),
+            defense: super::DefenseCounters::default(),
+            species: super::SpeciesBook::default(),
+            carnivore_retreats: std::collections::BTreeMap::new(),
+            carnivore_hunt_bouts: std::collections::BTreeMap::new(),
             prey_trend_snapshot: super::PreyTrendSnapshot::default(),
             resistance_event_logging: false,
             resistance_birth_events: Vec::new(),
+            herbivore_terminal_logging: false,
+            herbivore_terminal_events: Vec::new(),
+            focal_trace_id: None,
+            focal_upkeep_override: None,
+            resistance_upkeep_exempt: None,
+            focal_trace: Vec::new(),
+            behavior_trace_window: None,
+            behavior_trace_subject: None,
+            health_trace: None,
+            energy_trace: None,
+            foraging_trace: None,
             color_event_logging: false,
             color_events: Vec::new(),
             p42_life_events: Vec::new(),
@@ -116,6 +161,57 @@ impl World {
             let x = world.rng.unit() * world.config.world.width;
             let y = world.rng.unit() * world.config.world.height;
             world.create_initial_plant(x, y)?;
+        }
+        if world.config.toxin.experimental_plant_toxicity_colors
+            || world.config.toxin.experimental_inherited_plant_colors
+        {
+            let mut order: Vec<_> = (0..world.plants.items.len()).collect();
+            order.sort_by(|&a, &b| {
+                let a = &world.plants.items[a];
+                let b = &world.plants.items[b];
+                a.cell
+                    .cmp(&b.cell)
+                    .then_with(|| a.x.total_cmp(&b.x))
+                    .then_with(|| a.y.total_cmp(&b.y))
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            if world.config.toxin.experimental_inherited_plant_colors {
+                let mut next_type = [0, 0];
+                for (block, indices) in order.as_chunks_mut::<10>().0.iter_mut().enumerate() {
+                    indices.sort_by(|&a, &b| {
+                        let draw = |index| {
+                            crate::toxin::plant_trait_draw(
+                                world.config.seed,
+                                index as u64,
+                                0x53543500 + block as u64,
+                            )
+                        };
+                        draw(a).total_cmp(&draw(b)).then(a.cmp(&b))
+                    });
+                    for (slot, &index) in indices.iter().enumerate() {
+                        let purple = slot < 5;
+                        let plant = &mut world.plants.items[index];
+                        plant.color = if purple { 0xb86be3ff } else { 0x4ecb70ff };
+                        plant.produces_toxin = slot < 4 || slot == 5;
+                        if plant.produces_toxin {
+                            let color = usize::from(purple);
+                            plant.toxin_type = crate::toxin::ToxinTypeId(next_type[color]);
+                            next_type[color] ^= 1;
+                        }
+                    }
+                }
+            } else {
+                for (pair, indices) in order.as_chunks::<2>().0.iter().enumerate() {
+                    let first_toxic =
+                        crate::toxin::plant_trait_draw(world.config.seed, pair as u64, 0x53543443)
+                            < 0.5;
+                    for (side, &index) in indices.iter().enumerate() {
+                        let p = &mut world.plants.items[index];
+                        p.produces_toxin = first_toxic ^ (side == 1);
+                        p.color = crate::plants::visible_color(true, p.produces_toxin);
+                    }
+                }
+            }
         }
         world.plant_grid = PlantGrid::new(world.config.world.width, world.config.world.height, 50.);
         world.plant_grid.rebuild(&world.plants);
@@ -173,6 +269,7 @@ impl World {
                 self.config.toxin.initial_type0_fraction,
             ),
         });
+        self.species_plant_birth(self.plants.items.len() - 1, None);
         Ok(())
     }
     fn create_initial_herbivore(&mut self, x: f32, y: f32) -> Result<(), String> {
@@ -238,6 +335,7 @@ impl World {
             exploration_ticks,
             target: None,
         });
+        self.species_herbivore_birth(self.animals.items.len() - 1, None);
         Ok(())
     }
     fn create_initial_carnivore(&mut self, x: f32, y: f32) -> Result<(), String> {
@@ -266,7 +364,16 @@ impl World {
             body,
             reserve,
             color: crate::animals::color::initial(self.config.seed ^ 0xabcdef, id.index as u64),
-            speed: c.speed,
+            speed: if c.speed_evolution_enabled {
+                crate::animals::carnivore::initial_speed(
+                    c.speed,
+                    c.initial_speed_spread,
+                    self.config.seed,
+                    id.index as u64,
+                )
+            } else {
+                c.speed
+            },
             vision: c.vision,
             ambush_gene: 0.15
                 + 0.70
@@ -281,6 +388,7 @@ impl World {
             last_prey_heading: 0.,
             last_prey_ticks_left: 0,
         });
+        self.species_carnivore_birth(self.carnivores.len() - 1, None, None);
         Ok(())
     }
     pub fn carnivore_snapshot(&self) -> Vec<[f32; 7]> {

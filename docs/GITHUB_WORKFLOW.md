@@ -17,6 +17,24 @@
 
 ## 変更の流れ
 
+### ローカルのGit管理
+
+Git操作は `Cargo.toml` と `.git` があるリポジトリルートで行う。新しいPCでは既存リポジトリをcloneして履歴を取得する。ZIPを展開したフォルダだけでは履歴は取得できない。
+
+```powershell
+git clone https://github.com/lxi312044-oss/evolution-simulator.git
+cd evolution-simulator
+git switch -c work/issue-N-description
+```
+
+着手時は `git status --short` と `git fetch origin` で未コミット変更とリモートを確認する。作業中のファイルがある状態で `reset --hard` や強制checkoutを行わない。既存の配布フォルダをGit管理へ移す場合は、ファイルを保全してから既存リモートの履歴に接続し、ローカル差分を維持する。無関係な初期コミットで別履歴を作らない。
+
+検証後は `git diff` と `git status` で対象を確認し、依頼・承認された範囲のファイルを明示してadd/commitする。pushは作業ブランチへ行い、mainへの反映はPR経由とする。最初のpushは `git push -u origin <作業ブランチ名>`。commitの前に作者名・メールが本人の設定になっていることを確認し、推測で登録しない。
+
+非公開リポジトリをCLIから取得するには、Git Credential Manager等によるGitの認証が必要。アプリのGitHub連携とは認証が別の場合がある。トークンをorigin URL・ソース・ログへ埋め込まない。
+
+`results/`、`target/`、`web/node_modules/`、生成物、キャッシュは既存の `.gitignore` で除外する。除外はバックアップではないため、実験証拠はハッシュとIssue上の所在を維持して別途保全する。Git管理を導入しても、過去の実験metadataのGit SHA nullを後から現在のSHAへ書き換えない。
+
 1. 着手前にOpen/Closedを検索し、関連Issueを作成/更新する。目的、範囲、対照、評価指標、合格条件、再現条件、依存課題を固定し、対応中へ更新する。
 2. 作業ブランチを作り、PRテンプレートで変更・検証・未検証事項を整理する。
 3. 終了前にIssueへ実施日、SHA/ハッシュ、設定、seed、Tick、間隔、コマンド、結果/失敗、未検証事項、判断、状態、次の対応を記録する。PR/Actions/成果物をリンクして読み戻す。ローカル報告だけで終了しない。

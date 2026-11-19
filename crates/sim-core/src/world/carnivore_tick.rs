@@ -10,6 +10,8 @@ fn ambush_bin(gene: f32) -> usize {
 impl World {
     pub fn update_carnivores(&mut self) -> Result<(), String> {
         let c = self.config.carnivores.clone();
+        let required_birth_energy =
+            c.offspring_energy + c.reproduction_work_energy + c.reproduction_parent_reserve_energy;
         // Fixed-duration demographic observation; one sample for all predators in this tick.
         // This only affects births when explicitly enabled, and never changes resource totals.
         if c.prey_trend_reproduction_enabled
@@ -47,9 +49,26 @@ impl World {
                 (a.x, a.y, a.vision, a.speed, a.reserve)
             };
             self.carnivores[i].age = self.carnivores[i].age.saturating_add(1);
+            if self.config.carnivores.color_memory_decay_per_tick > 0.
+                && self.config.animal_toxin.color_learning_enabled
+            {
+                self.decay_carnivore_color_memory(
+                    i,
+                    self.config.carnivores.color_memory_decay_per_tick,
+                );
+            }
             self.carnivores[i].cooldown = self.carnivores[i].cooldown.saturating_sub(1);
             self.carnivores[i].attack_cooldown =
                 self.carnivores[i].attack_cooldown.saturating_sub(1);
+            {
+                let id = self.carnivores[i].id;
+                if let Some((_, left)) = self.carnivore_retreats.get_mut(&id) {
+                    *left = left.saturating_sub(1);
+                    if *left == 0 {
+                        self.carnivore_retreats.remove(&id);
+                    }
+                }
+            }
             self.carnivores[i].satiety_ticks = self.carnivores[i].satiety_ticks.saturating_sub(1);
             // Phase 06.2.28: conservative reserve -> body nutrient repair.
             // Unlike herbivores, carnivore reproduction currently takes offspring body N
@@ -74,6 +93,12 @@ impl World {
                         .map_err(|e| format!("carnivore body N repair: {e:?}"))?;
                 }
             }
+            let observe = self
+                .behavior_trace_window
+                .is_some_and(|(start, end)| (start..=end).contains(&self.tick));
+            let feeding_before = self.carnivores[i].feeding_active;
+            let nutrients_before = self.carnivore_debug.hunt_nutrients;
+            let energy_before_bite = self.carnivore_debug.hunt_energy;
             if c.digestion_enabled {
                 let stomach = self.carnivores[i].stomach;
                 let reserve_e = self.resources.energy_balance(reserve).unwrap_or(0.);
@@ -122,6 +147,7 @@ impl World {
                     self.carnivores[i].feeding_active = true;
                 }
             }
+            let resumed = !feeding_before && self.carnivores[i].feeding_active;
             // Optional energy-aware hunting. Never bypass the physical stomach capacity.
             // Mode 0 preserves the phase06.2.11 behavior and RNG sequence.
             let stomach = self.carnivores[i].stomach;
@@ -131,7 +157,7 @@ impl World {
             let stomach_has_capacity = stomach_e < c.stomach_capacity_energy - 1e-9
                 && stomach_n < c.stomach_capacity_nutrients - 1e-9;
             let predicted_need = (c.basal_energy_per_tick
-                + c.movement_energy_per_unit * c.speed as f64)
+                + c.movement_energy_per_unit * speed as f64)
                 * c.hunting_forecast_ticks as f64;
             let hunger_override = c.digestion_enabled
                 && !self.carnivores[i].feeding_active
@@ -162,16 +188,46 @@ impl World {
             }
             let mut nearest = None;
             let mut dist = vision * vision;
+            let predator_id = self.carnivores[i].id;
+            let mut color_skips = 0;
+            let mut last_color_skip = None;
+            let mut selection_color_skips = Vec::new();
+            let observe_opportunities = self.observes_carnivore_opportunities();
+            let avoided = self
+                .carnivore_retreats
+                .get(&predator_id)
+                .map(|(prey, _)| *prey);
+            // Opt-in hunting bouts: after a losing bout the carnivore rests (no search).
+            let bout_resting = c.hunt_bout_ticks > 0
+                && self
+                    .carnivore_hunt_bouts
+                    .get(&predator_id)
+                    .is_some_and(|b| b.rest_left > 0);
             for (j, h) in self.animals.items.iter().enumerate() {
-                if satiated {
+                if satiated || bout_resting {
                     break;
+                }
+                if avoided == Some(h.id) {
+                    continue;
                 }
                 let d = (h.x - x).powi(2) + (h.y - y).powi(2);
                 if d < dist {
+                    if !self.carnivore_allows_color(predator_id, h.genes.body_color, reserve_e) {
+                        color_skips += 1;
+                        last_color_skip = Some(h.id);
+                        if observe_opportunities {
+                            selection_color_skips.push([h.id.index, h.id.generation]);
+                        }
+                        continue;
+                    }
                     dist = d;
                     nearest = Some(j);
                 }
             }
+
+            let opportunity =
+                self.carnivore_opportunity_snapshot(i, nearest, satiated, hunger_override);
+            let opportunity_n_before = self.carnivore_debug.hunt_nutrients;
             // Phase 39: count prey within twice the vision radius even when no target is acquired.
             // These are diagnostic samples, not alternate target selection.
             let nearby_prey = self.animals.items.iter().any(|h| {
@@ -332,13 +388,34 @@ impl World {
             if !resting_without_prey && nearest.is_none() && !satiated && c.movement_strategy == 2 {
                 self.carnivore_debug.strategy_roaming_ticks += 1;
             }
-            let distance = if satiated || resting_without_prey {
+            let distance = if satiated || resting_without_prey || bout_resting {
                 0.
             } else if nearest.is_some() {
                 dist.sqrt().min(speed)
             } else {
                 speed
             };
+            if self
+                .behavior_trace_window
+                .is_some_and(|(start, end)| (start..=end).contains(&self.tick))
+            {
+                let a = &self.carnivores[i];
+                self.focal_trace.push(serde_json::json!({
+                    "phase":"predator_behavior", "tick":self.tick,
+                    "id":[a.id.index,a.id.generation], "position_before":[x,y],
+                    "reserve_e":reserve_e,"stomach_e":stomach_e,"stomach_n":stomach_n,
+                    "feeding_active":a.feeding_active, "satiated":satiated,
+                    "hunger_override":hunger_override,"stomach_has_capacity":stomach_has_capacity,
+                    "predicted_need":predicted_need,"resting_without_prey":resting_without_prey,
+                    "decision":format!("{decision:?}"),"angle":angle,"distance":distance,
+                    "prey":nearest.map(|j| {
+                        let prey = &self.animals.items[j];
+                        serde_json::json!({"id":[prey.id.index,prey.id.generation],
+                            "x":prey.x,"y":prey.y,"hp":prey.hp,
+                            "resistance":prey.genes.toxin_resistance})
+                    }),
+                }));
+            }
             let mut nx = (x + angle.cos() * distance).clamp(0., self.config.world.width);
             let mut ny = (y + angle.sin() * distance).clamp(0., self.config.world.height);
             // Reflect the exploration direction at the world boundary rather than
@@ -399,10 +476,33 @@ impl World {
             self.carnivores[i].x = nx;
             self.carnivores[i].y = ny;
             let available = self.resources.energy_balance(reserve).unwrap_or(0.);
-            let basal = c.basal_energy_per_tick.min(available);
+            let basal = (c.basal_energy_per_tick
+                * crate::animals::speed_upkeep_factor(c.speed_upkeep_slope, speed, c.speed))
+            .min(available);
             let movement =
                 (c.movement_energy_per_unit * moved as f64).min((available - basal).max(0.));
-            let burn = basal + movement;
+            // basal + (available - basal) can exceed `available` by one rounding step.
+            // Clamping only changes the result in that case, which previously aborted the run.
+            let burn = (basal + movement).min(available);
+            if c.hunt_bout_ticks > 0 {
+                let bout = self.carnivore_hunt_bouts.entry(predator_id).or_default();
+                if bout.rest_left > 0 {
+                    bout.rest_left -= 1;
+                } else if !satiated && !resting_without_prey {
+                    bout.hunting_ticks += 1;
+                    bout.spent += basal + movement;
+                    if bout.hunting_ticks >= c.hunt_bout_ticks {
+                        self.defense.hunt_bouts_completed += 1;
+                        if bout.gained < bout.spent {
+                            bout.rest_left = c.hunt_bout_ticks;
+                            self.defense.hunt_bouts_rested += 1;
+                        }
+                        bout.hunting_ticks = 0;
+                        bout.gained = 0.;
+                        bout.spent = 0.;
+                    }
+                }
+            }
             if nearest.is_some() {
                 self.carnivore_debug.p41_chase_basal_energy += basal;
                 self.carnivore_debug.p41_chase_movement_energy += movement;
@@ -414,11 +514,33 @@ impl World {
             self.ledger
                 .dissipate_heat(&mut self.resources, reserve, burn)
                 .map_err(|e| format!("carnivore metabolism: {e:?}"))?;
+            let attacks_before = self.carnivore_debug.hunt_attempts;
+            let mut attack_color_rejected = false;
+            let attack_reserve_e = opportunity
+                .as_ref()
+                .map(|_| self.resources.energy_balance(reserve).unwrap_or(0.));
             if let Some(j) = nearest {
+                let prey = &self.animals.items[j];
+                let learned_target = self.config.animal_toxin.color_learning_enabled
+                    && self.observe_carnivore_color_target(
+                        predator_id,
+                        prey.id,
+                        prey.genes.body_color,
+                        reserve_e,
+                        moved,
+                    );
                 let h = &self.animals.items[j];
                 if (h.x - nx).powi(2) + (h.y - ny).powi(2) <= c.attack_range * c.attack_range {
                     self.carnivore_debug.prey_in_attack_range += 1;
-                    if c.prey_refuge_enabled
+                    if !self.carnivore_allows_color(
+                        predator_id,
+                        h.genes.body_color,
+                        self.resources.energy_balance(reserve).unwrap_or(0.),
+                    ) {
+                        color_skips += 1;
+                        last_color_skip = Some(h.id);
+                        attack_color_rejected = true;
+                    } else if c.prey_refuge_enabled
                         && self.animals.items.len() <= c.prey_refuge_threshold as usize
                     {
                         self.carnivore_debug.hunt_refuge_blocked += 1;
@@ -467,14 +589,15 @@ impl World {
                         } else {
                             f64::INFINITY
                         };
-                        let n = c
-                            .bite_nutrients
-                            .min(free_n)
-                            .min(self.resources.nutrient_balance(source).unwrap_or(0.));
+                        let body_n = self.resources.nutrient_balance(source).unwrap_or(0.);
+                        let n = c.bite_nutrients.min(free_n).min(body_n);
                         let e = c
                             .bite_energy
                             .min(free_e)
                             .min(self.resources.energy_balance(prey_energy).unwrap_or(0.));
+                        if learned_target {
+                            self.observe_carnivore_learned_attack(n > 0. || e > 0.);
+                        }
                         if c.all_bites_to_stomach
                             && (n + 1e-9 < c.bite_nutrients || e + 1e-9 < c.bite_energy)
                         {
@@ -483,9 +606,20 @@ impl World {
                         self.resources
                             .transfer_nutrients(source, bite_target, n)
                             .map_err(|err| format!("carnivore bite N: {err:?}"))?;
+                        let prey_before = self.resources.energy_balance(prey_energy).unwrap_or(0.);
                         self.resources
                             .transfer_energy(prey_energy, bite_target, e)
                             .map_err(|err| format!("carnivore bite E: {err:?}"))?;
+                        if self.config.animal_toxin.enabled {
+                            self.transfer_animal_toxin(j, i, body_n, n);
+                        }
+                        self.record_energy(
+                            self.animals.items[j].id,
+                            "predation_bite",
+                            prey_before,
+                            self.resources.energy_balance(prey_energy).unwrap_or(0.),
+                            -e,
+                        );
                         if c.all_bites_to_stomach {
                             self.carnivore_debug.bite_stomach_energy += e;
                             self.carnivore_debug.bite_stomach_nutrients += n;
@@ -516,6 +650,12 @@ impl World {
                         self.carnivore_debug.hunt_contacts += 1;
                         self.carnivore_debug.hunt_nutrients += n;
                         self.carnivore_debug.hunt_energy += e;
+                        if c.hunt_bout_ticks > 0 {
+                            self.carnivore_hunt_bouts
+                                .entry(self.carnivores[i].id)
+                                .or_default()
+                                .gained += e;
+                        }
                         let hp_before = self.animals.items[j].hp;
                         // Standing ground is a defensive posture: it mitigates injury but does not create E/N.
                         // Bite nutrient and energy transfers remain unchanged in this initial experiment.
@@ -525,6 +665,57 @@ impl World {
                             5.
                         };
                         self.animals.items[j].hp = (hp_before - damage).max(0.);
+                        let h = &self.config.herbivores;
+                        // Any bitten herbivore fights back, standing ground or not (Issue 54).
+                        let strength = {
+                            let genes = &self.animals.items[j].genes;
+                            f64::from(genes.aggression) * f64::from(genes.adult_max_hp) / 60.
+                        };
+                        if h.counterattack_energy > 0.
+                            && strength >= h.counterattack_strength_threshold
+                        {
+                            let requested = h.counterattack_energy * strength;
+                            let available = self.resources.energy_balance(reserve).unwrap_or(0.);
+                            let injury = requested.min(available);
+                            if injury > 0. {
+                                self.ledger
+                                    .dissipate_heat(&mut self.resources, reserve, injury)
+                                    .map_err(|e| format!("carnivore counterattack: {e:?}"))?;
+                            }
+                            self.defense.counterattacks += 1;
+                            self.defense.counterattack_energy += injury;
+                            if h.counterattack_learning_enabled
+                                && self.config.animal_toxin.color_learning_enabled
+                                && requested > 0.
+                            {
+                                self.learn_counterattack(i, j, requested / 60.);
+                                self.defense.counterattack_learning_events += 1;
+                            }
+                            let retreat = self.config.herbivores.counterattack_retreat_ticks;
+                            if retreat > 0 {
+                                self.carnivore_retreats.insert(
+                                    self.carnivores[i].id,
+                                    (self.animals.items[j].id, retreat),
+                                );
+                                self.defense.counterattack_retreats += 1;
+                            }
+                        }
+                        if let Some(trace) = &mut self.health_trace {
+                            if trace.watched.contains(&self.animals.items[j].id) {
+                                trace.record(self.tick,&self.animals.items[j],&self.resources,"predation",Some(hp_before),
+                                    serde_json::json!({"damage":damage,"predator":[self.carnivores[i].id.index,self.carnivores[i].id.generation],
+                                        "nutrients_taken":n,"energy_taken":e,"defense_active":self.animals.items[j].defense_active}));
+                            }
+                        }
+                        if self.focal_trace_id == Some(self.animals.items[j].id) {
+                            self.focal_trace.push(serde_json::json!({
+                                "phase": "attack", "tick": self.tick,
+                                "predator": [self.carnivores[i].id.index, self.carnivores[i].id.generation],
+                                "hp_before": hp_before, "hp_after": self.animals.items[j].hp,
+                                "damage": damage, "nutrients_taken": n, "energy_taken": e,
+                                "defense_active": self.animals.items[j].defense_active,
+                            }));
+                        }
                         if hp_before > 0. && self.animals.items[j].hp <= 0. {
                             self.carnivore_debug.prey_hp_zero_after_attack += 1;
                             if c.satiety_enabled || c.digestion_enabled {
@@ -554,16 +745,26 @@ impl World {
                                     .kill_bonus_energy
                                     .min(free_e)
                                     .min(self.resources.energy_balance(prey_energy).unwrap_or(0.));
-                                let extra_n = c
-                                    .kill_bonus_nutrients
-                                    .min(free_n)
-                                    .min(self.resources.nutrient_balance(source).unwrap_or(0.));
+                                let body_n = self.resources.nutrient_balance(source).unwrap_or(0.);
+                                let extra_n = c.kill_bonus_nutrients.min(free_n).min(body_n);
+                                let prey_before =
+                                    self.resources.energy_balance(prey_energy).unwrap_or(0.);
                                 self.resources
                                     .transfer_energy(prey_energy, target, extra_e)
                                     .map_err(|err| format!("carnivore meal E: {err:?}"))?;
+                                self.record_energy(
+                                    self.animals.items[j].id,
+                                    "predation_lethal_meal",
+                                    prey_before,
+                                    self.resources.energy_balance(prey_energy).unwrap_or(0.),
+                                    -extra_e,
+                                );
                                 self.resources
                                     .transfer_nutrients(source, target, extra_n)
                                     .map_err(|err| format!("carnivore meal N: {err:?}"))?;
+                                if self.config.animal_toxin.enabled {
+                                    self.transfer_animal_toxin(j, i, body_n, extra_n);
+                                }
                                 if c.digestion_enabled {
                                     self.carnivore_debug.stomach_energy_ingested += extra_e;
                                     self.carnivore_debug.stomach_nutrients_ingested += extra_n;
@@ -595,8 +796,37 @@ impl World {
                     }
                 }
             }
+            if let Some(mut row) = opportunity {
+                row["selection_color_skips"] = serde_json::json!(selection_color_skips);
+                row["attack_color_rejected"] = serde_json::json!(attack_color_rejected);
+                row["attack_reserve_e"] = serde_json::json!(attack_reserve_e);
+                row["attacked"] =
+                    serde_json::json!(self.carnivore_debug.hunt_attempts != attacks_before);
+                row["eaten_n"] =
+                    serde_json::json!(self.carnivore_debug.hunt_nutrients - opportunity_n_before);
+                row["moved"] = serde_json::json!(moved);
+                row["distance_after"] = serde_json::json!(nearest.map(|j| {
+                    let p = &self.animals.items[j];
+                    (p.x - nx).hypot(p.y - ny)
+                }));
+                self.record_carnivore_opportunity(row);
+            }
+            if let Some(prey) = last_color_skip {
+                self.record_carnivore_color_skips(predator_id, prey, color_skips);
+            }
+            if self.config.animal_toxin.enabled {
+                self.trace_carnivore_toxin_decision(
+                    predator_id,
+                    nearest.map(|j| self.animals.items[j].id),
+                    last_color_skip,
+                    reserve_e,
+                    satiated,
+                    self.carnivore_debug.hunt_attempts != attacks_before,
+                );
+            }
+            let toxin_dead = self.config.animal_toxin.enabled && self.advance_carnivore_toxin(i)?;
             // Resource-conservative asexual reproduction. No food or energy created.
-            let ready = {
+            let ready = !toxin_dead && {
                 let a = &self.carnivores[i];
                 c.reproduction_enabled
                     && a.cooldown == 0
@@ -606,7 +836,7 @@ impl World {
                     && self.resources.nutrient_balance(a.reserve).unwrap_or(0.)
                         >= c.offspring_reserve_nutrients
                     && self.resources.energy_balance(a.reserve).unwrap_or(0.)
-                        >= c.offspring_energy + c.reproduction_work_energy
+                        >= required_birth_energy
                     && self.plants.len() + self.animals.items.len() + self.carnivores.len()
                         < self.config.world.max_living_entities as usize
             };
@@ -623,7 +853,7 @@ impl World {
                 if self.resources.nutrient_balance(a.reserve).unwrap_or(0.)
                     >= c.offspring_body_nutrients + c.offspring_reserve_nutrients
                     && self.resources.energy_balance(a.reserve).unwrap_or(0.)
-                        >= c.offspring_energy + c.reproduction_work_energy
+                        >= required_birth_energy
                 {
                     self.carnivore_debug.phase17_repro_resource_ready_ticks += 1;
                 }
@@ -649,7 +879,7 @@ impl World {
                 {
                     self.carnivore_debug.reproduction_reserve_n_blocked += 1;
                 } else if self.resources.energy_balance(a.reserve).unwrap_or(0.)
-                    < c.offspring_energy + c.reproduction_work_energy
+                    < required_birth_energy
                 {
                     self.carnivore_debug.reproduction_energy_blocked += 1;
                 } else if self.plants.len() + self.animals.items.len() + self.carnivores.len()
@@ -727,6 +957,30 @@ impl World {
             } else {
                 true
             };
+            if observe {
+                let a = &self.carnivores[i];
+                let reserve_e = self.resources.energy_balance(a.reserve).unwrap_or(0.);
+                let reserve_n = self.resources.nutrient_balance(a.reserve).unwrap_or(0.);
+                let stomach_e = self.resources.energy_balance(a.stomach).unwrap_or(0.);
+                let stomach_n = self.resources.nutrient_balance(a.stomach).unwrap_or(0.);
+                self.focal_trace.push(serde_json::json!({
+                    "phase":"predator_reproduction","tick":self.tick, "id":[a.id.index,a.id.generation],
+                    "parent":a.parent_id.map(|id| [id.index,id.generation]),
+                    "age":a.age,"cooldown":a.cooldown,"attack_cd":a.attack_cooldown,
+                    "reserve_e":reserve_e,"reserve_n":reserve_n,"stomach_e":stomach_e,"stomach_n":stomach_n,
+                    "fullness":(stomach_e/c.stomach_capacity_energy).max(stomach_n/c.stomach_capacity_nutrients),
+                    "population":self.plants.len()+self.animals.items.len()+self.carnivores.len(),
+                    "resumed":resumed,"bite_e":self.carnivore_debug.hunt_energy-energy_before_bite,"feeding":a.feeding_active,"bite_n":self.carnivore_debug.hunt_nutrients-nutrients_before,
+                    "fail":[!c.reproduction_enabled,toxin_dead,a.cooldown!=0,a.age<=c.reproduction_cooldown_ticks,
+                        reserve_n<c.offspring_body_nutrients+c.offspring_reserve_nutrients,
+                        reserve_e<required_birth_energy,
+                        self.plants.len()+self.animals.items.len()+self.carnivores.len()>=self.config.world.max_living_entities as usize],
+                    "ready":ready,"food":(ready && c.food_limited_reproduction_enabled).then_some(food_allows_birth),
+                    "trend":(ready && food_allows_birth && c.prey_trend_reproduction_enabled).then_some(trend_allows_birth),
+                    "stomach":(ready && c.digestion_enabled).then_some(stomach_allows_birth),
+                    "sustainable":(ready && c.sustainable_reproduction_enabled).then_some(sustainable_birth)
+                }));
+            }
             if ready
                 && food_allows_birth
                 && trend_allows_birth
@@ -781,7 +1035,22 @@ impl World {
                     c.mutation_probability,
                     c.mutation_scale,
                 );
+                let child_speed = if c.speed_evolution_enabled {
+                    crate::animals::carnivore::inherit_speed(
+                        pspeed,
+                        c.speed_mutation_probability,
+                        c.speed_mutation_scale,
+                        self.config.seed ^ self.tick.rotate_left(29),
+                        id.index as u64,
+                    )
+                    .0
+                } else {
+                    pspeed
+                };
                 let stomach = self.resources.open(0., 0.).map_err(|e| format!("{e:?}"))?;
+                if self.config.animal_toxin.enabled {
+                    self.inherit_carnivore_toxin(parent_id, id);
+                }
                 self.carnivores.push(Carnivore {
                     id,
                     x: (px + 5.).min(self.config.world.width),
@@ -796,7 +1065,7 @@ impl World {
                     body,
                     reserve: child_reserve,
                     color: child_color,
-                    speed: pspeed,
+                    speed: child_speed,
                     vision: pvision,
                     ambush_gene: child_gene,
                     p42: Default::default(),
@@ -806,6 +1075,7 @@ impl World {
                     last_prey_heading: 0.,
                     last_prey_ticks_left: 0,
                 });
+                self.species_carnivore_birth(self.carnivores.len() - 1, Some(i), None);
                 self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
                 let parent_bin = ambush_bin(parent_gene);
                 let child_bin = ambush_bin(child_gene);
@@ -818,7 +1088,9 @@ impl World {
             }
             let dead = {
                 let a = &self.carnivores[i];
-                a.age >= a.max_age || self.resources.energy_balance(a.reserve).unwrap_or(0.) <= 1e-9
+                toxin_dead
+                    || a.age >= a.max_age
+                    || self.resources.energy_balance(a.reserve).unwrap_or(0.) <= 1e-9
             };
             if dead {
                 let death_event = self.p42_snapshot(&self.carnivores[i], "death");
@@ -889,7 +1161,9 @@ impl World {
                         .predator_death_distance_to_nearest_prey_total += d as f64;
                     self.carnivore_debug.predator_death_nearest_prey_samples += 1;
                 }
-                if self.carnivores[i].age >= self.carnivores[i].max_age {
+                if toxin_dead {
+                    self.animal_toxins.toxin_deaths += 1;
+                } else if self.carnivores[i].age >= self.carnivores[i].max_age {
                     self.carnivore_debug.carnivore_age_deaths += 1;
                 } else {
                     self.carnivore_debug.carnivore_energy_deaths += 1;
@@ -897,6 +1171,19 @@ impl World {
                 let bin = ambush_bin(self.carnivores[i].ambush_gene);
                 self.carnivore_debug.gene_deaths[bin] += 1;
                 let a = self.carnivores.swap_remove(i);
+                self.carnivore_retreats.remove(&a.id);
+                self.carnivore_hunt_bouts.remove(&a.id);
+                if self.config.animal_toxin.enabled {
+                    let reason = if toxin_dead {
+                        "toxin_hp_zero"
+                    } else if a.age >= a.max_age {
+                        "age"
+                    } else {
+                        "energy"
+                    };
+                    self.trace_carnivore_toxin_removal(a.id, reason);
+                    self.animal_toxins.remove_carnivore(a.id);
+                }
                 let cell = self.land.cell_index(
                     a.x,
                     a.y,

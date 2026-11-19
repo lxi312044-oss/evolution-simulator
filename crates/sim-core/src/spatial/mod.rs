@@ -1,6 +1,7 @@
 //! Rebuilt once per tick after plant births/deaths. Deterministic bucket ordering.
 use crate::plants::PlantStore;
 #[derive(Debug)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct PlantGrid {
     pub columns: usize,
     pub rows: usize,
@@ -51,6 +52,28 @@ impl PlantGrid {
         count
     }
     pub fn nearest(&self, plants: &PlantStore, x: f32, y: f32, vision: f32) -> Option<usize> {
+        self.nearest_allowed(plants, x, y, vision, |_| true)
+    }
+
+    pub(crate) fn nearest_allowed(
+        &self,
+        plants: &PlantStore,
+        x: f32,
+        y: f32,
+        vision: f32,
+        allowed: impl Fn(u32) -> bool,
+    ) -> Option<usize> {
+        self.nearest_where(plants, x, y, vision, |i| allowed(plants.items[i].color))
+    }
+
+    pub(crate) fn nearest_where(
+        &self,
+        plants: &PlantStore,
+        x: f32,
+        y: f32,
+        vision: f32,
+        allowed: impl Fn(usize) -> bool,
+    ) -> Option<usize> {
         let min_c = (((x - vision).max(0.) / self.cell_width) as usize).min(self.columns - 1);
         let max_c = (((x + vision).max(0.) / self.cell_width) as usize).min(self.columns - 1);
         let min_r = (((y - vision).max(0.) / self.cell_height) as usize).min(self.rows - 1);
@@ -65,6 +88,7 @@ impl PlantGrid {
                     let dy = p.y - y;
                     let d2 = dx * dx + dy * dy;
                     if d2 <= best_d2
+                        && allowed(i)
                         && (d2 < best_d2
                             || best.is_none_or(|j: usize| p.id.index < plants.items[j].id.index))
                     {

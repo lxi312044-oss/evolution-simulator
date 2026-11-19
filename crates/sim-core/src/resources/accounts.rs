@@ -1,9 +1,11 @@
 use super::{ResourceError, TransferReceipt};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct AccountId(pub usize);
 
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ResourceBank {
     nutrients: Vec<f64>,
     chemical_energy: Vec<f64>,

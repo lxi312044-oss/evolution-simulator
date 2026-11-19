@@ -1,5 +1,6 @@
 //! Heritable sRGB body color. Visual genes do not own N/E accounts.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct BodyColor {
     pub r: f32,
     pub g: f32,
@@ -24,7 +25,7 @@ fn mix(mut x: u64) -> u64 {
     x = (x ^ (x >> 27)).wrapping_mul(0x94d049bb133111eb);
     x ^ (x >> 31)
 }
-fn unit(seed: u64) -> f32 {
+pub(crate) fn unit(seed: u64) -> f32 {
     ((mix(seed) >> 40) as f32) / 16777216.
 }
 pub fn initial(seed: u64, id: u64) -> BodyColor {

@@ -58,6 +58,13 @@ class MetadataTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.record("complete")
 
+    def test_example_identity_must_match_at_completion(self):
+        data = record("begin", self.root, self.config, self.root / "sim.exe", self.output, 100, 10,
+                      example_name="toxin_evolution_0759")
+        self.assertEqual(data["example"], "toxin_evolution_0759")
+        with self.assertRaises(ValueError):
+            self.record("complete")
+
 
 if __name__ == "__main__":
     unittest.main()

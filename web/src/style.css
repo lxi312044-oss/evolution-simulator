@@ -8,3 +8,76 @@
 /* Phase 42 playback speed selector */
 .speed-label{display:inline-flex;align-items:center;gap:.45rem;color:#c6d5d5;font-size:.9rem}
 .speed-label select{background:#183b37;color:#e8f4f2;border:1px solid #467b70;border-radius:5px;padding:.45rem}
+
+[hidden],body[data-mode="play"] .dev-only{display:none!important}
+nav{display:flex;gap:8px}nav a{color:#b9e6cc;padding:.55rem .9rem;border:1px solid #3b5d50;border-radius:8px;text-decoration:none;white-space:nowrap}
+body[data-mode="play"] #play-link,body[data-mode="dev"] #dev-link{background:#b9e6cc;color:#13261d}
+body[data-mode="play"] main{max-width:1500px}
+.layout{align-items:start}.world-panel{min-width:0}#world{touch-action:none;cursor:crosshair}
+.map-tools{align-items:center;margin:0 0 12px}.map-tools span{color:#a3c3b6;font-size:13px}
+#inspector{border-bottom:1px solid #345047;padding-bottom:14px;margin-bottom:18px}h2{font-size:17px;margin:0 0 12px}
+#individual dl{display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;font-size:13px}
+#individual dd{margin:0;text-align:right;overflow-wrap:anywhere}#individual dt{color:#abc6b9}
+#individual p{font-size:13px;overflow-wrap:anywhere}
+.swatch{display:inline-block;width:13px;height:13px;border:1px solid #fff8;border-radius:50%;margin-right:8px}
+select{background:#18332c;color:#f1faf4;border:1px solid #496b5c;padding:6px;border-radius:6px}
+#hit-list{width:100%;margin-bottom:8px}
+#population-trend{aspect-ratio:auto;height:auto;background:#0d1d18}
+#extinction{color:#f2c183;font-size:13px}
+details{margin:8px 0}summary{cursor:pointer;padding:.45rem 0}
+#settings-groups details{border-bottom:1px solid #345047;padding:5px 0}#settings-groups button{margin:14px 0}
+#research-summary{max-height:340px;overflow:auto;background:#0e1818;padding:12px;font-size:12px}
+#pending{color:#f2c183}#status:empty{display:none}
+.playback{margin:0 0 12px}
+
+#settings-groups .tuning-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); }
+.tuning-grid .setting-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start;
+  padding: 12px; background: #0e1b20; border: 1px solid #304941; border-radius: 8px; gap: 7px 12px; }
+.setting-name { font-weight: 650; color: #e2f3e9; }
+.tuning-grid .setting-card input[type=number] { width: min(100%, 10rem); justify-self: end; }
+.tuning-grid .setting-card input[type=checkbox] { width: 1.2rem; height: 1.2rem; margin: 0; accent-color: #78d6aa; }
+.setting-help, .setting-range, .setting-card code { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.setting-help { line-height: 1.6; }
+.setting-range, .setting-card code { color: #a4c4b5; font-size: 12px; }
+#settings-error { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 500px) {
+  .tuning-grid .setting-card:has(input[type=number]) { grid-template-columns: minmax(0, 1fr); }
+  .tuning-grid .setting-card input[type=number] { justify-self: start; }
+}
+
+/* Issue #66/#67: left panel with species ranking and event log */
+.layout{grid-template-columns:320px minmax(0,1fr) 330px}
+@media(max-width:1280px){.layout{grid-template-columns:minmax(0,1fr) 330px}.ecology-panel{grid-column:1/-1;order:3}}
+@media(max-width:900px){.layout{grid-template-columns:1fr}}
+.ecology-panel{scrollbar-color:#35514a #121f26;display:flex;flex-direction:column;gap:18px;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+@media(max-width:1280px){.ecology-panel{position:static;max-height:none}}
+.ecology-panel .note{margin-top:8px;font-size:12px;line-height:1.6}
+.kind-tabs{display:flex;gap:6px}.kind-tabs button{flex:1;padding:7px 0;font-size:13px;background:#183029}
+.kind-tabs button[aria-pressed=true]{background:#b9e6cc;color:#13261d;border-color:#b9e6cc}
+.species-totals{color:#9eb4af;font-size:12px;margin:10px 0 6px}
+.species-list,.event-log{list-style:none;margin:0;padding:0}
+.species-row{cursor:pointer;border-radius:6px;display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:4px 6px;padding:7px 4px;border-bottom:1px solid #25383c;font-size:13px}
+.species-row .swatch{margin-right:0}
+.species-name{overflow-wrap:anywhere;line-height:1.35}
+.species-row.top .species-name{font-weight:650;color:#f1faf4}
+.species-count{color:#c7f5db;font-variant-numeric:tabular-nums;font-size:12px}
+.rank-badge{font-size:11px;padding:2px 6px;border-radius:10px;background:#22383a;color:#a9bdb6;min-width:3.6em;text-align:center}
+.rank-badge.rank-1{background:#e8c56a;color:#2a2108}.rank-badge.rank-2{background:#c8d3d8;color:#1d2529}.rank-badge.rank-3{background:#c99467;color:#2b1a0c}
+.share-bar{grid-column:1/-1;height:4px;background:#1b2c2e;border-radius:2px;overflow:hidden}.share-bar span{display:block;height:100%}
+.event-log{max-height:420px;overflow:auto;scrollbar-color:#35514a #121f26}
+.event{display:flex;flex-direction:column;gap:2px;padding:7px 0;border-bottom:1px solid #25383c;font-size:13px;position:relative}
+.event-tick{color:#7f9a92;font-size:11px;font-variant-numeric:tabular-nums}
+.event-text{color:#d7e8dc;line-height:1.5}
+button.event-text{background:none;border:0;padding:0;text-align:left;color:#9fe0bd;text-decoration:underline dotted;cursor:pointer;font:inherit}
+button.event-text:hover{background:none;color:#d6ffe8}
+.event-dominance .event-text,.event-carnivore_from_herbivore .event-text{color:#f6d68a}
+.event-extinction_accelerating .event-text,.event-kind_gone .event-text,.event-plants_declining .event-text{color:#f2a483}
+.event-notice{color:#f2c183;font-size:12px}
+.empty{color:#7f9a92;font-size:12px;padding:8px 0}
+body[data-mode="play"] main,main{max-width:1800px}
+.species-row:hover,.species-row:focus-visible{background:#183029;outline:none}.species-row .event-notice{grid-column:1/-1}
+/* Issue #64: creature legend */
+.sprite-legend .preview-item canvas{width:40px;height:40px}.legend-note{flex-basis:100%;margin:4px 0 0;font-size:12px;line-height:1.6}
+/* Play-mode trait summary */
+.trait-list{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;margin:6px 0 0}.trait-list dt{color:#abc6b9}.trait-list dd{margin:0;text-align:right}
+.avoided-colors .swatch{margin:0 0 0 4px}

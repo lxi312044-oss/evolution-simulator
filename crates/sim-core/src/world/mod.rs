@@ -1,10 +1,22 @@
 mod state;
+#[cfg(feature = "state-audit")]
+mod state_audit;
 mod tick;
 pub use state::{SpontaneousGermination, World};
 
+mod animal_toxin;
 mod behavior;
 mod carnivore_tick;
+mod energy;
+mod foraging;
+mod health;
+mod plant_color_learning;
+mod species;
+pub use energy::EnergyTrace;
+pub use foraging::{ForagingTrace, ForagingWindow};
+pub use species::{SpeciesBook, SpeciesKind};
 mod herbivore_tick;
+pub use health::HealthTrace;
 
 mod diagnostics;
 pub use diagnostics::Diagnostics;
@@ -20,9 +32,55 @@ pub struct ResistanceBirthEvent {
     pub mutation_attempted: bool,
 }
 
+/// Read-only herbivore state immediately before removal and resource return.
+/// The trigger is the removal condition, not a causal attribution to toxin.
+#[derive(Debug, Clone)]
+pub struct HerbivoreTerminalEvent {
+    pub tick: u64,
+    pub id: crate::entity::EntityId,
+    pub resistance: [f32; 16],
+    pub loads: [f64; 16],
+    pub doses: [f64; 16],
+    pub age: u32,
+    pub successful_births: u64,
+    pub hp: f32,
+    pub removal_trigger: &'static str,
+    pub toxin_damage_total: f64,
+    pub prevented_damage_total: f64,
+    pub resistance_cost_total: f64,
+}
+
+impl HerbivoreTerminalEvent {
+    pub fn capture(tick: u64, animal: &crate::animals::Herbivore) -> Self {
+        let mut resistance = animal.genes.typed_resistance;
+        resistance[0] = animal.genes.toxin_resistance;
+        let mut loads = animal.typed_load;
+        loads[0] = animal.toxin_load;
+        Self {
+            tick,
+            id: animal.id,
+            resistance,
+            loads,
+            doses: animal.lifetime_typed_dose,
+            age: animal.age,
+            successful_births: animal.successful_births,
+            hp: animal.hp,
+            removal_trigger: if animal.hp <= 0. {
+                "hp_nonpositive"
+            } else {
+                "age_limit"
+            },
+            toxin_damage_total: animal.lifetime_toxin_damage,
+            prevented_damage_total: animal.lifetime_prevented_damage,
+            resistance_cost_total: animal.lifetime_resistance_cost,
+        }
+    }
+}
+
 /// A successful birth. Mutation flags record RNG decisions, even if clamping
 /// makes the resulting channel equal to the parent value.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ColorBirthEvent {
     pub tick: u64,
     pub parent_id: crate::entity::EntityId,
@@ -79,6 +137,7 @@ pub struct CarnivoreLifeEvent {
 }
 /// Rolling herbivore population and demographic sample; no resource accounts are modified.
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct PreyTrendSnapshot {
     pub tick: u64,
     pub population: usize,
@@ -87,6 +146,30 @@ pub struct PreyTrendSnapshot {
     pub decline_fraction: f64,
     pub births_in_window: u64,
     pub deaths_in_window: u64,
+}
+
+/// Opt-in hunting bout of one carnivore (Issue 11): energy gained from bites and spent on
+/// basal metabolism and movement while hunting, and rest ticks left after a losing bout.
+#[derive(Debug, Default, Clone, PartialEq)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
+pub struct HuntBout {
+    pub hunting_ticks: u32,
+    pub gained: f64,
+    pub spent: f64,
+    pub rest_left: u32,
+}
+
+/// Cumulative counters for the opt-in herbivore counterattack (Issue 54). Diagnostic only;
+/// never an input to the ecology, so the state audit does not emit them.
+#[derive(Debug, Default, Clone, serde::Serialize)]
+pub struct DefenseCounters {
+    pub counterattacks: u64,
+    pub counterattack_energy: f64,
+    pub counterattack_learning_events: u64,
+    pub counterattack_retreats: u64,
+    pub hunt_bouts_completed: u64,
+    pub hunt_bouts_rested: u64,
+    pub carnivores_born_from_herbivores: u64,
 }
 
 /// Cumulative, read-only diagnostics for the predator/prey balance investigation.
@@ -198,4 +281,26 @@ pub struct CarnivoreDebug {
     pub p41_chase_movement_energy: f64,
     pub p41_chase_basal_energy: f64,
     pub p41_death_after_visible_target: u64,
+}
+
+// Observation-only snapshots at explicit phases, independent of ecology/RNG.
+impl World {
+    pub fn record_focal_state(&mut self, id: crate::entity::EntityId, phase: &str) {
+        if self.focal_trace_id != Some(id) {
+            return;
+        }
+        if let Some(a) = self.animals.items.iter().find(|a| a.id == id) {
+            self.focal_trace.push(serde_json::json!({
+                "phase": phase, "tick": self.tick, "hp": a.hp, "age": a.age,
+                "x": a.x, "y": a.y, "births": a.successful_births,
+                "reserve_e": self.resources.energy_balance(a.reserve).unwrap_or(0.),
+                "reserve_n": self.resources.nutrient_balance(a.reserve).unwrap_or(0.),
+                "body_n": self.resources.nutrient_balance(a.body).unwrap_or(0.),
+                "stomach_e": self.resources.energy_balance(a.stomach).unwrap_or(0.),
+                "stomach_n": self.resources.nutrient_balance(a.stomach).unwrap_or(0.),
+                "damage": a.lifetime_toxin_damage, "cost": a.lifetime_resistance_cost,
+                "cooldown": a.reproduction_cooldown, "well_fed_ticks": a.well_fed_ticks,
+            }));
+        }
+    }
 }

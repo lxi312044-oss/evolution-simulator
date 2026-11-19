@@ -50,6 +50,7 @@ pub fn resistance_upkeep(resistance: f64, available_energy: f64, settings: &Toxi
 // Only type 0 is active in the current simulation. Other IDs are reserved for
 // Phase 07.5; these definitions do not enable new toxin pathways.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ToxinTypeId(pub u16);
 
 impl ToxinTypeId {

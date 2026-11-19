@@ -1,0 +1,139 @@
+"""Audit the paired 7000-tick toxic-founder-fraction experiment."""
+import argparse
+import json
+import random
+import re
+from pathlib import Path
+from statistics import mean
+
+from run_confirmation import require
+from run_metadata import sha256
+from run_wasm_lineage import FitnessAudit
+
+
+def summarize(path, config, horizon=7000, first_cycle_end=None):
+    audit = FitnessAudit(config, horizon)
+    probes = []
+    receipt = None
+    terminal = None
+    last_feeding = None
+    feeding = 0.0
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            row = json.loads(line)
+            kind = row["kind"]
+            if kind == "probe_config":
+                receipt = row["receipt"]
+            elif kind == "probe":
+                probes.append(row)
+                for event in row["energy"]:
+                    if event["phase"] == "feeding" and event["delta_e"] > 0:
+                        last_feeding = row["tick"]
+                        feeding += event["delta_e"]
+            else:
+                audit.accept(row)
+                if kind in ("removal", "survivor") and row["id"] == receipt["id"]:
+                    terminal = row
+    audit.finish()
+    require([r["tick"] for r in probes] == list(range(horizon + 1)), "Incomplete probes")
+    require(terminal is not None, "Missing focal terminal record")
+    state = audit.initial["initial_state"].copy()
+    require(state["animals"].count(receipt["after"]) == 1, "Missing focal state")
+    state["animals"] = state["animals"].replace(receipt["after"], receipt["before"], 1)
+    state["plants"] = re.sub(r"produces_toxin: (true|false)", "produces_toxin: masked", state["plants"])
+    first_zero = next((r["tick"] for r in probes
+                       if r["focal"] and r["focal"]["reserve_e"] <= 1e-9), None)
+    focal = tuple(receipt["id"])
+    lineage = {focal}
+    for child, parent in audit.parents.items():
+        if parent in lineage:
+            lineage.add(child)
+    result = dict(terminal=terminal, feeding_e=feeding, last_feeding=last_feeding,
+                  direct_births=terminal["births"], descendant_births=len(lineage) - 1,
+                  removal_or_end_tick=terminal["tick"],
+                  censored=terminal["kind"] == "survivor",
+                  first_zero=first_zero, initial_plants=probes[0]["plants"],
+                  initial_toxic_plants=probes[0]["toxic_plants"],
+                  plant_counts=[{k: row[k] for k in ("tick", "plants", "toxic_plants")}
+                                for row in probes[::1000]],
+                  birth_ticks=audit.life[tuple(receipt["id"])]["children"],
+                  log_sha256=sha256(path), max_n_error=audit.complete["max_n_error"],
+                  max_e_error=audit.complete["max_e_error"])
+    if first_cycle_end is not None:
+        descendants = [audit.life[ident] for ident in lineage - {focal}]
+        result.update(
+            first_cycle_present=sum(life["birth"] <= first_cycle_end
+                                    and (life["end"] is None or life["end"] > first_cycle_end)
+                                    for life in descendants),
+            second_cycle_births=sum(life["birth"] > first_cycle_end for life in descendants),
+            final_present=len((lineage - {focal}) & audit.live),
+        )
+    return result, state
+
+
+def paired_contrasts(results, plan):
+    report = {}
+    for metric in plan["metrics"]:
+        differences = {name: [] for name in plan["contrasts"]}
+        for seed in plan["seeds"]:
+            low, high, exempt, low_rich, high_rich = (
+                results[f"{seed}_{fraction}_{resistance}_{mode}"][metric]
+                for fraction, resistance, mode in (
+                    (0.1, 0.2, "paid"), (0.1, 0.8, "paid"), (0.1, 0.8, "exempt"),
+                    (0.9, 0.2, "paid"), (0.9, 0.8, "paid")
+                )
+            )
+            differences["low_high_minus_low"].append(high - low)
+            differences["high_high_minus_low"].append(high_rich - low_rich)
+            differences["low_exempt_minus_paid_high"].append(exempt - high)
+            differences["interaction"].append((high_rich - low_rich) - (high - low))
+        report[metric] = {}
+        for name, values in differences.items():
+            rng = random.Random(plan["bootstrap_seed"])
+            draws = sorted(mean(rng.choices(values, k=len(values))) for _ in range(4000))
+            report[metric][name] = dict(mean=mean(values), ci95=[draws[99], draws[3899]],
+                                        by_seed=dict(zip(plan["seeds"], values)))
+    return report
+
+
+def main(directory):
+    plan_path = directory / "plan.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8")) if plan_path.exists() else None
+    seeds = plan["seeds"] if plan else (12350, 12351)
+    results = {}
+    for seed in seeds:
+        baseline_state = None
+        for fraction in (0.1, 0.9):
+            for resistance, mode in ((0.2, "paid"), (0.8, "paid"), (0.8, "exempt")):
+                if fraction == 0.9 and mode == "exempt":
+                    continue
+                name = f"{seed}_{fraction}_{resistance}_{mode}"
+                config = json.loads((directory / f"{name}.input.json").read_text(encoding="utf-8"))
+                result, state = summarize(directory / f"{name}.jsonl", config)
+                require(config["seed"] == seed and config["toxin"]["initial_toxic_plant_fraction"] == fraction,
+                        f"Input mismatch: {name}")
+                if baseline_state is None:
+                    baseline_state = state
+                require(state == baseline_state, f"Initial state mismatch: {name}")
+                require(result["initial_plants"] == 1200, "Founder plant count mismatch")
+                require(result["terminal"]["resistance"] == resistance or
+                        abs(result["terminal"]["resistance"] - resistance) < 1e-7, "Resistance mismatch")
+                require((result["terminal"]["upkeep"] == 0) == (mode == "exempt"), "Upkeep mismatch")
+                results[name] = result
+    with (directory / "assessment.json").open("x", encoding="utf-8") as stream:
+        json.dump(results, stream, indent=2)
+    if plan:
+        report = paired_contrasts(results, plan)
+        with (directory / "contrasts.json").open("x", encoding="utf-8") as stream:
+            json.dump(report, stream, indent=2)
+    for name, result in results.items():
+        end = result["terminal"]
+        print(name, result["initial_toxic_plants"], end["tick"], end["kind"],
+              end["births"], round(end["dose"], 3), round(end["damage"], 3),
+              round(end["upkeep"], 3), result["first_zero"])
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("directory", type=Path)
+    main(parser.parse_args().directory)

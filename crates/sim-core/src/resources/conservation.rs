@@ -1,6 +1,7 @@
 use super::{AccountId, ResourceBank, ResourceError};
 
 #[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ResourceLedger {
     pub sunlight_in: f64,
     pub heat_out: f64,
@@ -68,6 +69,7 @@ impl ResourceLedger {
     }
 }
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
 pub struct ConservationBaseline {
     pub nutrients: f64,
     pub energy: f64,

@@ -25,13 +25,13 @@ def source_hashes(root):
     return {p.relative_to(root).as_posix(): sha256(p) for p in paths}
 
 
-def record(stage, root, config, binary, output, ticks, interval):
+def record(stage, root, config, binary, output, ticks, interval, example_name="toxin_evolution_0758"):
     root, config, binary, output = map(lambda p: Path(p).resolve(), (root, config, binary, output))
     if ticks <= 0 or interval <= 0:
         raise ValueError("ticks and interval must be positive")
     inputs = dict(config_sha256=sha256(config), binary_sha256=sha256(binary),
                   source_sha256=source_hashes(root), ticks=ticks, interval=interval,
-                  seed=json.loads(config.read_text(encoding="utf-8-sig"))["seed"])
+                  seed=json.loads(config.read_text(encoding="utf-8-sig"))["seed"], example=example_name)
     now = datetime.now(timezone.utc).isoformat()
     if stage == "begin":
         if output.exists():
@@ -42,7 +42,7 @@ def record(stage, root, config, binary, output, ticks, interval):
                     git_commit=commit, git_dirty=bool(status) if status is not None else None,
                     git_status=status, rustc=command(root, "rustc", "--version"),
                     cargo=command(root, "cargo", "--version"), python=sys.version,
-                    config_file=config.name, example="toxin_evolution_0758")
+                    config_file=config.name, example=example_name)
     else:
         data = json.loads(output.read_text(encoding="utf-8"))
         if data["status"] != "running" or data["inputs"] != inputs:
@@ -63,6 +63,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--ticks", type=int, required=True)
     parser.add_argument("--interval", type=int, required=True)
+    parser.add_argument("--example-name", default="toxin_evolution_0758")
     args = parser.parse_args()
     try:
         record(**vars(args))
