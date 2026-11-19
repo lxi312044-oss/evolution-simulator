@@ -95,7 +95,33 @@ def summary(rows):
         [r["toxic_plants"] / r["plants"] if r["plants"] else None for r in w]
     )
     s["carn_damage"] = rows[-1]["carn_damage"]
+    # Revised M1 (choice scenes): scenes where the nearest prey was of group g, and the share
+    # of them in which the carnivore passed it over because of its color.
+    for g in G:
+        key = f"choice_first_{g}"
+        if key in rows[0]:
+            n = interval(rows, key) or 0
+            k = interval(rows, f"choice_skipped_{g}") or 0
+            s[f"choice_n_{g}"] = n
+            s[f"skip_{g}"] = k / n if n else None
+        else:
+            s[f"choice_n_{g}"] = None
+            s[f"skip_{g}"] = None
     return s
+
+
+MIN_CHOICE = 200
+
+
+def m1_new(s):
+    """Revised M1 (2026-11-19): avoidance difference and targeting in choice scenes."""
+    am, ao = s["avoid_mimic"], s["avoid_other"]
+    nm, no = s["choice_n_mimic"], s["choice_n_other"]
+    if am is None or ao is None or not nm or not no or nm < MIN_CHOICE or no < MIN_CHOICE:
+        return False
+    targeted_m = 1 - s["skip_mimic"]
+    targeted_o = 1 - s["skip_other"]
+    return am - ao >= 0.1 and targeted_m <= 0.7 * targeted_o
 
 
 def judge(s, nl=None):
@@ -138,6 +164,7 @@ def judge(s, nl=None):
             or (closer is not None and closer - nl_closer >= 0.01)
         )
     out["M2"] = bool(m2)
+    out["M1new"] = m1_new(s)
     return out
 
 
@@ -163,8 +190,8 @@ def fmt(x, nd=2):
 
 def arm_table(found, controls):
     lines = [
-        "| 条件 | seed数 | 肉食がいた割合 | 草食の絶滅 | 有毒の割合 | 避けられる割合 有毒/擬態/他 | 攻撃率 有毒/擬態/他 | P1 | P2 | P3 | M1 | M2 |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| 条件 | seed数 | 肉食がいた割合 | 草食の絶滅 | 有毒の割合 | 避けられる割合 有毒/擬態/他 | 攻撃率 有毒/擬態/他 | P1 | P2 | P3 | M1（新） | M1（旧） | M2 |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for arm in sorted(found):
         seeds = sorted(found[arm])
@@ -186,7 +213,7 @@ def arm_table(found, controls):
             + "/".join(fmt(avg(f"avoid_{g}")) for g in G)
             + " | "
             + "/".join(fmt(avg(f"rate_{g}")) for g in G)
-            + f" | {cnt('P1')}/{n} | {cnt('P2')}/{n} | {fmt(p3)} | "
+            + f" | {cnt('P1')}/{n} | {cnt('P2')}/{n} | {fmt(p3)} | {cnt('M1new')}/{n} | "
             + (f"{cnt('M1')}/{n}" if nl_arm else f"({cnt('M1')}/{n})")
             + " | "
             + (f"{cnt('M2')}/{n}" if nl_arm else f"({cnt('M2')}/{n})")
@@ -265,6 +292,28 @@ def pooled(found):
             f"| {arm} | " + "/".join(fmt(x) for x in tot) + f" | {fmt(ratio(tot))} | "
             + "/".join(fmt(x) for x in near) + f" | {fmt(ratio(near))} |"
         )
+    return "\n".join(lines)
+
+
+def choice_table(found):
+    """Per-seed revised-M1 components (choice scenes, 10000..30000)."""
+    lines = [
+        "| 条件 | seed | 避け 擬態−他 | 選べる場面（一番近いのが 擬態/他） | 飛ばした割合 有毒/擬態/他 | 狙った割合 擬態/他の比 | M1（新） |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for arm in sorted(found):
+        for sd in sorted(found[arm]):
+            x = summary(found[arm][sd])
+            dav = None if x["avoid_mimic"] is None or x["avoid_other"] is None else x["avoid_mimic"] - x["avoid_other"]
+            ratio = None
+            if x["skip_mimic"] is not None and x["skip_other"] is not None and x["skip_other"] < 1:
+                ratio = (1 - x["skip_mimic"]) / (1 - x["skip_other"])
+            n = lambda g: "—" if x[f"choice_n_{g}"] is None else f"{x[f'choice_n_{g}']:.0f}"
+            lines.append(
+                f"| {arm} | {sd} | {fmt(dav)} | {n('mimic')}/{n('other')} | "
+                + "/".join(fmt(x[f"skip_{g}"]) for g in G)
+                + f" | {fmt(ratio)} | {fmt(m1_new(x))} |"
+            )
     return "\n".join(lines)
 
 
@@ -406,6 +455,9 @@ def main():
     if controls:
         print()
         print(components(found, controls))
+    if "--choice" in args:
+        print()
+        print(choice_table(found))
     if "--pooled" in args or "--diag" in args:
         print()
         print(pooled(found))
