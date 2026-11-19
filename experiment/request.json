@@ -1,0 +1,11 @@
+{
+  "name": "r2-threshold",
+  "check": false,
+  "builds": [
+    {"id": "new", "sha": "", "example": "mimicry_goal"}
+  ],
+  "runs": [
+    {"build": "new", "arms": ["std", "B_T00_D01_NL", "B_T01_D01_G100", "B_T01_D01_G300", "B_T00_D01_G10", "B_T00_D01_G30"],
+     "seeds": [90006, 90001, 90002, 90003], "ticks": 30000, "extra": [500]}
+  ]
+}
