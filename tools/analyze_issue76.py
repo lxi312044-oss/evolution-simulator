@@ -389,10 +389,17 @@ def main():
     directory = args[0]
     controls = {}
     for a in args[1:]:
-        if "=" in a:
+        if "=" in a and not a.startswith("--"):
             k, v = a.split("=", 1)
             controls[k] = v
     found = runs(directory)
+    for a in args[1:]:
+        if a.startswith("--seeds="):
+            keep = {int(x) for x in a.split("=", 1)[1].split(",")}
+            found = {
+                arm: {sd: rows for sd, rows in by_seed.items() if sd in keep}
+                for arm, by_seed in found.items()
+            }
     print(arm_table(found, controls))
     print()
     print(seed_table(found))
