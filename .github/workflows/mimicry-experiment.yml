@@ -1,0 +1,162 @@
+name: Mimicry experiment (Issue 76)
+# Runs the comparison described in experiment/request.json when a branch exp/** is pushed.
+# Results (CSV + metadata, no binaries) are committed to the branch exp-results/issue76.
+on:
+  push:
+    branches: ['exp/**']
+permissions:
+  contents: write
+concurrency:
+  group: mimicry-experiment-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  CARGO_INCREMENTAL: 0
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      builds: ${{ steps.plan.outputs.builds }}
+      runs: ${{ steps.plan.outputs.runs }}
+      check: ${{ steps.plan.outputs.check }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: plan
+        run: python3 tools/issue76_experiment_plan.py experiment/request.json >> "$GITHUB_OUTPUT"
+  check:
+    needs: plan
+    if: needs.plan.outputs.check == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --locked -p sim-core --all-targets -- -D warnings
+      - run: cargo test --locked -p sim-core
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.builds) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ matrix.sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked --release -p sim-core --example "${{ matrix.example }}"
+      - name: Package binary
+        run: |
+          mkdir bin
+          cp "target/release/examples/${{ matrix.example }}" bin/
+          git rev-parse HEAD > bin/source_sha
+          (cd bin && sha256sum "${{ matrix.example }}" > binary_sha256)
+          sha256sum config/stage4-standard.json > bin/standard_config_sha256
+          rustc --version > bin/rustc_version
+      - uses: actions/upload-artifact@v6
+        with:
+          name: bin-${{ matrix.id }}
+          path: bin/
+          retention-days: 3
+  run:
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.runs) }}
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          name: bin-${{ matrix.build }}
+          path: bin
+      - name: Run seeds in parallel
+        env:
+          EXAMPLE: ${{ matrix.example }}
+          ARM: ${{ matrix.arm }}
+          SEEDS: ${{ matrix.seeds }}
+          TICKS: ${{ matrix.ticks }}
+          EXTRA: ${{ matrix.extra }}
+          BUILD: ${{ matrix.build }}
+        run: |
+          chmod +x "bin/$EXAMPLE"
+          out="res/$BUILD"
+          mkdir -p "$out"
+          if [ "$EXAMPLE" = mimicry_goal ]; then
+            "bin/$EXAMPLE" "$ARM" config > "$out/${ARM}.config.json"
+            sha256sum "$out/${ARM}.config.json" | cut -d' ' -f1 > "$out/${ARM}.config_sha256"
+          fi
+          run_one() {
+            start=$(date +%s)
+            # shellcheck disable=SC2086
+            "bin/$EXAMPLE" "$ARM" "$1" "$TICKS" $EXTRA > "$out/${ARM}_$1.csv" 2> "$out/${ARM}_$1.stderr"
+            code=$?
+            echo "$1,$code,$(( $(date +%s) - start ))" >> "$out/${ARM}.timing"
+          }
+          export -f run_one
+          export out
+          echo $SEEDS | tr ' ' '\n' | xargs -P "$(nproc)" -I{} bash -c 'run_one {}'
+          nproc > "$out/${ARM}.nproc"
+          ls -la "$out"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: res-${{ matrix.build }}-${{ matrix.arm }}
+          path: res/
+          retention-days: 3
+  collect:
+    needs: [plan, build, run]
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: src
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: res-*
+          path: res
+          merge-multiple: true
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: bin-*
+          path: bins
+      - name: Commit results to exp-results/issue76
+        env:
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+          RUN_RESULT: ${{ needs.run.result }}
+        run: |
+          name=$(python3 -c "import json;print(json.load(open('src/experiment/request.json'))['name'])")
+          git init -q out
+          cd out
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${TOKEN}@github.com/${REPO}"
+          if git fetch -q --depth=1 origin exp-results/issue76; then
+            git checkout -q -b out FETCH_HEAD
+          else
+            git checkout -q --orphan out
+          fi
+          dest="${name}/run-${RUN_ID}"
+          mkdir -p "$dest"
+          cp -r ../res/. "$dest/"
+          for d in ../bins/bin-*; do
+            id=${d#../bins/bin-}
+            mkdir -p "$dest/builds/$id"
+            cp "$d"/source_sha "$d"/binary_sha256 "$d"/standard_config_sha256 "$d"/rustc_version "$dest/builds/$id/"
+          done
+          cp ../src/experiment/request.json "$dest/request.json"
+          printf '{"run_id":"%s","branch":"%s","sha":"%s","run_result":"%s"}\n' \
+            "$RUN_ID" "$REF_NAME" "$SHA" "$RUN_RESULT" > "$dest/meta.json"
+          git add -A
+          git commit -q -m "Issue 76 results: ${name} (run ${RUN_ID}, ${REF_NAME} ${SHA})"
+          git push -q origin HEAD:exp-results/issue76
