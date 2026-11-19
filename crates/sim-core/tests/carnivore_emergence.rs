@@ -130,3 +130,14 @@ fn species_observer_reports_ranking_and_focusable_events() {
     let again: serde_json::Value = serde_json::from_str(&w.take_events_json()).unwrap();
     assert!(again.as_array().unwrap().is_empty());
 }
+
+/// The current standard (decided 2026-11-19) is the w_p002_b120 check config.
+#[test]
+fn standard_config_matches_the_w_p002_b120_check_config() {
+    let standard = include_str!("../../../config/stage4-standard.json");
+    let check = include_str!("../../../config/stage4-emergence-check-40x40.json");
+    assert_eq!(standard, check);
+    let c: SimulationConfig = serde_json::from_str(standard).unwrap();
+    assert_eq!(c.herbivores.carnivore_offspring_probability, 0.002);
+    assert_eq!(c.initial_population.carnivores, 0);
+}

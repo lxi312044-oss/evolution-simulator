@@ -5,6 +5,7 @@ import config from "../../config/standard-toxin.json";
 import fixedBaseline from "../../config/stage4-inherited-plant-colors.json";
 import fixedCandidate from "../../config/stage4-inherited-predator-candidate.json";
 import stage4Baseline from "../../config/stage4-carnivore-threshold-050.json";
+import stage4Standard from "../../config/stage4-standard.json";
 import control from "../../config/phase06219-control.json";
 import plant120 from "../../config/phase06219-plant-120.json";
 import plant150 from "../../config/phase06219-plant-150.json";
@@ -66,12 +67,14 @@ const playNames: Record<string, string> = {
   "standard-toxin": "通常毒",
   "stage4-fixed-candidate": "色を覚える捕食者",
   "stage4-fixed-baseline": "色のある草原",
+  "stage4-standard": "肉食は草食から生まれる（標準）",
 };
 const playNotes: Record<string, string> = {
   [defaultWebPreset]: "最初の植物はすべて無毒の緑色です。種子から生まれる子では、毒性と色が独立に変異します。草食は食べた後の被毒経験から色を学習します。色だけで有毒株を正確に見分けられるとは限りません。",
   "standard-toxin": "植物・草食・肉食と資源の循環を観察します。",
   "stage4-fixed-candidate": "色を手掛かりに餌を選ぶ草食と、被毒経験を覚える肉食を観察します。",
   "stage4-fixed-baseline": "色と毒性が部分的に対応する草原で、草食の餌選びを観察します。",
+  "stage4-standard": "肉食は最初はいません。草食の子がまれに肉食として生まれ、草食の増減に合わせて肉食も増減します（40×40、Seed 90006）。",
 };
 const settings = editor(el("settings-groups"), () => el("pending").textContent = "未適用の変更があります");
 el("zoom-in").onclick = () => map.scale(1.25);
@@ -110,6 +113,7 @@ phase19Configs[defaultWebPreset] = greenFounderPreset(config);
 phase19Configs["stage4-fixed-baseline"] = normalizeConfig(fixedBaseline);
 phase19Configs["stage4-fixed-candidate"] = normalizeConfig(fixedCandidate);
 phase19Configs["stage4-baseline"] = normalizeConfig(stage4Baseline);
+phase19Configs["stage4-standard"] = normalizeConfig(stage4Standard);
 phase19Configs["stage4-hungry-recheck"] = normalizeConfig({
   ...stage4Baseline,
   herbivores: { ...stage4Baseline.herbivores, hungry_color_recheck_enabled: true },
