@@ -1,0 +1,13 @@
+{
+  "name": "m1-choice",
+  "check": true,
+  "builds": [
+    {"id": "new", "sha": "", "example": "mimicry_goal"},
+    {"id": "newprereq", "sha": "", "example": "mimicry_prereq"}
+  ],
+  "runs": [
+    {"build": "new", "arms": ["std", "B_T01_D01_F40_NL", "B_T01_D01_F40_G100", "B_T01_D01_F40_G150", "B_T01_D01_F120_NL", "B_T01_D01_F120_G100"],
+     "seeds": [90006, 90001, 90002, 90003, 90004, 90005, 90007, 90008], "ticks": 30000, "extra": [500]},
+    {"build": "newprereq", "arms": ["std", "B_T03_D01_H50"], "seeds": [90006, 90003], "ticks": 30000}
+  ]
+}
