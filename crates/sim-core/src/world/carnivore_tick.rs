@@ -619,6 +619,8 @@ impl World {
                         if self.config.animal_toxin.enabled {
                             self.transfer_animal_toxin(j, i, body_n, n);
                         }
+                        // Issue #78 (opt-in): the diet value scales what the bite gains.
+                        self.diet_lose_meal(i, bite_target, n, e)?;
                         self.record_energy(
                             self.animals.items[j].id,
                             "predation_bite",
@@ -771,6 +773,7 @@ impl World {
                                 if self.config.animal_toxin.enabled {
                                     self.transfer_animal_toxin(j, i, body_n, extra_n);
                                 }
+                                self.diet_lose_meal(i, target, extra_n, extra_e)?;
                                 if c.digestion_enabled {
                                     self.carnivore_debug.stomach_energy_ingested += extra_e;
                                     self.carnivore_debug.stomach_nutrients_ingested += extra_n;
@@ -1056,44 +1059,77 @@ impl World {
                     pspeed
                 };
                 let stomach = self.resources.open(0., 0.).map_err(|e| format!("{e:?}"))?;
-                if self.config.animal_toxin.enabled {
-                    self.inherit_carnivore_toxin(parent_id, id);
+                let diet_effects = self.diet_effects();
+                if diet_effects && child_diet.is_some_and(|value| value < 0.5) {
+                    // Issue #78: an offspring whose diet value is below 0.5 is born a
+                    // herbivore; it carries this carnivore's genes without using them.
+                    self.diet_birth_herbivore_from_carnivore(
+                        i,
+                        super::diet::HerbivoreFromCarnivore {
+                            id,
+                            value: child_diet.unwrap_or(0.),
+                            x: (px + 5.).min(self.config.world.width),
+                            y: py,
+                            color: child_color,
+                            carnivore: super::diet::DormantCarnivore {
+                                speed: child_speed,
+                                ambush_gene: child_gene,
+                            },
+                            body,
+                            reserve: child_reserve,
+                            stomach,
+                        },
+                    );
+                    self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
+                } else {
+                    if self.config.animal_toxin.enabled {
+                        self.inherit_carnivore_toxin(parent_id, id);
+                    }
+                    self.carnivores.push(Carnivore {
+                        id,
+                        x: (px + 5.).min(self.config.world.width),
+                        y: py,
+                        age: 0,
+                        max_age: c.max_age_ticks,
+                        cooldown: c.reproduction_cooldown_ticks,
+                        attack_cooldown: 0,
+                        satiety_ticks: 0,
+                        stomach,
+                        feeding_active: true,
+                        body,
+                        reserve: child_reserve,
+                        color: child_color,
+                        speed: child_speed,
+                        vision: pvision,
+                        ambush_gene: child_gene,
+                        p42: Default::default(),
+                        parent_id: Some(parent_id),
+                        search_heading: 0.,
+                        search_ticks_left: 0,
+                        last_prey_heading: 0.,
+                        last_prey_ticks_left: 0,
+                    });
+                    if diet_effects {
+                        // Issue #78: herbivore genes carried down the carnivore lineage.
+                        if let Some(genes) = self.diet_dormant_herbivore(parent_id) {
+                            self.diet_set_dormant_herbivore(id, genes);
+                        }
+                        if self.config.animal_toxin.enabled && self.has_herbivore_toxin(parent_id) {
+                            self.inherit_herbivore_production(parent_id, id);
+                        }
+                    }
+                    self.species_carnivore_birth(self.carnivores.len() - 1, Some(i), None);
+                    self.diet_record_birth(true, id, child_diet, true);
+                    self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
+                    let parent_bin = ambush_bin(parent_gene);
+                    let child_bin = ambush_bin(child_gene);
+                    self.carnivore_debug.gene_parent_reproductions[parent_bin] += 1;
+                    self.carnivore_debug.gene_births[child_bin] += 1;
+                    if (child_gene - parent_gene).abs() > 1e-7 {
+                        self.carnivore_debug.gene_mutations[child_bin] += 1;
+                    }
+                    self.carnivore_births += 1;
                 }
-                self.carnivores.push(Carnivore {
-                    id,
-                    x: (px + 5.).min(self.config.world.width),
-                    y: py,
-                    age: 0,
-                    max_age: c.max_age_ticks,
-                    cooldown: c.reproduction_cooldown_ticks,
-                    attack_cooldown: 0,
-                    satiety_ticks: 0,
-                    stomach,
-                    feeding_active: true,
-                    body,
-                    reserve: child_reserve,
-                    color: child_color,
-                    speed: child_speed,
-                    vision: pvision,
-                    ambush_gene: child_gene,
-                    p42: Default::default(),
-                    parent_id: Some(parent_id),
-                    search_heading: 0.,
-                    search_ticks_left: 0,
-                    last_prey_heading: 0.,
-                    last_prey_ticks_left: 0,
-                });
-                self.species_carnivore_birth(self.carnivores.len() - 1, Some(i), None);
-                self.diet_record_birth(true, id, child_diet, true);
-                self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
-                let parent_bin = ambush_bin(parent_gene);
-                let child_bin = ambush_bin(child_gene);
-                self.carnivore_debug.gene_parent_reproductions[parent_bin] += 1;
-                self.carnivore_debug.gene_births[child_bin] += 1;
-                if (child_gene - parent_gene).abs() > 1e-7 {
-                    self.carnivore_debug.gene_mutations[child_bin] += 1;
-                }
-                self.carnivore_births += 1;
             }
             let dead = {
                 let a = &self.carnivores[i];
@@ -1193,6 +1229,7 @@ impl World {
                     };
                     self.trace_carnivore_toxin_removal(a.id, reason);
                     self.animal_toxins.remove_carnivore(a.id);
+                    self.animal_toxins.remove_carried_herbivore_toxin(a.id);
                 }
                 let cell = self.land.cell_index(
                     a.x,

@@ -102,3 +102,85 @@ fn diet_settings_are_validated() {
     effects.carnivores.enabled = false;
     assert!(World::new(effects).is_err());
 }
+
+fn acting(change: impl Fn(&mut SimulationConfig, &mut DietGeneSettings)) -> SimulationConfig {
+    let mut c = quarter_standard();
+    c.herbivores.carnivore_offspring_probability = 0.;
+    let mut d = DietGeneSettings {
+        effects: true,
+        ..Default::default()
+    };
+    change(&mut c, &mut d);
+    c.diet_gene = Some(d);
+    c
+}
+
+/// Stage 1: herbivores at value 0 and carnivores at value 1 that never mutate live exactly as
+/// without the diet value (same gains, same bodies at birth).
+#[test]
+fn pure_values_keep_current_gains() {
+    let mut control_config = quarter_standard();
+    control_config.herbivores.carnivore_offspring_probability = 0.;
+    let mut control = World::new(control_config).unwrap();
+    let mut pure = World::new(acting(|_, d| {
+        d.initial_herbivore = 0.;
+        d.initial_carnivore = 1.;
+        d.initial_spread = 0.;
+        d.mutation_probability = 0.;
+    }))
+    .unwrap();
+    for _ in 0..12 {
+        control.step(100).unwrap();
+        pure.step(100).unwrap();
+        assert_eq!(control.animals.items.len(), pure.animals.items.len());
+        assert_eq!(control.carnivores.len(), pure.carnivores.len());
+        assert_eq!(
+            control.resources.total_energy().to_bits(),
+            pure.resources.total_energy().to_bits()
+        );
+        assert_eq!(format!("{:?}", control.rng), format!("{:?}", pure.rng));
+    }
+    assert!(control.carnivore_hunts > 0, "the test needs bites");
+    let lost = &pure.diet_value_json()["lost"];
+    for k in [
+        "herbivore_nutrients",
+        "herbivore_energy",
+        "carnivore_nutrients",
+        "carnivore_energy",
+    ] {
+        assert_eq!(lost[k].as_f64(), Some(0.), "{k}");
+    }
+}
+
+/// Stage 1: with values near 0.5, offspring cross the boundary in both directions, every
+/// animal's body matches its value, intermediate values lose gains, and the conservation check
+/// of every Tick passes (`step` fails otherwise).
+#[test]
+fn diet_effects_cross_both_ways() {
+    let mut w = World::new(acting(|c, d| {
+        c.carnivores.reproduction_cooldown_ticks = 150;
+        c.carnivores.food_limited_reproduction_enabled = false;
+        c.carnivores.prey_trend_reproduction_enabled = false;
+        d.initial_herbivore = 0.45;
+        d.initial_carnivore = 0.55;
+        d.initial_spread = 0.04;
+        d.mutation_probability = 1.;
+        d.mutation_scale = 0.15;
+        d.efficiency_exponent = 0.1;
+    }))
+    .unwrap();
+    for _ in 0..15 {
+        w.step(100).unwrap();
+    }
+    let d = w.diet_value_json();
+    let births = |k: &str| d["births"][k].as_u64().unwrap();
+    assert!(births("herbivore_to_carnivore") > 0);
+    assert!(births("carnivore_to_herbivore") > 0);
+    for i in 0..5 {
+        assert_eq!(d["herbivore"]["hist"][i + 5].as_u64(), Some(0));
+        assert_eq!(d["carnivore"]["hist"][i].as_u64(), Some(0));
+    }
+    for k in ["herbivore_energy", "carnivore_energy"] {
+        assert!(d["lost"][k].as_f64().unwrap() > 0., "{k}");
+    }
+}

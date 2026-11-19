@@ -719,6 +719,13 @@ impl World {
         self.species_birth(child, self.animals.items[index].id, parent);
     }
 
+    /// Issue #78: a herbivore born from carnivore `parent` (diet value below 0.5).
+    pub(super) fn species_herbivore_birth_from_carnivore(&mut self, index: usize, parent: usize) {
+        let child = self.observe_herbivore(index);
+        let parent = Some((self.carnivores[parent].id, self.observe_carnivore(parent)));
+        self.species_birth(child, self.animals.items[index].id, parent);
+    }
+
     /// `herbivore_parent` marks a carnivore born from a herbivore.
     pub(super) fn species_carnivore_birth(
         &mut self,
