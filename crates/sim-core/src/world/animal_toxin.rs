@@ -187,6 +187,8 @@ impl AnimalToxins {
 impl World {
     pub(super) fn produce_herbivore_toxins(&mut self) -> Result<(), String> {
         let types = type_count(&self.config.toxin);
+        let decay = self.config.animal_toxin.herbivore_toxin_decay_per_tick;
+        let mut decayed = [0.; TYPES];
         for animal in &self.animals.items {
             if animal.hp <= 0. || animal.age >= animal.max_age {
                 continue;
@@ -196,6 +198,13 @@ impl World {
                 .herbivores
                 .entry(animal.id)
                 .or_insert_with(|| Production::founder(self.config.seed, animal.id, 71));
+            // Issue #74 (opt-in): stored toxin breaks down, so holding it needs synthesis.
+            if decay > 0. {
+                for (stock, lost) in production.stock.iter_mut().zip(&mut decayed).take(types) {
+                    *lost += *stock * decay;
+                    *stock *= 1. - decay;
+                }
+            }
             let available = self
                 .resources
                 .energy_balance(animal.reserve)
@@ -209,6 +218,10 @@ impl World {
             for (total, amount) in self.animal_toxins.produced.iter_mut().zip(units) {
                 *total += amount;
             }
+        }
+        // Broken-down toxin is accounted as cleared, keeping the toxin balance closed.
+        for (cleared, lost) in self.animal_toxins.cleared.iter_mut().zip(decayed) {
+            *cleared += lost;
         }
         Ok(())
     }

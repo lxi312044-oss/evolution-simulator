@@ -164,7 +164,7 @@
     "initial_type0_fraction": 0.5,
     "multi_type_resistance_upkeep_multiplier": 1.0,
     "plant_energy_cost_per_tick": 0.002,
-    "plant_toxic_mutation_probability": 0.0,
+    "plant_toxic_mutation_probability": 0.005,
     "plant_toxin_type_count": 2,
     "plant_toxin_type_mutation_probability": 0.0,
     "plant_toxin_type_variation_enabled": true,

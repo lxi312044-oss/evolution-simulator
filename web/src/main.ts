@@ -75,7 +75,7 @@ const playNotes: Record<string, string> = {
   "standard-toxin": "植物・草食・肉食と資源の循環を観察します。",
   "stage4-fixed-candidate": "色を手掛かりに餌を選ぶ草食と、被毒経験を覚える肉食を観察します。",
   "stage4-fixed-baseline": "色と毒性が部分的に対応する草原で、草食の餌選びを観察します。",
-  "stage4-standard": "肉食は最初はいません。草食の子がまれに肉食として生まれ、草食の増減に合わせて肉食も増減します。植物の色は子に受け継がれながら少しずつ変わります（40×40、Seed 90006）。",
+  "stage4-standard": "肉食は最初はいません。草食の子がまれに肉食として生まれ、草食の増減に合わせて肉食も増減します。植物の色は子に受け継がれながら少しずつ変わり、ごくまれに毒の有無も変わります（40×40、Seed 90006）。",
 };
 const settings = editor(el("settings-groups"), () => el("pending").textContent = "未適用の変更があります");
 el("zoom-in").onclick = () => map.scale(1.25);
