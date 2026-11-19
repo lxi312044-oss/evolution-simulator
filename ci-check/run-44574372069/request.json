@@ -1,0 +1,6 @@
+{
+  "name": "ci-check",
+  "check": true,
+  "builds": [{"id": "new", "sha": "", "example": "mimicry_goal"}],
+  "runs": [{"build": "new", "arms": ["std"], "seeds": [90006], "ticks": 100, "extra": ["100"]}]
+}
