@@ -76,3 +76,5 @@ button.event-text:hover{background:none;color:#d6ffe8}
 .empty{color:#7f9a92;font-size:12px;padding:8px 0}
 body[data-mode="play"] main,main{max-width:1800px}
 .species-row:hover,.species-row:focus-visible{background:#183029;outline:none}.species-row .event-notice{grid-column:1/-1}
+/* Issue #64: creature legend */
+.sprite-legend .preview-item canvas{width:40px;height:40px}.legend-note{flex-basis:100%;margin:4px 0 0;font-size:12px;line-height:1.6}

@@ -35,7 +35,7 @@ import p35ambush from "../../config/phase06235-ambush.json";
 import p35genetic from "../../config/phase06235-genetic.json";
 import "./style.css";
 import { resizeField } from "./field";
-import {drawAnimalSprite} from "./sprites";
+import { creatureShape, drawCreature } from "./sprites";
 import { EcosystemMap } from "./map";
 import { EcologyPanel } from "./ecology-panel";
 import { describeExistingControls, editor } from "./settings";
@@ -301,7 +301,8 @@ function render(){
     herbivore: JSON.parse(simulation.herbivore_color_snapshot_json()),
     carnivore: JSON.parse(simulation.carnivore_snapshot_json()),
   }, simulation.map_entity_ids(), activeConfig.world,
-    (index, generation) => simulation.inspect_entity_json(index, generation));
+    (index, generation) => simulation.inspect_entity_json(index, generation),
+    JSON.parse(simulation.animal_shape_snapshot_json()));
   renderMs = performance.now() - renderStart;
   const tick = Number(simulation.tick_count());
   if (tick !== priorTick) {
@@ -530,10 +531,18 @@ async function main(){
   for(const id of ["field-size","field-density","growth","uptake","seed","mineralization","diffusion","radius","cooldown","feeding","herbivores","food-radius","food-target","plant-protection","plant-protection-threshold","resource-reproduction","satiety-enabled","satiety-reproduction","repro-satiety-threshold","repro-well-fed-ticks","stomach-capacity","satiety-stop","satiety-resume","digestion"])(el(id) as HTMLInputElement).oninput=()=>{(el("preset") as HTMLSelectElement).value="custom";el("pending").textContent="未適用の変更があります";};
   if (!dev) status.textContent="";
 
-  // The preview and the world both render live carnivore sprites.
-  const preview=el("carnivore-preview") as HTMLCanvasElement;
-  const previewCtx=preview.getContext("2d")!;
-  drawAnimalSprite(previewCtx,"carnivore",24,24,40);
+  // Issue #64: legend samples drawn with the same gene-based creature sprites as the map.
+  const samples: Record<string, ["herbivore" | "carnivore", number[], [number, number, number]]> = {
+    plain: ["herbivore", [60, 2.5, 0.2, 0.5], [0.3, 0.75, 0.4]],
+    carnivore: ["carnivore", [0, 5.25, 0.2, -1], [0.3, 0.75, 0.4]],
+    toxic: ["herbivore", [60, 2.5, 0.95, 0.5], [0.3, 0.75, 0.4]],
+    fast: ["herbivore", [60, 4.5, 0.2, 0.5], [0.3, 0.75, 0.4]],
+    shell: ["herbivore", [60, 2.5, 0.2, 0.65], [0.3, 0.75, 0.4]],
+  };
+  for (const canvas of document.querySelectorAll<HTMLCanvasElement>("canvas[data-legend]")) {
+    const [kind, traits, rgb] = samples[canvas.dataset.legend!];
+    drawCreature(canvas.getContext("2d")!, kind, 20, 20, 36, rgb, creatureShape(kind, traits));
+  }
   render();requestAnimationFrame(loop);
  }catch(e){status.textContent=`初期化失敗: ${String(e)}`;}
 }

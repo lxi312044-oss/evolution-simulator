@@ -776,6 +776,29 @@ impl World {
         self.species.name_of(sp).map(str::to_string)
     }
 
+    /// Display-only genetic traits for sprite shapes (Issue #64), in the same order as
+    /// `herbivore_color_snapshot` then `carnivore_snapshot`:
+    /// `[adult max HP (0 for carnivores), speed, strongest toxin ability, toxin resistance (-1 for carnivores)]`.
+    pub fn animal_shape_snapshot(&self) -> Vec<[f32; 4]> {
+        self.animals
+            .items
+            .iter()
+            .map(|h| {
+                [
+                    h.genes.adult_max_hp,
+                    h.genes.speed,
+                    self.herbivore_toxin_ability(h.id) as f32,
+                    h.genes.toxin_resistance,
+                ]
+            })
+            .chain(
+                self.carnivores
+                    .iter()
+                    .map(|c| [0., c.speed, self.carnivore_toxin_ability(c.id) as f32, -1.]),
+            )
+            .collect()
+    }
+
     /// Living members of a species, in storage order (Issue #66: focus from the ranking).
     pub fn species_members(&self, species: u32) -> Vec<EntityId> {
         let of = |id: &EntityId| self.species.species_of(*id) == Some(species);

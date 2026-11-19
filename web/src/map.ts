@@ -1,4 +1,4 @@
-import { drawAnimalSprite, drawPlantSprite } from "./sprites";
+import { creatureShape, drawCreature, drawPlantSprite } from "./sprites";
 
 export type Kind = "plant" | "herbivore" | "carnivore";
 type Id = [number, number];
@@ -118,7 +118,7 @@ export class EcosystemMap {
 
   draw(groups: Record<Kind, Sprite[]>, ids: Uint32Array,
     world: {width: number; height: number; land_columns: number; land_rows: number},
-    inspect: (index: number, generation: number) => string) {
+    inspect: (index: number, generation: number) => string, shapes: number[][] = []) {
     const ctx = this.context;
     this.world = world;
     const { width, height } = this.canvas;
@@ -138,15 +138,16 @@ export class EcosystemMap {
     }
     ctx.stroke();
     this.hits = [];
-    let cursor = 0;
+    let cursor = 0, animal = 0;
     for (const kind of ["plant", "herbivore", "carnivore"] as const) {
       for (const [x, y, r, state, red, green, blue] of groups[kind]) {
         const id: Id = [ids[cursor++], ids[cursor++]];
+        const traits = kind === "plant" ? undefined : shapes[animal++];
         const px = x * sx + ox, py = y * sy + oy;
         const size = Math.max(kind === "plant" ? 8 : 17, r * Math.min(sx, sy) * 2);
         if (px < -size || py < -size || px > width + size || py > height + size) continue;
         if (kind === "plant") drawPlantSprite(ctx, px, py, state, size, [red, green, blue]);
-        else drawAnimalSprite(ctx, kind, px, py, size, false, [red, green, blue]);
+        else drawCreature(ctx, kind, px, py, size, [red, green, blue], creatureShape(kind, traits));
         this.hits.push({ id, kind, x: px, y: py, radius: Math.max(9, size / 2) });
       }
     }

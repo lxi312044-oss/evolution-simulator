@@ -127,6 +127,12 @@ fn species_observer_reports_ranking_and_focusable_events() {
         w.species_member_json(top, 0)
     );
     assert_eq!(w.species_member_json(u32::MAX, 0), "null");
+    let shapes = w.animal_shape_snapshot();
+    assert_eq!(shapes.len(), w.animals.items.len() + w.carnivores.len());
+    for (s, h) in shapes.iter().zip(&w.animals.items) {
+        assert_eq!(s[0], h.genes.adult_max_hp);
+        assert!((0. ..=1.).contains(&s[2]));
+    }
     let again: serde_json::Value = serde_json::from_str(&w.take_events_json()).unwrap();
     assert!(again.as_array().unwrap().is_empty());
 }

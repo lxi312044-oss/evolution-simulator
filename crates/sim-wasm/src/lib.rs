@@ -529,6 +529,11 @@ impl Simulation {
         self.world.species_summary_json()
     }
 
+    /// Issue #64: display-only traits for creature sprites, herbivores then carnivores.
+    pub fn animal_shape_snapshot_json(&self) -> String {
+        serde_json::to_string(&self.world.animal_shape_snapshot()).unwrap_or_else(|_| "[]".into())
+    }
+
     /// Issue #66: the `n`-th living member of a species (wrapping), `[index, generation]` or `null`.
     pub fn species_member_json(&self, species: u32, n: u32) -> String {
         self.world.species_member_json(species, n)
