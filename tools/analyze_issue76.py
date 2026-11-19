@@ -239,6 +239,35 @@ def components(found, controls):
     return "\n".join(lines)
 
 
+def pooled(found):
+    """Seed-pooled attack rates (all individual-ticks, and only near a carnivore)."""
+    lines = [
+        "| 条件 | 攻撃率（合計） 有毒/擬態/他 | 擬態/他 | 肉食の近くでの攻撃率（合計） 有毒/擬態/他 | 擬態/他 |",
+        "|---|---|---|---|---|",
+    ]
+    for arm in sorted(found):
+        tot, near = [], []
+        for g in G:
+            a = e = an = en = 0.0
+            for rows in found[arm].values():
+                for s_ in range(8):
+                    da = interval(rows, f"sa_{g}_{s_}") or 0
+                    de = interval(rows, f"se_{g}_{s_}") or 0
+                    a += da
+                    e += de
+                    if s_ & 4:
+                        an += da
+                        en += de
+            tot.append(a * 1000 / e if e else None)
+            near.append(an * 1000 / en if en else None)
+        ratio = lambda v: v[1] / v[2] if v[1] is not None and v[2] else None
+        lines.append(
+            f"| {arm} | " + "/".join(fmt(x) for x in tot) + f" | {fmt(ratio(tot))} | "
+            + "/".join(fmt(x) for x in near) + f" | {fmt(ratio(near))} |"
+        )
+    return "\n".join(lines)
+
+
 def diag(found):
     out = []
     # Q1: death causes before herbivore extinction.
@@ -370,6 +399,9 @@ def main():
     if controls:
         print()
         print(components(found, controls))
+    if "--pooled" in args or "--diag" in args:
+        print()
+        print(pooled(found))
     if "--diag" in args:
         print()
         print(diag(found))
