@@ -150,7 +150,7 @@ impl PredatorToxin {
     }
 }
 
-fn visible_color(color: crate::animals::color::BodyColor) -> u32 {
+pub(super) fn visible_color(color: crate::animals::color::BodyColor) -> u32 {
     let [r, g, b] = color.rgb().map(|value| (value * 255.).round() as u32);
     (r << 24) | (g << 16) | (b << 8)
 }
@@ -229,6 +229,15 @@ impl World {
             .iter()
             .copied()
             .fold(0., f64::max)
+    }
+
+    /// Read-only: current toxin stock summed over active types (0 if never produced).
+    pub(super) fn herbivore_toxin_stock(&self, id: EntityId) -> f64 {
+        let types = type_count(&self.config.toxin);
+        self.animal_toxins
+            .herbivores
+            .get(&id)
+            .map_or(0., |p| p.stock[..types].iter().sum())
     }
 
     /// Read-only: mean toxin resistance over active types for a carnivore (display only).

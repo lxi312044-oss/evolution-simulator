@@ -40,6 +40,8 @@ pub struct World {
     pub defense: super::DefenseCounters,
     /// Issue #66/#67: species and events for display (observation only, not audited).
     pub species: super::SpeciesBook,
+    /// Issue #72: mimicry indicators (observation only, not audited).
+    pub mimicry: super::MimicryBook,
     /// Opt-in counterattack retreat: carnivore -> (herbivore it will not target, ticks left).
     /// Opt-in hunting bouts (Issue 11), per carnivore.
     pub carnivore_hunt_bouts: std::collections::BTreeMap<crate::entity::EntityId, super::HuntBout>,
@@ -135,6 +137,7 @@ impl World {
             carnivore_debug: super::CarnivoreDebug::default(),
             defense: super::DefenseCounters::default(),
             species: super::SpeciesBook::default(),
+            mimicry: super::MimicryBook::default(),
             carnivore_retreats: std::collections::BTreeMap::new(),
             carnivore_hunt_bouts: std::collections::BTreeMap::new(),
             prey_trend_snapshot: super::PreyTrendSnapshot::default(),

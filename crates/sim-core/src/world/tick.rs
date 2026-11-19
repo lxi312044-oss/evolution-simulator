@@ -475,6 +475,7 @@ impl World {
             self.update_carnivores()?;
         }
         self.species_census_if_due();
+        self.mimicry_census_if_due();
         self.baseline.check(&self.resources,&self.ledger,1e-3,1e-9).map_err(|e|format!(
             "conservation at tick {}: {e:?}; energy_current={:.12}, energy_initial={:.12}, sunlight_in={:.12}, heat_out={:.12}, energy_tolerance={:.12}",
             self.tick, self.resources.total_energy(), self.baseline.energy,

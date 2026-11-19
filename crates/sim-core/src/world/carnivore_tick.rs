@@ -563,6 +563,8 @@ impl World {
                     } else {
                         self.carnivores[i].p42.attacks += 1;
                         self.carnivore_debug.hunt_attempts += 1;
+                        let mimicry_group = self.mimicry_attack_group(j);
+                        self.mimicry.count_attack(mimicry_group);
                         if hunger_override {
                             self.carnivore_debug.hunting_hunger_override_attacks += 1;
                         }

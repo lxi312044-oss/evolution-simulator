@@ -32,6 +32,7 @@ impl World {
             carnivore_debug,
             defense: _,
             species: _,
+            mimicry: _,
             carnivore_retreats,
             carnivore_hunt_bouts,
             prey_trend_snapshot,
