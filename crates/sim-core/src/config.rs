@@ -34,6 +34,20 @@ pub struct AnimalToxinSettings {
     /// is unchanged. Absent = 1 (previous behavior).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub carnivore_learning_gain: Option<f64>,
+    /// Issue #76 (opt-in): herbivores carry a heritable toxic / non-toxic trait. Founders are
+    /// toxic with this probability; non-toxic herbivores make no toxin and pay no synthesis
+    /// cost (their production ability is still inherited). Absent = every herbivore makes
+    /// toxin by its ability (previous behavior).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub herbivore_toxic_initial_fraction: Option<f64>,
+    /// Issue #76 (opt-in): probability that an offspring has the opposite toxic trait.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub herbivore_toxic_mutation_probability: f64,
+    /// Issue #76 (opt-in): plant-derived toxin of a type moves from a bitten herbivore to the
+    /// carnivore only when the herbivore's load of that type is at least this much; below it
+    /// the toxin stays in the herbivore. 0 = always moves (previous behavior).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub plant_toxin_transfer_threshold: f64,
 }
 
 impl AnimalToxinSettings {
@@ -44,6 +58,9 @@ impl AnimalToxinSettings {
             && self.carnivore_hp_damage_per_excess_unit.is_none()
             && self.herbivore_toxin_decay_per_tick == 0.
             && self.carnivore_learning_gain.is_none()
+            && self.herbivore_toxic_initial_fraction.is_none()
+            && self.herbivore_toxic_mutation_probability == 0.
+            && self.plant_toxin_transfer_threshold == 0.
     }
 }
 
@@ -628,6 +645,25 @@ impl SimulationConfig {
                 "animal_toxin.carnivore_learning_gain は0より大きく10000以下で指定してください"
                     .into(),
             );
+        }
+        {
+            let a = &self.animal_toxin;
+            if a.herbivore_toxic_initial_fraction
+                .is_some_and(|v| !(0.0..=1.0).contains(&v))
+                || !(0.0..=1.0).contains(&a.herbivore_toxic_mutation_probability)
+                || (a.herbivore_toxic_mutation_probability > 0.
+                    && a.herbivore_toxic_initial_fraction.is_none())
+                || !a.plant_toxin_transfer_threshold.is_finite()
+                || a.plant_toxin_transfer_threshold < 0.
+            {
+                return Err(concat!(
+                    "草食の有毒・無毒の性質（animal_toxin.herbivore_toxic_initial_fraction と ",
+                    "herbivore_toxic_mutation_probability、0〜1。変異は初期の割合を指定したときだけ）、",
+                    "または植物由来の毒が肉食に移る下限（animal_toxin.plant_toxin_transfer_threshold、",
+                    "0以上）の値が正しくありません。"
+                )
+                .into());
+            }
         }
         if self
             .animal_toxin

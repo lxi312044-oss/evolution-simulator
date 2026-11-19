@@ -58,6 +58,13 @@ pub(super) struct AnimalToxins {
     hunger_reapproach_opportunities: u64,
     threshold_exceedance_ticks: [u64; TYPES],
     trace: Option<CarnivoreToxinTrace>,
+    /// Issue #76 (opt-in): inherited toxic trait of herbivores born to a parent (founders are
+    /// drawn from the seed). Empty when the trait is off, so the audited state is unchanged.
+    #[cfg_attr(
+        feature = "state-audit",
+        serde(skip_serializing_if = "BTreeMap::is_empty")
+    )]
+    toxic_trait: BTreeMap<EntityId, bool>,
 }
 
 #[derive(Debug, Default)]
@@ -163,6 +170,7 @@ fn remove_fraction(stock: &mut f64, fraction: f64) -> f64 {
 
 impl AnimalToxins {
     pub(super) fn remove_herbivore(&mut self, animal: &Herbivore) {
+        self.toxic_trait.remove(&animal.id);
         let production = self.herbivores.remove(&animal.id);
         for (kind, discarded) in self.discarded.iter_mut().enumerate() {
             let residual = if kind == 0 {
@@ -185,6 +193,20 @@ impl AnimalToxins {
 }
 
 impl World {
+    /// Issue #76 (opt-in): whether herbivore `id` makes toxin. Always true when the trait is off.
+    /// Founders are drawn from a stateless stream; offspring inherit with rare flips.
+    pub(super) fn herbivore_is_toxic(&self, id: EntityId) -> bool {
+        match self.config.animal_toxin.herbivore_toxic_initial_fraction {
+            None => true,
+            Some(fraction) => self
+                .animal_toxins
+                .toxic_trait
+                .get(&id)
+                .copied()
+                .unwrap_or_else(|| trait_draw(self.config.seed, id, 0, 95) < fraction),
+        }
+    }
+
     pub(super) fn produce_herbivore_toxins(&mut self) -> Result<(), String> {
         let types = type_count(&self.config.toxin);
         let decay = self.config.animal_toxin.herbivore_toxin_decay_per_tick;
@@ -193,6 +215,7 @@ impl World {
             if animal.hp <= 0. || animal.age >= animal.max_age {
                 continue;
             }
+            let toxic = self.herbivore_is_toxic(animal.id);
             let production = self
                 .animal_toxins
                 .herbivores
@@ -209,7 +232,12 @@ impl World {
                 .resources
                 .energy_balance(animal.reserve)
                 .ok_or("missing animal reserve")?;
-            let units = production.generate(types, available);
+            // Issue #76 (opt-in): non-toxic herbivores make nothing and pay nothing.
+            let units = if toxic {
+                production.generate(types, available)
+            } else {
+                [0.; TYPES]
+            };
             let cost = (units.iter().sum::<f64>() * ENERGY_PER_UNIT).min(available);
             self.ledger
                 .dissipate_heat(&mut self.resources, animal.reserve, cost)
@@ -281,6 +309,20 @@ impl World {
 
     pub(super) fn inherit_herbivore_production(&mut self, parent: EntityId, child: EntityId) {
         let seed = self.config.seed;
+        if self
+            .config
+            .animal_toxin
+            .herbivore_toxic_initial_fraction
+            .is_some()
+        {
+            let flip = trait_draw(seed, child, 0, 97)
+                < self
+                    .config
+                    .animal_toxin
+                    .herbivore_toxic_mutation_probability;
+            let toxic = self.herbivore_is_toxic(parent) != flip;
+            self.animal_toxins.toxic_trait.insert(child, toxic);
+        }
         let states = &mut self.animal_toxins.herbivores;
         let production = states
             .entry(parent)
@@ -315,6 +357,7 @@ impl World {
             return;
         }
         let fraction = (eaten_n / body_n).clamp(0., 1.);
+        let plant_threshold = self.config.animal_toxin.plant_toxin_transfer_threshold;
         // Issue #76 diagnosis (observation only): group of the prey for dose accounting.
         let dose_group = self
             .mimicry
@@ -338,7 +381,12 @@ impl World {
                 &mut prey.typed_load[kind]
             };
             let before = *stock;
-            let residual = remove_fraction(stock, fraction);
+            // Issue #76 (opt-in): a small plant-derived load stays in the herbivore.
+            let residual = if plant_threshold <= 0. || before >= plant_threshold {
+                remove_fraction(stock, fraction)
+            } else {
+                0.
+            };
             if residual > 0. {
                 if let Some(memory) = self.plant_color_learning.get_mut(&prey.id) {
                     memory.observe_damage(kind, before, *stock, 0.);
