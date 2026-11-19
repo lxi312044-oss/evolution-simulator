@@ -1,0 +1,15 @@
+{
+  "name": "r0-diagnosis",
+  "check": true,
+  "builds": [
+    {"id": "new", "sha": "", "example": "mimicry_goal"},
+    {"id": "newprereq", "sha": "", "example": "mimicry_prereq"},
+    {"id": "oldprereq", "sha": "9ddc219327445f34bfd5eaa8592151136a61233f", "example": "mimicry_prereq"}
+  ],
+  "runs": [
+    {"build": "new", "arms": ["std", "B_T03_D01", "B_T03_D01_NL", "B_T03_D01_H50", "B_T03_D01_H50_NL"],
+     "seeds": [90006, 90001, 90002, 90003], "ticks": 30000, "extra": [500]},
+    {"build": "newprereq", "arms": ["std", "B_T03_D01_H50"], "seeds": [90006, 90003], "ticks": 30000},
+    {"build": "oldprereq", "arms": ["std", "B_T03_D01_H50"], "seeds": [90006, 90003], "ticks": 30000}
+  ]
+}
