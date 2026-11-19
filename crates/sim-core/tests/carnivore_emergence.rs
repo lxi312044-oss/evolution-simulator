@@ -138,7 +138,7 @@ fn species_observer_reports_ranking_and_focusable_events() {
 }
 
 /// The current standard (decided 2026-11-19) is the w_p002_b120 check config plus plant
-/// color mutation 0.20 / 0.25 (Issue #70).
+/// color mutation 0.20 / 0.25 (Issue #70) and plant toxicity mutation 0.005 (Issue #74).
 #[test]
 fn standard_config_is_w_p002_b120_with_plant_color_mutation() {
     let standard = include_str!("../../../config/stage4-standard.json");
@@ -150,12 +150,18 @@ fn standard_config_is_w_p002_b120_with_plant_color_mutation() {
             plants.remove("color_mutation_probability"),
             plants.remove("color_mutation_scale"),
         );
-        (v, mutation)
+        let toxic = v["toxin"]
+            .as_object_mut()
+            .unwrap()
+            .remove("plant_toxic_mutation_probability");
+        (v, (mutation, toxic))
     };
-    let (s, mutation) = strip(standard);
-    let (c, _) = strip(check);
+    let (s, (mutation, toxic)) = strip(standard);
+    let (c, (_, check_toxic)) = strip(check);
     assert_eq!(s, c);
     assert_eq!(mutation, (Some(0.2.into()), Some(0.25.into())));
+    assert_eq!(toxic, Some(0.005.into()));
+    assert_eq!(check_toxic, Some(0.0.into()));
     let c: SimulationConfig = serde_json::from_str(standard).unwrap();
     assert_eq!(c.herbivores.carnivore_offspring_probability, 0.002);
     assert_eq!(c.initial_population.carnivores, 0);

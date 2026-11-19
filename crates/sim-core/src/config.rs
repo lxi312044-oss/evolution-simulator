@@ -25,6 +25,10 @@ pub struct AnimalToxinSettings {
     /// Override HP damage per excess toxin unit per Tick for carnivores only.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub carnivore_hp_damage_per_excess_unit: Option<f64>,
+    /// Issue #74: fraction of each herbivore toxin stock that breaks down every Tick
+    /// (0 = never). Keeping toxin then needs continuous synthesis.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub herbivore_toxin_decay_per_tick: f64,
 }
 
 impl AnimalToxinSettings {
@@ -33,6 +37,7 @@ impl AnimalToxinSettings {
             && !self.color_learning_enabled
             && self.carnivore_damage_threshold.is_none()
             && self.carnivore_hp_damage_per_excess_unit.is_none()
+            && self.herbivore_toxin_decay_per_tick == 0.
     }
 }
 
@@ -593,6 +598,11 @@ impl SimulationConfig {
         if self.animal_toxin.color_learning_enabled && !self.animal_toxin.enabled {
             return Err("carnivore color learning requires animal toxin".into());
         }
+        if !(0.0..1.0).contains(&self.animal_toxin.herbivore_toxin_decay_per_tick) {
+            return Err(
+                "animal_toxin.herbivore_toxin_decay_per_tick は0以上1未満で指定してください".into(),
+            );
+        }
         if self
             .animal_toxin
             .carnivore_damage_threshold
@@ -616,7 +626,8 @@ impl SimulationConfig {
             && (!t.plant_variation_enabled
                 || !t.plant_toxin_type_variation_enabled
                 || t.plant_toxin_type_count != 2
-                || t.plant_toxic_mutation_probability != 0.
+                // Issue #74: toxicity may mutate (opt-in, plant_toxic_mutation_probability);
+                // toxin types stay fixed.
                 || t.plant_toxin_type_mutation_probability != 0.
                 // Founders are assigned in blocks of 10 plants (4/1/1/4); 300 is the
                 // 20x20 stage 4 setting and its multiples keep the same density.
@@ -627,7 +638,7 @@ impl SimulationConfig {
                 "継承配色（toxin.experimental_inherited_plant_colors）の設定が不整合です。",
                 " 継承配色を使うには initial_population.plants を10の倍数（20×20の段階4では300）、",
                 "toxin.plant_variation_enabled と toxin.plant_toxin_type_variation_enabled をON、",
-                "toxin.plant_toxin_type_count=2、toxin.plant_toxic_mutation_probability と ",
+                "toxin.plant_toxin_type_count=2、",
                 "toxin.plant_toxin_type_mutation_probability を0にしてください。",
                 " この条件を使わない場合は継承配色をOFFにしてください。"
             )

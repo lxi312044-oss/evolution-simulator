@@ -9,8 +9,18 @@ fn colors(w: &World) -> std::collections::BTreeSet<u32> {
 }
 
 #[test]
-fn standard_now_includes_the_trial_plant_color_mutation() {
-    assert_eq!(STANDARD, TRIAL);
+fn standard_includes_the_trial_plant_color_mutation() {
+    let standard: SimulationConfig = serde_json::from_str(STANDARD).unwrap();
+    let trial: SimulationConfig = serde_json::from_str(TRIAL).unwrap();
+    assert_eq!(
+        standard.plants.color_mutation_probability,
+        trial.plants.color_mutation_probability
+    );
+    assert_eq!(
+        standard.plants.color_mutation_scale,
+        trial.plants.color_mutation_scale
+    );
+    assert_eq!(standard.toxin.plant_toxic_mutation_probability, 0.005);
 }
 
 #[test]
