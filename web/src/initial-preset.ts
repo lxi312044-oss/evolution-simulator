@@ -1,4 +1,6 @@
 export const defaultWebPreset = "green-founders";
+/** Preset used when no `?preset=` is given (decided 2026-11-19, Issue #11). */
+export const startupWebPreset = "stage4-standard";
 
 export function greenFounderPreset<T extends {
   plants: object;

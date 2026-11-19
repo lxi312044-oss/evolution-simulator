@@ -1,4 +1,4 @@
-import { defaultWebPreset, greenFounderPreset } from "./initial-preset";
+import { defaultWebPreset, greenFounderPreset, startupWebPreset } from "./initial-preset";
 import { formatSettingError } from "./settings-display";
 import init, { Simulation } from "./pkg/sim_wasm";
 import config from "../../config/standard-toxin.json";
@@ -63,11 +63,11 @@ let stopAt = 0;
 let interval = 100;
 let reference: {config: Config; condition: string} | undefined;
 const playNames: Record<string, string> = {
+  "stage4-standard": "肉食は草食から生まれる（標準）",
   [defaultWebPreset]: "無毒の緑から始まる世界",
   "standard-toxin": "通常毒",
   "stage4-fixed-candidate": "色を覚える捕食者",
   "stage4-fixed-baseline": "色のある草原",
-  "stage4-standard": "肉食は草食から生まれる（標準）",
 };
 const playNotes: Record<string, string> = {
   [defaultWebPreset]: "最初の植物はすべて無毒の緑色です。種子から生まれる子では、毒性と色が独立に変異します。草食は食べた後の被毒経験から色を学習します。色だけで有毒株を正確に見分けられるとは限りません。",
@@ -118,7 +118,7 @@ phase19Configs["stage4-hungry-recheck"] = normalizeConfig({
   ...stage4Baseline,
   herbivores: { ...stage4Baseline.herbivores, hungry_color_recheck_enabled: true },
 });
-let activeCondition = defaultWebPreset;
+let activeCondition = startupWebPreset;
 let baseline:Config = structuredClone(config);
 const presets={
  baseline:{growth:0.003,uptake:0.1,seed:0.35,feeding:1.5,herbivores:80,mineralization:0.002,diffusion:0,radius:70,cooldown:100},
@@ -440,7 +440,7 @@ async function main(){
     if (requested && Object.hasOwn(phase19Configs, requested) && !Object.hasOwn(playNames, requested))
       conditionSelect.add(new Option("URL指定の環境", requested));
   }
-  conditionSelect.value = requested && Object.hasOwn(phase19Configs, requested) ? requested : defaultWebPreset;
+  conditionSelect.value = requested && Object.hasOwn(phase19Configs, requested) ? requested : startupWebPreset;
   conditionSelect.onchange=()=>{
     try{
       const next=structuredClone(phase19Configs[conditionSelect.value]);
