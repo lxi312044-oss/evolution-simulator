@@ -1524,7 +1524,7 @@ impl World {
                     }
                 }
                 self.species_carnivore_birth(self.carnivores.len() - 1, None, Some(i));
-                self.diet_record_birth(false, id, child_diet, true);
+                self.diet_record_birth(parent_id, false, id, child_diet, true);
                 self.animals.items[i].successful_births += 1;
                 self.carnivore_births += 1;
                 self.defense.carnivores_born_from_herbivores += 1;
@@ -1572,7 +1572,7 @@ impl World {
                 }
             }
             self.species_herbivore_birth(self.animals.items.len() - 1, Some(i));
-            self.diet_record_birth(false, id, child_diet, false);
+            self.diet_record_birth(parent_id, false, id, child_diet, false);
             self.record_energy(
                 id,
                 "birth",

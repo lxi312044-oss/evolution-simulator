@@ -85,6 +85,10 @@ fn header() -> String {
     }
     h.extend(BIRTHS.map(|k| format!("births_{k}")));
     h.extend(LOST.map(|k| format!("lost_{k}")));
+    for k in ["herbivore_to_carnivore", "carnivore_to_herbivore"] {
+        h.extend(["n", "mean"].map(|s| format!("parent_{k}_{s}")));
+        h.extend((0..10).map(|i| format!("parent_{k}_hist{i}")));
+    }
     h.join(",")
 }
 
@@ -125,6 +129,11 @@ fn main() {
             }
             row.extend(BIRTHS.map(|k| d["births"][k].to_string()));
             row.extend(LOST.map(|k| f(&d["lost"][k])));
+            for k in ["herbivore_to_carnivore", "carnivore_to_herbivore"] {
+                let p = &d["crossing_parents"][k];
+                row.extend([p["n"].to_string(), f(&p["mean"])]);
+                row.extend((0..10).map(|i| p["hist"][i].to_string()));
+            }
             println!("{}", row.join(","));
         }
         if w.tick >= ticks {

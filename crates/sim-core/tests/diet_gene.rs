@@ -63,6 +63,10 @@ fn diet_observation_changes_nothing() {
         births("herbivore_to_herbivore") > 0,
         "the test needs births"
     );
+    assert_eq!(
+        d["crossing_parents"]["herbivore_to_carnivore"]["n"].as_u64(),
+        Some(births("herbivore_to_carnivore"))
+    );
     assert_eq!(births("carnivore_to_herbivore"), 0);
     // Founder herbivores start around 0.1 and the values stay in [0, 1].
     let mean = d["herbivore"]["mean"].as_f64().unwrap();
@@ -176,6 +180,17 @@ fn diet_effects_cross_both_ways() {
     let births = |k: &str| d["births"][k].as_u64().unwrap();
     assert!(births("herbivore_to_carnivore") > 0);
     assert!(births("carnivore_to_herbivore") > 0);
+    // Crossings come from parents near the boundary: a herbivore parent's value is below
+    // 0.5 and a carnivore parent's at least 0.5.
+    let parents = &d["crossing_parents"];
+    for (k, lo, hi) in [
+        ("herbivore_to_carnivore", 0., 0.5),
+        ("carnivore_to_herbivore", 0.5, 1.),
+    ] {
+        assert_eq!(parents[k]["n"].as_u64(), Some(births(k)));
+        let mean = parents[k]["mean"].as_f64().unwrap();
+        assert!((lo..hi).contains(&mean) || mean == hi, "{k} {mean}");
+    }
     for i in 0..5 {
         assert_eq!(d["herbivore"]["hist"][i + 5].as_u64(), Some(0));
         assert_eq!(d["carnivore"]["hist"][i].as_u64(), Some(0));

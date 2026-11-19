@@ -1119,7 +1119,7 @@ impl World {
                         }
                     }
                     self.species_carnivore_birth(self.carnivores.len() - 1, Some(i), None);
-                    self.diet_record_birth(true, id, child_diet, true);
+                    self.diet_record_birth(parent_id, true, id, child_diet, true);
                     self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
                     let parent_bin = ambush_bin(parent_gene);
                     let child_bin = ambush_bin(child_gene);

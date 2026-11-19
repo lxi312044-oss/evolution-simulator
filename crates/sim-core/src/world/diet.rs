@@ -70,6 +70,10 @@ pub struct DietBook {
     /// Feeding gains lost to the diet value by [herbivore, carnivore] x [nutrients, energy]
     /// (observation only).
     lost: [[f64; 2]; 2],
+    /// Parent values of births that cross the body boundary, by direction (0 herbivore to
+    /// carnivore, 1 carnivore to herbivore): sum and 10-bin histogram (observation only).
+    crossing_parent_sum: [f64; 2],
+    crossing_parent_hist: [[u64; 10]; 2],
 }
 
 impl DietBook {
@@ -86,6 +90,8 @@ impl DietBook {
             && self.dormant_carnivore.is_empty()
             && self.births == [[0; 2]; 2]
             && self.lost == [[0.; 2]; 2]
+            && self.crossing_parent_sum == [0.; 2]
+            && self.crossing_parent_hist == [[0; 10]; 2]
     }
 }
 
@@ -144,18 +150,28 @@ impl World {
         Some((value + d.mutation_scale * z).clamp(0., 1.))
     }
 
-    /// Record a birth (no-op without a diet value).
+    /// Record a birth (no-op without a diet value). Births that cross the body boundary also
+    /// record the parent's value.
     pub(super) fn diet_record_birth(
         &mut self,
+        parent: EntityId,
         parent_carnivore: bool,
         child: EntityId,
         value: Option<f64>,
         child_carnivore: bool,
     ) {
-        if let Some(v) = value {
-            self.diet.value.insert(child, v);
-            self.diet.births[body(parent_carnivore)][body(child_carnivore)] += 1;
+        let Some(v) = value else {
+            return;
+        };
+        if parent_carnivore != child_carnivore {
+            if let Some(p) = self.diet_value(parent, parent_carnivore) {
+                let direction = body(parent_carnivore);
+                self.diet.crossing_parent_sum[direction] += p;
+                self.diet.crossing_parent_hist[direction][((p * 10.) as usize).min(9)] += 1;
+            }
         }
+        self.diet.value.insert(child, v);
+        self.diet.births[body(parent_carnivore)][body(child_carnivore)] += 1;
     }
 
     /// Whether the diet value decides bodies and feeding gains (stage 1).
@@ -314,7 +330,7 @@ impl World {
         }
         self.diet_set_dormant_carnivore(child.id, child.carnivore);
         self.species_herbivore_birth_from_carnivore(index, parent);
-        self.diet_record_birth(true, child.id, Some(child.value), false);
+        self.diet_record_birth(parent_id, true, child.id, Some(child.value), false);
         self.births += 1;
         self.diagnostics.herbivore_births += 1;
     }
@@ -349,7 +365,17 @@ impl World {
         let share = (all > 0).then(|| intermediate as f64 / all as f64);
         let b = &self.diet.births;
         let lost = &self.diet.lost;
+        let crossing = |direction: usize| {
+            let hist = self.diet.crossing_parent_hist[direction];
+            let n: u64 = hist.iter().sum();
+            let mean = (n > 0).then(|| self.diet.crossing_parent_sum[direction] / n as f64);
+            json!({"n": n, "mean": mean, "hist": hist})
+        };
         json!({
+            "crossing_parents": {
+                "herbivore_to_carnivore": crossing(0),
+                "carnivore_to_herbivore": crossing(1),
+            },
             "lost": {
                 "herbivore_nutrients": lost[0][0],
                 "herbivore_energy": lost[0][1],
