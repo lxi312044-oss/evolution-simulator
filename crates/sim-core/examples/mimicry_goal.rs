@@ -4,7 +4,7 @@
 //! An arm is a list of tokens joined by `_` applied to config/stage4-standard.json:
 //!   std  no change          B    no change (plant toxicity mutation is already standard)
 //!   T03 / T01 / T00  carnivore damage threshold 0.03 / 0.01 / 0
-//!   D01 / D02  herbivore toxin decay per tick 0.01 / 0.02
+//!   D01 / D02 / D005 / D002  herbivore toxin decay per tick 0.01 / 0.02 / 0.005 / 0.002
 //!   H10 / H50  carnivore HP damage per excess unit 0.1 / 0.5
 //!   NL   carnivore color learning off (control)
 //!   G<n> carnivore learning gain n (e.g. G30), Issue #76 round 1
@@ -28,6 +28,8 @@ fn config_for(arm: &str) -> SimulationConfig {
             "T00" => a.carnivore_damage_threshold = Some(0.),
             "D01" => a.herbivore_toxin_decay_per_tick = 0.01,
             "D02" => a.herbivore_toxin_decay_per_tick = 0.02,
+            "D005" => a.herbivore_toxin_decay_per_tick = 0.005,
+            "D002" => a.herbivore_toxin_decay_per_tick = 0.002,
             "H10" => a.carnivore_hp_damage_per_excess_unit = Some(0.1),
             "H50" => a.carnivore_hp_damage_per_excess_unit = Some(0.5),
             "NL" => a.color_learning_enabled = false,
