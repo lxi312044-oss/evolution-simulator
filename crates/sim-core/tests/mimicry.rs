@@ -48,3 +48,49 @@ fn herbivore_toxin_decay_lowers_stock_and_keeps_balance() {
     bad.animal_toxin.herbivore_toxin_decay_per_tick = 1.;
     assert!(World::new(bad).is_err());
 }
+
+/// Issue #76 (observation only): the strata partition the attack and exposure counters,
+/// and observing does not change the run.
+#[test]
+fn mimicry_diagnostics_partition_counters_and_do_not_change_the_run() {
+    let config = || {
+        let mut c: SimulationConfig =
+            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
+        c.animal_toxin.carnivore_damage_threshold = Some(0.03);
+        c.herbivores.carnivore_offspring_probability = 0.02;
+        c
+    };
+    let mut observed = World::new(config()).unwrap();
+    let mut plain = World::new(config()).unwrap();
+    for _ in 0..30 {
+        observed.step(100).unwrap();
+        plain.step(100).unwrap();
+        let _ = observed.mimicry_diagnostics_value();
+        let _ = observed.mimicry_json();
+        assert_eq!(observed.animals.items.len(), plain.animals.items.len());
+        assert_eq!(observed.carnivores.len(), plain.carnivores.len());
+        assert_eq!(
+            observed.resources.total_energy().to_bits(),
+            plain.resources.total_energy().to_bits()
+        );
+        assert_eq!(format!("{:?}", observed.rng), format!("{:?}", plain.rng));
+    }
+    let m = observed.mimicry_value();
+    let d = observed.mimicry_diagnostics_value();
+    assert!(observed.carnivore_hunts > 0, "the test needs attacks");
+    for (g, name) in ["defended", "mimic", "other"].iter().enumerate() {
+        for (total, strata) in [
+            ("attacks", "strata_attacks"),
+            ("individual_ticks", "strata_exposure"),
+        ] {
+            let sum: u64 = (0..8).map(|s| d[strata][g][s].as_u64().unwrap()).sum();
+            assert_eq!(sum, m[total][name].as_u64().unwrap(), "{strata} {name}");
+        }
+    }
+    let shares = d["carnivore_memory"]["avoids_own_harm_color"].clone();
+    assert!(shares.is_null() || (0. ..=1.).contains(&shares.as_f64().unwrap()));
+    assert!(
+        d["memory_entries_created"].as_u64().unwrap() >= d["harmful_evictions"].as_u64().unwrap()
+    );
+}

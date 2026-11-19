@@ -106,6 +106,22 @@ impl PlantColorMemory {
             .collect()
     }
 
+    /// Read-only (Issue #76 diagnosis): would `ingest(color, ..)` create a new entry, and
+    /// would that push out an entry carrying learned harm? Returns (new_entry, evicts_harm).
+    pub(super) fn ingest_effect(&self, color: u32) -> (bool, bool) {
+        let color = color & 0xffffff00;
+        if self.experiences.iter().any(|entry| entry.color == color) {
+            return (false, false);
+        }
+        let evicts = self.experiences.len() == Self::CAPACITY && self.experiences[0].damage > 0.;
+        (true, evicts)
+    }
+
+    /// Read-only (Issue #76 diagnosis): number of remembered colors.
+    pub(super) fn entry_count(&self) -> usize {
+        self.experiences.len()
+    }
+
     pub(super) fn has_harm_for_color(&self, color: u32) -> bool {
         self.experiences
             .iter()

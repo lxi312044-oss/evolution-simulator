@@ -362,6 +362,10 @@ impl World {
                 }
             }
             if learning && dose > 0. {
+                // Issue #76 diagnosis (observation only): memory turnover.
+                let (created, evicts_harm) = predator.memory.ingest_effect(color);
+                self.mimicry.memory_entries_created += u64::from(created);
+                self.mimicry.harmful_evictions += u64::from(evicts_harm);
                 predator.memory.ingest(color, kind, dose);
             }
             book.transferred_produced[kind] += produced;
@@ -485,6 +489,45 @@ impl World {
                 .predators
                 .get(&id)
                 .is_none_or(|p| p.memory.allows(visible_color(color), reserve_e / 60.))
+    }
+
+    /// Issue #76 diagnosis (read-only): color-memory summary over living carnivores.
+    /// `avoids_own_harm_color` = the largest learned harm exceeds the current risk tolerance,
+    /// i.e. the carnivore would refuse at least the exact color it learned from.
+    pub(super) fn carnivore_memory_summary(&self) -> serde_json::Value {
+        let mut n = 0u64;
+        let (mut entries, mut harmful, mut max_harm, mut tolerance, mut hp, mut load) =
+            (0., 0., 0., 0., 0., 0.);
+        let mut avoiding = 0u64;
+        let types = type_count(&self.config.toxin);
+        for c in &self.carnivores {
+            let Some(p) = self.animal_toxins.predators.get(&c.id) else {
+                continue;
+            };
+            let scores = p.memory.harm_scores();
+            let top = scores.iter().map(|&(_, s)| s).fold(0., f64::max);
+            let reserve = self.resources.energy_balance(c.reserve).unwrap_or(0.);
+            let tol = super::plant_color_learning::risk_tolerance(reserve / 60.);
+            n += 1;
+            entries += p.memory.entry_count() as f64;
+            harmful += scores.len() as f64;
+            max_harm += top;
+            tolerance += tol;
+            hp += p.hp;
+            load += p.load[..types].iter().sum::<f64>();
+            avoiding += u64::from(top * 10. > tol);
+        }
+        let mean = |v: f64| (n > 0).then(|| v / n as f64);
+        serde_json::json!({
+            "carnivores_with_state": n,
+            "mean_entries": mean(entries),
+            "mean_harmful_entries": mean(harmful),
+            "mean_max_harm": mean(max_harm),
+            "mean_tolerance": mean(tolerance),
+            "mean_hp": mean(hp),
+            "mean_load": mean(load),
+            "avoids_own_harm_color": mean(avoiding as f64),
+        })
     }
 
     /// A counterattack teaches the carnivore that this prey color is harmful.
