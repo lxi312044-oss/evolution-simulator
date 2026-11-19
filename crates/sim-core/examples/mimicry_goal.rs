@@ -10,6 +10,9 @@
 //!   G<n> carnivore learning gain n (e.g. G30), Issue #76 round 1
 //!   F<n> herbivore reproduction food target n plants (standard 8), Issue #76 round 3
 //!   C<n> herbivore body-color mutation probability n % per channel, Issue #76 round 4
+//!   X<n> herbivore toxic trait: founders toxic with n %, offspring flip with 0.5 %
+//!   P<n> plant-derived toxin moves to carnivores only from a load of n/100 per type
+//!   R<n> carnivores resume hunting at stomach fullness n % (standard 20)
 //! Example: B_T03_D01_H50_NL. Names from Issue #74 (std, B_T03_D01, ...) keep their meaning.
 use sim_core::{SimulationConfig, World};
 
@@ -34,6 +37,19 @@ fn config_for(arm: &str) -> SimulationConfig {
             f if f.starts_with('F') && f[1..].parse::<u32>().is_ok() => {
                 c.herbivores.reproduction_food_target = f[1..].parse().unwrap()
             }
+            x if x.starts_with('X') && x[1..].parse::<u32>().is_ok() => {
+                let percent: u32 = x[1..].parse().unwrap();
+                a.herbivore_toxic_initial_fraction = Some(f64::from(percent) / 100.);
+                a.herbivore_toxic_mutation_probability = 0.005;
+            }
+            p if p.starts_with('P') && p[1..].parse::<u32>().is_ok() => {
+                let percent: u32 = p[1..].parse().unwrap();
+                a.plant_toxin_transfer_threshold = f64::from(percent) / 100.;
+            }
+            r if r.starts_with('R') && r[1..].parse::<u32>().is_ok() => {
+                let percent: u32 = r[1..].parse().unwrap();
+                c.carnivores.feeding_resume_fraction = f64::from(percent) / 100.;
+            }
             m if m.starts_with('C') && m[1..].parse::<u32>().is_ok() => {
                 let percent: u32 = m[1..].parse().unwrap();
                 c.herbivores.body_color_mutation_probability = Some(percent as f32 / 100.)
@@ -45,7 +61,8 @@ fn config_for(arm: &str) -> SimulationConfig {
 }
 
 const G: [&str; 3] = ["defended", "mimic", "other"];
-const PROFILE: [&str; 10] = [
+const PROFILE: [&str; 11] = [
+    "toxic_trait",
     "age",
     "juvenile",
     "energy_fraction",

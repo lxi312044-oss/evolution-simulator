@@ -229,3 +229,55 @@ fn choice_scene_observation_is_observation_only() {
         assert!((a - b).abs() <= 1e-9 * b.max(1.), "{by_group} {a} vs {b}");
     }
 }
+
+/// Issue #76 rounds 6+: the herbivore toxic trait and the plant-toxin transfer threshold are
+/// opt-in; non-toxic herbivores make no toxin, and a high threshold keeps plant toxin in prey.
+#[test]
+fn toxic_trait_and_plant_threshold_are_opt_in() {
+    let config = |fraction: Option<f64>, threshold: f64| {
+        let mut c: SimulationConfig =
+            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        c.herbivores.carnivore_offspring_probability = 0.02;
+        c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
+        c.animal_toxin.herbivore_toxic_initial_fraction = fraction;
+        c.animal_toxin.plant_toxin_transfer_threshold = threshold;
+        c
+    };
+    let mut w = World::new(config(Some(0.5), 100.)).unwrap();
+    for _ in 0..25 {
+        w.step(100).unwrap();
+    }
+    let d = w.mimicry_diagnostics_value();
+    let t: serde_json::Value = serde_json::from_str(&w.animal_toxin_snapshot_json()).unwrap();
+    let residual: f64 = t["transferred_residual"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_f64().unwrap())
+        .sum();
+    assert_eq!(residual, 0.);
+    for e in t["balance_error"].as_array().unwrap() {
+        assert!(e.as_f64().unwrap().abs() < 1e-6, "balance {e}");
+    }
+    let shares: Vec<f64> = ["defended", "mimic", "other"]
+        .iter()
+        .filter_map(|g| d["profile"][g]["toxic_trait"].as_f64())
+        .collect();
+    assert!(!shares.is_empty());
+    // Defended herbivores hold toxin, so they must carry the toxic trait.
+    if let Some(share) = d["profile"]["defended"]["toxic_trait"].as_f64() {
+        assert_eq!(share, 1.);
+    }
+    let m = w.mimicry_value();
+    let nontoxic = shares.iter().any(|&s| s < 1.);
+    assert!(nontoxic || m["counts"]["other"].as_u64() == Some(0));
+    for bad in [config(Some(1.5), 0.), config(None, -1.), {
+        let mut c = config(None, 0.);
+        c.animal_toxin.herbivore_toxic_mutation_probability = 0.01;
+        c
+    }] {
+        assert!(World::new(bad).is_err());
+    }
+    let s = serde_json::to_string(&config(None, 0.)).unwrap();
+    assert!(!s.contains("herbivore_toxic") && !s.contains("plant_toxin_transfer"));
+}

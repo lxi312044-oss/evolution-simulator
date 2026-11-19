@@ -213,7 +213,8 @@ impl World {
         let defended = self.defended_colors();
         let groups = self.mimicry_groups(&defended);
         let h = &self.config.herbivores;
-        const KEYS: [&str; 10] = [
+        const KEYS: [&str; 11] = [
+            "toxic_trait",
             "age",
             "juvenile",
             "energy_fraction",
@@ -234,6 +235,7 @@ impl World {
             let energy = self.resources.energy_balance(a.reserve).unwrap_or(0.);
             let plant_load = a.toxin_load + a.typed_load[1..].iter().sum::<f64>();
             let values = [
+                f64::from(u8::from(self.herbivore_is_toxic(a.id))),
                 f64::from(a.age),
                 f64::from(u8::from(s & 1 != 0)),
                 if maximum > 0. { energy / maximum } else { 0. },
