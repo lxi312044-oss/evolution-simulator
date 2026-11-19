@@ -9,7 +9,8 @@ Request format (JSON):
   "check": true,                       # run fmt/clippy/tests for sim-core first
   "builds": [{"id": "new", "sha": "", "example": "mimicry_goal"}],
   "runs": [{"build": "new", "arms": ["std"], "seeds": [90006], "ticks": 30000,
-            "extra": ["500"]}]
+            "extra": ["500"]}],
+  "collect_from_run": ""               # optional: only re-collect the artifacts of that run
 }
 An empty sha means the pushed commit. Each run entry becomes one job per arm; the seeds of
 that arm run in parallel inside the job. The example CLI is `<example> <arm> <seed> <ticks>
@@ -58,15 +59,19 @@ def plan(request):
             )
     if not NAME.match(request["name"]):
         raise ValueError("bad name")
-    return builds, runs, bool(request.get("check", False))
+    collect_from = str(request.get("collect_from_run", ""))
+    if collect_from and not collect_from.isdigit():
+        raise ValueError("collect_from_run must be a run id")
+    return builds, runs, bool(request.get("check", False)), collect_from
 
 
 def main():
     with open(sys.argv[1], encoding="utf-8") as f:
-        builds, runs, check = plan(json.load(f))
+        builds, runs, check, collect_from = plan(json.load(f))
     print("builds=" + json.dumps(builds, separators=(",", ":")))
     print("runs=" + json.dumps(runs, separators=(",", ":")))
     print("check=" + ("true" if check else "false"))
+    print("collect_from=" + collect_from)
 
 
 if __name__ == "__main__":

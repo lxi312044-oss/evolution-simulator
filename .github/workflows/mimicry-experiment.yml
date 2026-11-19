@@ -1,11 +1,13 @@
 name: Mimicry experiment (Issue 76)
 # Runs the comparison described in experiment/request.json when a branch exp/** is pushed.
 # Results (CSV + metadata, no binaries) are committed to the branch exp-results/issue76.
+# With "collect_from_run" in the request, only the artifacts of that earlier run are collected.
 on:
   push:
     branches: ['exp/**']
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: mimicry-experiment-${{ github.ref }}
   cancel-in-progress: false
@@ -19,6 +21,7 @@ jobs:
       builds: ${{ steps.plan.outputs.builds }}
       runs: ${{ steps.plan.outputs.runs }}
       check: ${{ steps.plan.outputs.check }}
+      collect_from: ${{ steps.plan.outputs.collect_from }}
     steps:
       - uses: actions/checkout@v6
       - id: plan
@@ -27,7 +30,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.check == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -38,6 +41,7 @@ jobs:
       - run: tools/issue76_logged.sh cargo test --locked -p sim-core
   build:
     needs: plan
+    if: needs.plan.outputs.collect_from == ''
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -57,13 +61,16 @@ jobs:
             cargo build --locked --release -p sim-core --example "${{ matrix.example }}"
           fi
       - name: Package binary
+        env:
+          ID: ${{ matrix.id }}
+          EXAMPLE: ${{ matrix.example }}
         run: |
-          mkdir bin
-          cp "target/release/examples/${{ matrix.example }}" bin/
-          git rev-parse HEAD > bin/source_sha
-          (cd bin && sha256sum "${{ matrix.example }}" > binary_sha256)
-          sha256sum config/stage4-standard.json > bin/standard_config_sha256
-          rustc --version > bin/rustc_version
+          mkdir -p "bin/$ID"
+          cp "target/release/examples/$EXAMPLE" "bin/$ID/"
+          git rev-parse HEAD > "bin/$ID/source_sha"
+          (cd "bin/$ID" && sha256sum "$EXAMPLE" > binary_sha256)
+          sha256sum config/stage4-standard.json > "bin/$ID/standard_config_sha256"
+          rustc --version > "bin/$ID/rustc_version"
       - uses: actions/upload-artifact@v6
         with:
           name: bin-${{ matrix.id }}
@@ -71,6 +78,7 @@ jobs:
           retention-days: 3
   run:
     needs: [plan, build]
+    if: needs.plan.outputs.collect_from == ''
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
@@ -91,22 +99,23 @@ jobs:
           EXTRA: ${{ matrix.extra }}
           BUILD: ${{ matrix.build }}
         run: |
-          chmod +x "bin/$EXAMPLE"
+          exe="$PWD/bin/$BUILD/$EXAMPLE"
+          chmod +x "$exe"
           out="res/$BUILD"
           mkdir -p "$out"
           if [ "$EXAMPLE" = mimicry_goal ]; then
-            "bin/$EXAMPLE" "$ARM" config > "$out/${ARM}.config.json"
+            "$exe" "$ARM" config > "$out/${ARM}.config.json"
             sha256sum "$out/${ARM}.config.json" | cut -d' ' -f1 > "$out/${ARM}.config_sha256"
           fi
           run_one() {
             start=$(date +%s)
             # shellcheck disable=SC2086
-            "bin/$EXAMPLE" "$ARM" "$1" "$TICKS" $EXTRA > "$out/${ARM}_$1.csv" 2> "$out/${ARM}_$1.stderr"
+            "$exe" "$ARM" "$1" "$TICKS" $EXTRA > "$out/${ARM}_$1.csv" 2> "$out/${ARM}_$1.stderr"
             code=$?
             echo "$1,$code,$(( $(date +%s) - start ))" >> "$out/${ARM}.timing"
           }
           export -f run_one
-          export out
+          export out exe
           echo $SEEDS | tr ' ' '\n' | xargs -P "$(nproc)" -I{} bash -c 'run_one {}'
           nproc > "$out/${ARM}.nproc"
           ls -la "$out"
@@ -117,7 +126,7 @@ jobs:
           retention-days: 3
   collect:
     needs: [plan, build, run]
-    if: always() && needs.build.result == 'success'
+    if: always() && needs.plan.result == 'success' && (needs.build.result == 'success' || needs.plan.outputs.collect_from != '')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -129,20 +138,32 @@ jobs:
           pattern: res-*
           path: res
           merge-multiple: true
+          run-id: ${{ needs.plan.outputs.collect_from || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v6
         with:
           pattern: bin-*
           path: bins
+          merge-multiple: true
+          run-id: ${{ needs.plan.outputs.collect_from || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Commit results to exp-results/issue76
         env:
           TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
+          RUN_ID: ${{ needs.plan.outputs.collect_from || github.run_id }}
           REF_NAME: ${{ github.ref_name }}
           SHA: ${{ github.sha }}
           RUN_RESULT: ${{ needs.run.result }}
         run: |
+          set -x
           name=$(python3 -c "import json;print(json.load(open('src/experiment/request.json'))['name'])")
+          first=$(python3 -c "import json;print(json.load(open('src/experiment/request.json'))['builds'][0]['id'])")
+          # Older artifacts kept the build files at the artifact root.
+          if [ -f bins/source_sha ]; then
+            mkdir -p "bins/$first"
+            find bins -maxdepth 1 -type f -exec mv {} "bins/$first/" \;
+          fi
           git init -q out
           cd out
           git config user.name "github-actions[bot]"
@@ -154,12 +175,14 @@ jobs:
             git checkout -q --orphan out
           fi
           dest="${name}/run-${RUN_ID}"
-          mkdir -p "$dest"
+          mkdir -p "$dest/builds"
           cp -r ../res/. "$dest/"
-          for d in ../bins/bin-*; do
-            id=${d#../bins/bin-}
+          for d in ../bins/*/; do
+            id=$(basename "$d")
             mkdir -p "$dest/builds/$id"
-            cp "$d"/source_sha "$d"/binary_sha256 "$d"/standard_config_sha256 "$d"/rustc_version "$dest/builds/$id/"
+            for f in source_sha binary_sha256 standard_config_sha256 rustc_version; do
+              cp "$d$f" "$dest/builds/$id/" || true
+            done
           done
           cp ../src/experiment/request.json "$dest/request.json"
           printf '{"run_id":"%s","branch":"%s","sha":"%s","run_result":"%s"}\n' \
