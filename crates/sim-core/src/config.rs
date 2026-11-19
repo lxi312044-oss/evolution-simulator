@@ -235,6 +235,14 @@ pub struct HerbivoreSettings {
     /// never shifts ecology RNG and does not depend on whether carnivores exist. Zero disables.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub carnivore_offspring_probability: f64,
+    /// Issue #76 (opt-in): body-color mutation probability per channel, separate from the
+    /// other genes. Absent = `mutation_probability` (previous behavior). Body color uses its
+    /// own stateless stream, so this never shifts ecology RNG.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_color_mutation_probability: Option<f32>,
+    /// Issue #76 (opt-in): body-color mutation scale. Absent = `mutation_scale`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_color_mutation_scale: Option<f32>,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -488,6 +496,8 @@ impl Default for HerbivoreSettings {
             counterattack_retreat_ticks: 0,
             speed_mutation_enabled: true,
             carnivore_offspring_probability: 0.,
+            body_color_mutation_probability: None,
+            body_color_mutation_scale: None,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -848,6 +858,20 @@ impl SimulationConfig {
             || h.speed_min > h.speed_max
         {
             return Err("invalid herbivore settings".into());
+        }
+        if [
+            h.body_color_mutation_probability,
+            h.body_color_mutation_scale,
+        ]
+        .iter()
+        .flatten()
+        .any(|v| !(0.0..=1.0).contains(v))
+        {
+            return Err(concat!(
+                "草食の体色の突然変異（herbivores.body_color_mutation_probability と ",
+                "herbivores.body_color_mutation_scale）は0から1の範囲で指定してください。"
+            )
+            .into());
         }
         if [
             h.color_memory_safe_meal_relief,

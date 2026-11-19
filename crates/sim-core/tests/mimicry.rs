@@ -124,3 +124,46 @@ fn carnivore_learning_gain_is_opt_in() {
     let s = serde_json::to_string(&config(None)).unwrap();
     assert!(!s.contains("carnivore_learning_gain"));
 }
+
+/// Issue #76 round 4: body-color mutation is opt-in, uses its own stream, and with carnivore
+/// color learning off it changes colors only, not the ecology.
+#[test]
+fn body_color_mutation_is_opt_in_and_color_only_without_learning() {
+    let config = |p: Option<f32>, learning: bool| {
+        let mut c: SimulationConfig =
+            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        c.herbivores.carnivore_offspring_probability = 0.02;
+        c.animal_toxin.color_learning_enabled = learning;
+        c.herbivores.body_color_mutation_probability = p;
+        c
+    };
+    let colors = |w: &World| -> Vec<[u32; 3]> {
+        w.animals
+            .items
+            .iter()
+            .map(|a| a.genes.body_color.rgb().map(f32::to_bits))
+            .collect()
+    };
+    let mut absent = World::new(config(None, true)).unwrap();
+    let mut same = World::new(config(Some(0.05), true)).unwrap();
+    let mut plain = World::new(config(None, false)).unwrap();
+    let mut varied = World::new(config(Some(0.5), false)).unwrap();
+    for _ in 0..20 {
+        for w in [&mut absent, &mut same, &mut plain, &mut varied] {
+            w.step(100).unwrap();
+        }
+        assert_eq!(colors(&absent), colors(&same));
+        assert_eq!(format!("{:?}", absent.rng), format!("{:?}", same.rng));
+        assert_eq!(plain.animals.items.len(), varied.animals.items.len());
+        assert_eq!(plain.carnivores.len(), varied.carnivores.len());
+        assert_eq!(format!("{:?}", plain.rng), format!("{:?}", varied.rng));
+    }
+    assert_ne!(colors(&plain), colors(&varied));
+    let mut bad = config(Some(1.5), true);
+    assert!(World::new(bad.clone()).is_err());
+    bad.herbivores.body_color_mutation_probability = None;
+    bad.herbivores.body_color_mutation_scale = Some(-0.1);
+    assert!(World::new(bad).is_err());
+    let s = serde_json::to_string(&config(None, true)).unwrap();
+    assert!(!s.contains("body_color_mutation"));
+}

@@ -1303,12 +1303,14 @@ impl World {
             );
             // Color has its own deterministic stream and does not consume ecology RNG.
             let color_seed = self.config.seed ^ self.tick.rotate_left(17);
+            // Issue #76 (opt-in): body color may mutate separately from the other genes.
             let (color, color_flags) = crate::animals::color::inherit_with_flags(
                 genes.body_color,
                 color_seed,
                 self.births.wrapping_add(1),
-                h.mutation_probability,
-                h.mutation_scale,
+                h.body_color_mutation_probability
+                    .unwrap_or(h.mutation_probability),
+                h.body_color_mutation_scale.unwrap_or(h.mutation_scale),
             );
             let fear = (genes.fear + (self.rng.unit() - 0.5) * 0.12).clamp(0., 1.);
             let aggression = (genes.aggression + (self.rng.unit() - 0.5) * 0.12).clamp(0., 1.);
