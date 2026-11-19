@@ -33,14 +33,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --locked -p sim-core --all-targets -- -D warnings
-      - run: cargo test --locked -p sim-core
+      - run: tools/issue76_logged.sh cargo fmt --all -- --check
+      - run: tools/issue76_logged.sh cargo clippy --locked -p sim-core --all-targets -- -D warnings
+      - run: tools/issue76_logged.sh cargo test --locked -p sim-core
   build:
     needs: plan
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         include: ${{ fromJSON(needs.plan.outputs.builds) }}
     steps:
@@ -48,7 +49,13 @@ jobs:
         with:
           ref: ${{ matrix.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --locked --release -p sim-core --example "${{ matrix.example }}"
+      - name: Build
+        run: |
+          if [ -x tools/issue76_logged.sh ]; then
+            tools/issue76_logged.sh cargo build --locked --release -p sim-core --example "${{ matrix.example }}"
+          else
+            cargo build --locked --release -p sim-core --example "${{ matrix.example }}"
+          fi
       - name: Package binary
         run: |
           mkdir bin

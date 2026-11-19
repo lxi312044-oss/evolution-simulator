@@ -35,6 +35,14 @@ pub struct MimicryBook {
     pub(super) memory_entries_created: u64,
 }
 
+impl MimicryBook {
+    /// Count one carnivore attack on a herbivore of group `g` and stratum `s`.
+    pub(super) fn count_attack(&mut self, g: usize, s: usize) {
+        self.attacks[g] += 1;
+        self.strata_attacks[g][s] += 1;
+    }
+}
+
 /// Nearest-defended distance (None when there is no defended herbivore).
 fn nearest(color: u32, defended: &[u32]) -> Option<f64> {
     defended
@@ -118,12 +126,12 @@ impl World {
         )
     }
 
-    /// Count one carnivore attack on herbivore `prey` by group and stratum (observation only).
-    pub(super) fn mimicry_count_attack(&mut self, prey: usize) {
-        let g = self.mimicry_attack_group(prey);
-        let s = self.herbivore_stratum(prey);
-        self.mimicry.attacks[g] += 1;
-        self.mimicry.strata_attacks[g][s] += 1;
+    /// Group and stratum of herbivore `prey` for an attack (observation only).
+    pub(super) fn mimicry_attack_class(&self, prey: usize) -> (usize, usize) {
+        (
+            self.mimicry_attack_group(prey),
+            self.herbivore_stratum(prey),
+        )
     }
 
     /// Issue #76 diagnosis (observation only): stratified attack counters, per-group
