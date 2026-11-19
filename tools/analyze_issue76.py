@@ -317,6 +317,32 @@ def choice_table(found):
     return "\n".join(lines)
 
 
+def cause_table(found):
+    """Issue #76 diagnosis 2: in choice scenes, hunger (tolerance) vs learned risk; and the
+    toxin moved to carnivores by prey group and source. Seeds pooled, 10000..30000."""
+    lines = [
+        "| 条件 | 群 | 場面 | 許せる危険度（平均） | 色の危険度（平均） | 危険度がある割合 | 飛ばした割合 | 満腹なら飛ばす割合 | 移った毒 自作/植物由来 |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    for arm in sorted(found):
+        for g in G:
+            tot = defaultdict(float)
+            for rows in found[arm].values():
+                if f"choice_tolerance_sum_{g}" not in rows[0]:
+                    continue
+                for k in ["choice_first", "choice_skipped", "choice_tolerance_sum", "choice_risk_sum",
+                          "choice_any_risk", "choice_refused_if_fed", "dose_produced", "dose_plant"]:
+                    tot[k] += interval(rows, f"{k}_{g}") or 0
+            n = tot["choice_first"]
+            share = lambda k: tot[k] / n if n else None
+            lines.append(
+                f"| {arm} | {g} | {n:.0f} | {fmt(share('choice_tolerance_sum'))} | {fmt(share('choice_risk_sum'))} | "
+                f"{fmt(share('choice_any_risk'))} | {fmt(share('choice_skipped'))} | {fmt(share('choice_refused_if_fed'))} | "
+                f"{tot['dose_produced']:.1f}/{tot['dose_plant']:.1f} |"
+            )
+    return "\n".join(lines)
+
+
 def diag(found):
     out = []
     # Q1: death causes before herbivore extinction.
@@ -455,6 +481,9 @@ def main():
     if controls:
         print()
         print(components(found, controls))
+    if "--cause" in args:
+        print()
+        print(cause_table(found))
     if "--choice" in args:
         print()
         print(choice_table(found))
