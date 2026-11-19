@@ -11,8 +11,10 @@ mod energy;
 mod foraging;
 mod health;
 mod plant_color_learning;
+mod species;
 pub use energy::EnergyTrace;
 pub use foraging::{ForagingTrace, ForagingWindow};
+pub use species::{SpeciesBook, SpeciesKind};
 mod herbivore_tick;
 pub use health::HealthTrace;
 

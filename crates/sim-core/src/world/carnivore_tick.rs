@@ -1075,6 +1075,7 @@ impl World {
                     last_prey_heading: 0.,
                     last_prey_ticks_left: 0,
                 });
+                self.species_carnivore_birth(self.carnivores.len() - 1, Some(i), None);
                 self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
                 let parent_bin = ambush_bin(parent_gene);
                 let child_bin = ambush_bin(child_gene);

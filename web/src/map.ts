@@ -13,6 +13,7 @@ export class EcosystemMap {
   private hits: { id: Id; kind: Kind; x: number; y: number; radius: number }[] = [];
   private drag?: { x: number; y: number; dx: number; dy: number; moved: boolean };
   private context: CanvasRenderingContext2D;
+  private world?: { width: number; height: number };
 
   constructor(private canvas: HTMLCanvasElement, private list: HTMLSelectElement,
     private detail: HTMLElement, private redraw: () => void) {
@@ -77,6 +78,23 @@ export class EcosystemMap {
     this.redraw();
   }
 
+  /** Select an entity and zoom to it; false when it no longer exists (Issue #67). */
+  focus(id: Id, inspect: (index: number, generation: number) => string): boolean {
+    const data = JSON.parse(inspect(...id));
+    if (!data || !this.world) return false;
+    const [x, y] = data.position as [number, number];
+    const { width, height } = this.canvas;
+    this.zoom = Math.max(this.zoom, 4);
+    this.offset = [width / 2 - x * width / this.world.width * this.zoom,
+      height / 2 - y * height / this.world.height * this.zoom];
+    this.clamp();
+    this.selection = id;
+    this.removed = false;
+    this.list.hidden = true;
+    this.redraw();
+    return true;
+  }
+
   reset() {
     this.selection = undefined;
     this.removed = false;
@@ -102,6 +120,7 @@ export class EcosystemMap {
     world: {width: number; height: number; land_columns: number; land_rows: number},
     inspect: (index: number, generation: number) => string) {
     const ctx = this.context;
+    this.world = world;
     const { width, height } = this.canvas;
     const sx = width / world.width * this.zoom, sy = height / world.height * this.zoom;
     const [ox, oy] = this.offset;
@@ -166,7 +185,7 @@ export class EcosystemMap {
       target: "記録された対象ID", last_target: "直近の追跡対象ID",
       reproduction_cooldown: "繁殖クールダウン（Tick）", attack_cooldown: "攻撃クールダウン（Tick）",
       births: "直接出生数", well_fed_ticks: "満腹継続（Tick）", dose: "累積毒曝露",
-      damage: "累積毒損傷（HP）", tolerance: "現在のEでの色許容度",
+      damage: "累積毒損傷（HP）", species: "種", tolerance: "現在のEでの色許容度",
       action: "実行した行動", reproduction: "実際の繁殖判定",
     };
     const kind = data.kind as Kind;
@@ -176,8 +195,8 @@ export class EcosystemMap {
     color.className = "swatch";
     color.style.backgroundColor = "rgb(" + (data.rgb as number[]).map(v => Math.round(v * 255)).join(",") + ")";
     title.prepend(color);
-    const primary = kind === "plant" ? ["age", "toxic", "growth", "body_n"]
-      : ["age", "hp", "reserve_e", "stomach_n"];
+    const primary = kind === "plant" ? ["species", "age", "toxic", "growth", "body_n"]
+      : ["species", "age", "hp", "reserve_e", "stomach_n"];
     const entries = (keys: string[]) => {
       const dl = document.createElement("dl");
       for (const key of keys) {

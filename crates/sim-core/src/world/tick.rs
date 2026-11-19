@@ -313,6 +313,14 @@ impl World {
                 produces_toxin,
                 toxin_type,
             });
+            super::species::plant_birth(
+                &mut self.species,
+                &self.plants.items,
+                self.config.seed,
+                self.tick,
+                self.plants.items.len() - 1,
+                Some(i),
+            );
             self.births += 1;
             self.diagnostics.plant_births += 1;
         }
@@ -397,6 +405,14 @@ impl World {
                             self.config.toxin.initial_type0_fraction,
                         ),
                     });
+                    super::species::plant_birth(
+                        &mut self.species,
+                        &self.plants.items,
+                        self.config.seed,
+                        self.tick,
+                        self.plants.items.len() - 1,
+                        None,
+                    );
                     if self.plants.items.last().unwrap().produces_toxin {
                         self.diagnostics.toxic_plant_births += 1;
                     } else {
@@ -450,6 +466,7 @@ impl World {
         if self.config.carnivores.enabled {
             self.update_carnivores()?;
         }
+        self.species_census_if_due();
         self.baseline.check(&self.resources,&self.ledger,1e-3,1e-9).map_err(|e|format!(
             "conservation at tick {}: {e:?}; energy_current={:.12}, energy_initial={:.12}, sunlight_in={:.12}, heat_out={:.12}, energy_tolerance={:.12}",
             self.tick, self.resources.total_energy(), self.baseline.energy,

@@ -1481,6 +1481,7 @@ impl World {
                     last_prey_heading: 0.,
                     last_prey_ticks_left: 0,
                 });
+                self.species_carnivore_birth(self.carnivores.len() - 1, None, Some(i));
                 self.animals.items[i].successful_births += 1;
                 self.carnivore_births += 1;
                 self.defense.carnivores_born_from_herbivores += 1;
@@ -1519,6 +1520,7 @@ impl World {
                 exploration_ticks: 30,
                 target: None,
             });
+            self.species_herbivore_birth(self.animals.items.len() - 1, Some(i));
             self.record_energy(
                 id,
                 "birth",

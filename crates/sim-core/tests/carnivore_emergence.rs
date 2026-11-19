@@ -86,3 +86,31 @@ fn check_only_web_config_loads_and_runs() {
     w.step(200).unwrap();
     assert!(w.herbivore_count() > 0);
 }
+
+/// Issue #66/#67: the species observer reports living individuals and focusable events.
+#[test]
+fn species_observer_reports_ranking_and_focusable_events() {
+    let mut w = World::new(config(0.01, 0)).unwrap();
+    for _ in 0..30 {
+        w.step(100).unwrap();
+    }
+    let summary: serde_json::Value = serde_json::from_str(&w.species_summary_json()).unwrap();
+    let herbivores = &summary["kinds"]["herbivore"];
+    let counted: u64 = herbivores["species"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["count"].as_u64().unwrap())
+        .sum();
+    assert_eq!(counted, herbivores["total"].as_u64().unwrap());
+    let events: serde_json::Value = serde_json::from_str(&w.take_events_json()).unwrap();
+    let events = events.as_array().unwrap();
+    assert!(events
+        .iter()
+        .any(|e| e["code"] == "carnivore_from_herbivore"));
+    for e in events {
+        assert!(e["message"].as_str().is_some_and(|m| !m.is_empty()));
+    }
+    let again: serde_json::Value = serde_json::from_str(&w.take_events_json()).unwrap();
+    assert!(again.as_array().unwrap().is_empty());
+}

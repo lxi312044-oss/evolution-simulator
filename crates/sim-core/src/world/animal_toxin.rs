@@ -213,6 +213,41 @@ impl World {
         Ok(())
     }
 
+    /// Read-only: strongest toxin production ability over active types (observation only;
+    /// falls back to the stateless founder draw the lazy initialisation would use).
+    pub(super) fn herbivore_toxin_ability(&self, id: EntityId) -> f64 {
+        let types = type_count(&self.config.toxin);
+        let founder;
+        let production = match self.animal_toxins.herbivores.get(&id) {
+            Some(p) => p,
+            None => {
+                founder = Production::founder(self.config.seed, id, 71);
+                &founder
+            }
+        };
+        production.ability[..types]
+            .iter()
+            .copied()
+            .fold(0., f64::max)
+    }
+
+    /// Read-only counterpart of `herbivore_toxin_ability` for carnivores.
+    pub(super) fn carnivore_toxin_ability(&self, id: EntityId) -> f64 {
+        let types = type_count(&self.config.toxin);
+        let founder;
+        let production = match self.animal_toxins.predators.get(&id) {
+            Some(p) => &p.production,
+            None => {
+                founder = Production::founder(self.config.seed, id, 83);
+                &founder
+            }
+        };
+        production.ability[..types]
+            .iter()
+            .copied()
+            .fold(0., f64::max)
+    }
+
     pub(super) fn inherit_herbivore_production(&mut self, parent: EntityId, child: EntityId) {
         let seed = self.config.seed;
         let states = &mut self.animal_toxins.herbivores;

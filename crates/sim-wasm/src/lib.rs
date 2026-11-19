@@ -514,7 +514,24 @@ impl Simulation {
     }
 
     pub fn inspect_entity_json(&self, index: u32, generation: u32) -> String {
-        self.world.inspect_entity(index, generation).to_string()
+        let mut value = self.world.inspect_entity(index, generation);
+        if let Some(object) = value.as_object_mut() {
+            let id = sim_core::entity::EntityId { index, generation };
+            if let Some(name) = self.world.entity_species_name(id) {
+                object.insert("species".into(), name.into());
+            }
+        }
+        value.to_string()
+    }
+
+    /// Issue #66: living species per kind, ranked by count.
+    pub fn species_summary_json(&self) -> String {
+        self.world.species_summary_json()
+    }
+
+    /// Issue #67: events since the last call (oldest first); clears the queue.
+    pub fn take_events_json(&mut self) -> String {
+        self.world.take_events_json()
     }
 
     pub fn plant_color_snapshot_json(&self) -> String {

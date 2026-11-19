@@ -38,6 +38,8 @@ pub struct World {
     pub diagnostics: super::Diagnostics,
     pub carnivore_debug: super::CarnivoreDebug,
     pub defense: super::DefenseCounters,
+    /// Issue #66/#67: species and events for display (observation only, not audited).
+    pub species: super::SpeciesBook,
     /// Opt-in counterattack retreat: carnivore -> (herbivore it will not target, ticks left).
     /// Opt-in hunting bouts (Issue 11), per carnivore.
     pub carnivore_hunt_bouts: std::collections::BTreeMap<crate::entity::EntityId, super::HuntBout>,
@@ -132,6 +134,7 @@ impl World {
             diagnostics: super::Diagnostics::default(),
             carnivore_debug: super::CarnivoreDebug::default(),
             defense: super::DefenseCounters::default(),
+            species: super::SpeciesBook::default(),
             carnivore_retreats: std::collections::BTreeMap::new(),
             carnivore_hunt_bouts: std::collections::BTreeMap::new(),
             prey_trend_snapshot: super::PreyTrendSnapshot::default(),
@@ -266,6 +269,7 @@ impl World {
                 self.config.toxin.initial_type0_fraction,
             ),
         });
+        self.species_plant_birth(self.plants.items.len() - 1, None);
         Ok(())
     }
     fn create_initial_herbivore(&mut self, x: f32, y: f32) -> Result<(), String> {
@@ -331,6 +335,7 @@ impl World {
             exploration_ticks,
             target: None,
         });
+        self.species_herbivore_birth(self.animals.items.len() - 1, None);
         Ok(())
     }
     fn create_initial_carnivore(&mut self, x: f32, y: f32) -> Result<(), String> {
@@ -383,6 +388,7 @@ impl World {
             last_prey_heading: 0.,
             last_prey_ticks_left: 0,
         });
+        self.species_carnivore_birth(self.carnivores.len() - 1, None, None);
         Ok(())
     }
     pub fn carnivore_snapshot(&self) -> Vec<[f32; 7]> {
