@@ -6,8 +6,10 @@ use sim_core::{SimulationConfig, World};
 
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut c: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
+    let mut c: SimulationConfig = serde_json::from_str(include_str!(
+        "../../../config/stage4-standard-20261119.json"
+    ))
+    .unwrap();
     let arm = a[1].as_str();
     if arm != "std" {
         c.toxin.plant_toxic_mutation_probability = 0.005;

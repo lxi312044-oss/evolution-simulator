@@ -4,8 +4,10 @@ use sim_core::{SimulationConfig, World};
 
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let mut c: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
+    let mut c: SimulationConfig = serde_json::from_str(include_str!(
+        "../../../config/stage4-standard-20261119.json"
+    ))
+    .unwrap();
     c.seed = a[1].parse().unwrap();
     let ticks: u64 = a[2].parse().unwrap();
     let every: u64 = a.get(3).map_or(1000, |v| v.parse().unwrap());

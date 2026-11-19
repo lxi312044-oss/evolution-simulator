@@ -17,8 +17,10 @@
 use sim_core::{SimulationConfig, World};
 
 fn config_for(arm: &str) -> SimulationConfig {
-    let mut c: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
+    let mut c: SimulationConfig = serde_json::from_str(include_str!(
+        "../../../config/stage4-standard-20261119.json"
+    ))
+    .unwrap();
     for token in arm.split('_') {
         let a = &mut c.animal_toxin;
         match token {
