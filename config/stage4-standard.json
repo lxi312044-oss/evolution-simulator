@@ -38,7 +38,9 @@
     "seed_energy": 8.0,
     "seed_probability": 0.6499999761581421,
     "seed_work_energy": 1.8,
-    "soil_diffusion_rate": 0.0
+    "soil_diffusion_rate": 0.0,
+    "color_mutation_probability": 0.2,
+    "color_mutation_scale": 0.25
   },
   "herbivores": {
     "basal_energy_per_tick": 0.03,

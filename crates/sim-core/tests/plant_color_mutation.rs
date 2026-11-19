@@ -9,33 +9,24 @@ fn colors(w: &World) -> std::collections::BTreeSet<u32> {
 }
 
 #[test]
-fn trial_config_differs_from_the_standard_only_in_plant_color_mutation() {
-    let mut trial: serde_json::Value = serde_json::from_str(TRIAL).unwrap();
-    let standard: serde_json::Value = serde_json::from_str(STANDARD).unwrap();
-    assert_eq!(trial["plants"]["color_mutation_probability"], 0.2);
-    assert_eq!(trial["plants"]["color_mutation_scale"], 0.25);
-    trial["plants"]["color_mutation_probability"] =
-        standard["plants"]["color_mutation_probability"].clone();
-    trial["plants"]["color_mutation_scale"] = standard["plants"]["color_mutation_scale"].clone();
-    let strip = |mut v: serde_json::Value| {
-        for k in ["color_mutation_probability", "color_mutation_scale"] {
-            v["plants"].as_object_mut().unwrap().remove(k);
-        }
-        v
-    };
-    assert_eq!(strip(trial), strip(standard));
+fn standard_now_includes_the_trial_plant_color_mutation() {
+    assert_eq!(STANDARD, TRIAL);
 }
 
 #[test]
 fn mutation_adds_plant_colors_and_zero_keeps_two() {
-    let run = |text: &str| {
-        let c: SimulationConfig = serde_json::from_str(text).unwrap();
+    let run = |mutation: bool| {
+        let mut c: SimulationConfig = serde_json::from_str(STANDARD).unwrap();
+        if !mutation {
+            c.plants.color_mutation_probability = 0.;
+            c.plants.color_mutation_scale = 0.;
+        }
         let mut w = World::new(c).unwrap();
         for _ in 0..10 {
             w.step(100).unwrap();
         }
         colors(&w)
     };
-    assert!(run(STANDARD).len() <= 2);
-    assert!(run(TRIAL).len() > 10);
+    assert!(run(false).len() <= 2);
+    assert!(run(true).len() > 10);
 }
