@@ -1,0 +1,11 @@
+{
+  "name": "r8-hunt",
+  "check": false,
+  "builds": [
+    {"id": "new", "sha": "", "example": "mimicry_goal"}
+  ],
+  "runs": [
+    {"build": "new", "arms": ["std", "B_T01_D002_F40_X50_P20_R50_NL", "B_T01_D002_F40_X50_P20_R50_G100", "B_T01_D002_F40_X50_P20_R70_NL", "B_T01_D002_F40_X50_P20_R70_G100", "B_T01_D002_F40_X50_P20_R70_G150"],
+     "seeds": [90006, 90001, 90002, 90003, 90004, 90005, 90007, 90008], "ticks": 30000, "extra": [500]}
+  ]
+}
