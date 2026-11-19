@@ -46,7 +46,8 @@ document.body.dataset.mode = dev ? "dev" : "play";
 el("mode-description").textContent = dev ? "開発版 · 設定と観測" : "プレイ版 · 生態系を観察";
 const map = new EcosystemMap(canvas, el("hit-list") as HTMLSelectElement, el("individual"), render);
 const ecology = new EcologyPanel(el("species-ranking"), el("species-tabs"), el("species-totals"), el("event-log"),
-  id => map.focus(id, (index, generation) => simulation.inspect_entity_json(index, generation)));
+  id => map.focus(id, (index, generation) => simulation.inspect_entity_json(index, generation)),
+  (species, n) => JSON.parse(simulation.species_member_json(species, n)));
 const populationTrend: number[][] = [];
 let priorTick = -1;
 let frameStart = 0;

@@ -56,7 +56,7 @@ details{margin:8px 0}summary{cursor:pointer;padding:.45rem 0}
 .kind-tabs button[aria-pressed=true]{background:#b9e6cc;color:#13261d;border-color:#b9e6cc}
 .species-totals{color:#9eb4af;font-size:12px;margin:10px 0 6px}
 .species-list,.event-log{list-style:none;margin:0;padding:0}
-.species-row{display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:4px 6px;padding:7px 0;border-bottom:1px solid #25383c;font-size:13px}
+.species-row{cursor:pointer;border-radius:6px;display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;align-items:center;gap:4px 6px;padding:7px 4px;border-bottom:1px solid #25383c;font-size:13px}
 .species-row .swatch{margin-right:0}
 .species-name{overflow-wrap:anywhere;line-height:1.35}
 .species-row.top .species-name{font-weight:650;color:#f1faf4}
@@ -75,3 +75,4 @@ button.event-text:hover{background:none;color:#d6ffe8}
 .event-notice{color:#f2c183;font-size:12px}
 .empty{color:#7f9a92;font-size:12px;padding:8px 0}
 body[data-mode="play"] main,main{max-width:1800px}
+.species-row:hover,.species-row:focus-visible{background:#183029;outline:none}.species-row .event-notice{grid-column:1/-1}

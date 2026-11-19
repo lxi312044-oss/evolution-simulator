@@ -775,6 +775,28 @@ impl World {
         let sp = self.species.species_of(id)?;
         self.species.name_of(sp).map(str::to_string)
     }
+
+    /// Living members of a species, in storage order (Issue #66: focus from the ranking).
+    pub fn species_members(&self, species: u32) -> Vec<EntityId> {
+        let of = |id: &EntityId| self.species.species_of(*id) == Some(species);
+        self.plants
+            .items
+            .iter()
+            .map(|p| p.id)
+            .chain(self.animals.items.iter().map(|h| h.id))
+            .chain(self.carnivores.iter().map(|c| c.id))
+            .filter(of)
+            .collect()
+    }
+
+    /// The `n`-th living member (wrapping) as `[index, generation]`, or `null` (JSON).
+    pub fn species_member_json(&self, species: u32, n: u32) -> String {
+        let members = self.species_members(species);
+        match members.get(n as usize % members.len().max(1)) {
+            Some(id) => serde_json::json!([id.index, id.generation]).to_string(),
+            None => "null".into(),
+        }
+    }
 }
 
 #[cfg(test)]

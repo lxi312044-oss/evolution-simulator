@@ -24,9 +24,11 @@ export class EcologyPanel {
   private summary?: Summary;
   private events: SimEvent[] = [];
   private notice?: { element: HTMLElement; timer: number };
+  private cursor = new Map<number, number>();
 
   constructor(private ranking: HTMLElement, private tabs: HTMLElement, private totals: HTMLElement,
-    private log: HTMLElement, private focus: (id: Id) => boolean) {
+    private log: HTMLElement, private focus: (id: Id) => boolean,
+    private member: (species: number, n: number) => Id | null) {
     for (const button of tabs.querySelectorAll<HTMLButtonElement>("button[data-kind]")) {
       button.onclick = () => { this.kind = button.dataset.kind as Kind; this.drawRanking(); };
     }
@@ -36,12 +38,17 @@ export class EcologyPanel {
   reset() {
     this.summary = undefined;
     this.events = [];
+    this.cursor.clear();
     this.drawRanking();
     this.drawLog();
   }
 
   updateSpecies(json: string) {
-    this.summary = JSON.parse(json) as Summary;
+    const next = JSON.parse(json) as Summary;
+    // The summary only changes at the census; redrawing less often keeps rows clickable.
+    if (this.summary && next.tick - next.tick % 100 === this.summary.tick - this.summary.tick % 100
+      && next.tick >= this.summary.tick) return;
+    this.summary = next;
     this.drawRanking();
   }
 
@@ -90,6 +97,12 @@ export class EcologyPanel {
       fill.style.backgroundColor = swatch.style.backgroundColor;
       bar.append(fill);
       row.append(badge, swatch, name, count, bar);
+      row.tabIndex = 0;
+      row.title = "クリックでこの種の個体にフォーカス（押すたびに次の個体へ）";
+      const go = () => this.focusSpecies(row, s.id);
+      // pointerdown: the list is redrawn while playing, so a full click may span two rows.
+      row.onpointerdown = e => { if (e.button === 0) go(); };
+      row.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
       return row;
     });
     const rest = data.species.length - SHOWN;
@@ -114,14 +127,22 @@ export class EcologyPanel {
       if (e.entity) {
         const id = e.entity;
         text.title = "クリックでこの個体にフォーカス";
-        text.onclick = () => {
-          if (!this.focus(id)) this.flash(item, "この個体はもういません");
-        };
+        const go = () => { if (!this.focus(id)) this.flash(item, "この個体はもういません"); };
+        text.onpointerdown = e => { if (e.button === 0) go(); };
+        text.onclick = e => { if (e.detail === 0) go(); };
       }
       item.append(tick, text);
       return item;
     });
     this.log.replaceChildren(...items);
+  }
+
+  /** Focus the next living member of a species; repeated clicks cycle through members. */
+  private focusSpecies(row: HTMLElement, species: number) {
+    const n = this.cursor.get(species) ?? 0;
+    const id = this.member(species, n);
+    this.cursor.set(species, n + 1);
+    if (!id || !this.focus(id)) this.flash(row, "この種の個体はもういません");
   }
 
   private flash(item: HTMLElement, message: string) {

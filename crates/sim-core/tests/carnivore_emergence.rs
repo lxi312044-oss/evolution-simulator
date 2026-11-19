@@ -111,6 +111,22 @@ fn species_observer_reports_ranking_and_focusable_events() {
     for e in events {
         assert!(e["message"].as_str().is_some_and(|m| !m.is_empty()));
     }
+    let top = herbivores["species"][0]["id"].as_u64().unwrap() as u32;
+    let first: serde_json::Value = serde_json::from_str(&w.species_member_json(top, 0)).unwrap();
+    let id = sim_core::entity::EntityId {
+        index: first[0].as_u64().unwrap() as u32,
+        generation: first[1].as_u64().unwrap() as u32,
+    };
+    assert_eq!(
+        w.entity_species_name(id).as_deref(),
+        herbivores["species"][0]["name"].as_str()
+    );
+    let count = w.species_members(top).len() as u32;
+    assert_eq!(
+        w.species_member_json(top, count),
+        w.species_member_json(top, 0)
+    );
+    assert_eq!(w.species_member_json(u32::MAX, 0), "null");
     let again: serde_json::Value = serde_json::from_str(&w.take_events_json()).unwrap();
     assert!(again.as_array().unwrap().is_empty());
 }
