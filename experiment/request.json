@@ -1,0 +1,161 @@
+{
+ "name": "diet-s01",
+ "check": true,
+ "builds": [
+  {
+   "id": "oldprereq",
+   "sha": "51ac9c430166754cb6cced68bd7565a17d0a6bf3",
+   "example": "mimicry_prereq"
+  },
+  {
+   "id": "s0prereq",
+   "sha": "1de8e16f7c0eb538517d86e9309e020bbd10ca09",
+   "example": "mimicry_prereq"
+  },
+  {
+   "id": "newprereq",
+   "sha": "",
+   "example": "mimicry_prereq"
+  },
+  {
+   "id": "oldgoal",
+   "sha": "51ac9c430166754cb6cced68bd7565a17d0a6bf3",
+   "example": "mimicry_goal"
+  },
+  {
+   "id": "newgoal",
+   "sha": "",
+   "example": "mimicry_goal"
+  },
+  {
+   "id": "s0diet",
+   "sha": "1de8e16f7c0eb538517d86e9309e020bbd10ca09",
+   "example": "diet_goal"
+  },
+  {
+   "id": "diet",
+   "sha": "",
+   "example": "diet_goal"
+  }
+ ],
+ "runs": [
+  {
+   "build": "oldprereq",
+   "arms": [
+    "std",
+    "B_T03_D01_H50"
+   ],
+   "seeds": [
+    90003,
+    90006
+   ],
+   "ticks": 30000
+  },
+  {
+   "build": "s0prereq",
+   "arms": [
+    "std",
+    "B_T03_D01_H50"
+   ],
+   "seeds": [
+    90003,
+    90006
+   ],
+   "ticks": 30000
+  },
+  {
+   "build": "newprereq",
+   "arms": [
+    "std",
+    "B_T03_D01_H50"
+   ],
+   "seeds": [
+    90003,
+    90006
+   ],
+   "ticks": 30000
+  },
+  {
+   "build": "oldgoal",
+   "arms": [
+    "std",
+    "B_T01_D002_F40_X50_P20_R70_Y20_G400"
+   ],
+   "seeds": [
+    90001,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  },
+  {
+   "build": "newgoal",
+   "arms": [
+    "std",
+    "B_T01_D002_F40_X50_P20_R70_Y20_G400"
+   ],
+   "seeds": [
+    90001,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  },
+  {
+   "build": "s0diet",
+   "arms": [
+    "std",
+    "DO"
+   ],
+   "seeds": [
+    90001,
+    90002,
+    90003,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  },
+  {
+   "build": "diet",
+   "arms": [
+    "DO"
+   ],
+   "seeds": [
+    90001,
+    90002,
+    90003,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  },
+  {
+   "build": "diet",
+   "arms": [
+    "DE",
+    "DE_K50",
+    "DE_K25",
+    "DE_M20",
+    "DE_H20_M15",
+    "DE_H20_M15_K50"
+   ],
+   "seeds": [
+    90001,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  }
+ ]
+}
