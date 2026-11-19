@@ -6,11 +6,17 @@ const groups: [string, string[], string][] = [
     "固定配色モードは相互排他です。通常の色継承・変異と実験配色は併用できません。"],
   ["毒・耐性", ["toxin", "animal_toxin"],
     "toxin.enabled は植物毒の作用と草食の被毒処理を切り替えます。植物の配色・継承と動物毒・耐性の設定は個別です。動物の生成上限・生成費と身体N割合に基づく移送はコード内固定です。"],
-  ["学習・判断", ["herbivores.color_learning", "herbivores.hungry_color", "animal_toxin.color_learning"],
+  ["学習・判断", ["herbivores.color_learning", "herbivores.hungry_color", "animal_toxin.color_learning", "animal_toxin.carnivore_learning"],
     "記憶は最大30色、一般化距離0.25、空腹時の許容式はコード内固定です。時間経過による忘却は未実装です。"],
   ["摂食・繁殖", ["herbivores", "carnivores"], ""],
 ];
-const optional = ["animal_toxin.carnivore_damage_threshold", "animal_toxin.carnivore_hp_damage_per_excess_unit"];
+const optional = ["animal_toxin.carnivore_damage_threshold", "animal_toxin.carnivore_hp_damage_per_excess_unit",
+  "animal_toxin.carnivore_learning_gain", "animal_toxin.herbivore_toxic_initial_fraction"];
+// Placeholder for an empty optional field: what an absent value means.
+const emptyMeaning: Record<string, string> = {
+  "animal_toxin.carnivore_learning_gain": "空欄＝1倍",
+  "animal_toxin.herbivore_toxic_initial_fraction": "空欄＝全個体が毒を作る",
+};
 const matches = (path: string, parts: string[]) => parts.some(part => path === part || path.startsWith(part + ".")
   || part.includes(".") && path.startsWith(part));
 
@@ -66,7 +72,7 @@ export function editor(container: HTMLElement, dirty: () => void) {
           input.step = "any";
           input.value = val == null ? "" : String(val);
           input.required = !optional.includes(path);
-          if (!input.required) input.placeholder = "共有設定を使用";
+          if (!input.required) input.placeholder = emptyMeaning[path] ?? "共有設定を使用";
         }
         input.readOnly = path === "simulation.decision_interval_ticks";
         input.addEventListener("input", dirty);

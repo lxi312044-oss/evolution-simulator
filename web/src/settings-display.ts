@@ -69,6 +69,11 @@ animal_toxin.enabled|動物毒の作用|動物の毒生成・捕食による毒�
 animal_toxin.color_learning_enabled|肉食の色学習|摂食後の被毒経験を獲物の可視色に結びつけ、次の選択や攻撃に使います。動物毒ONが必要です。|b
 animal_toxin.carnivore_damage_threshold|肉食専用の毒損傷閾値|肉食の毒損傷判定だけに使います。空欄なら共有閾値を使います。|n 毒量・空欄可
 animal_toxin.carnivore_hp_damage_per_excess_unit|肉食専用の毒損傷係数|肉食の超過負荷当たりのHP損傷を指定します。空欄なら共有係数を使います。|n HP／毒量／Tick・空欄可
+animal_toxin.herbivore_toxin_decay_per_tick|草食の毒の分解率|草食が体に蓄えた毒のうち、毎Tickこの割合が分解されます。毒を保つには作り続ける必要があります。0なら分解しません。|0以上1未満 ／Tick
+animal_toxin.carnivore_learning_gain|肉食の色学習の強さ|被毒の経験を色の記憶へ書き込むときの倍率です。1色に記憶できる危険度の上限も同じ倍率になります。HPへの損傷は変わりません。空欄なら1倍です。|pos 倍（10000以下）・空欄可
+animal_toxin.herbivore_toxic_initial_fraction|草食の有毒個体の初期割合|草食に有毒・無毒の性質を持たせます。開始時の草食はこの確率で有毒です。無毒の個体は毒を作らず、生成費も払いません。空欄なら全個体が生成能力どおりに毒を作ります。|p 空欄可
+animal_toxin.herbivore_toxic_mutation_probability|草食の有毒・無毒の変異確率|子が親と反対の性質（有毒↔無毒）で生まれる確率です。有毒個体の初期割合を指定したときだけ使えます。|p
+animal_toxin.plant_toxin_transfer_threshold|植物由来の毒が肉食へ移る量|かまれた草食の植物由来の毒が、種類ごとにこの量以上あるときだけ肉食へ移ります。少ない毒は草食に残ります。0なら量によらず移ります。|n 毒量
 herbivores.color_learning_enabled|草食の色学習|植物の可視色と摂食後の毒損傷を結びつけ、餌の選択に使います。|b
 herbivores.hungry_color_recheck_enabled|実験用：低エネルギー時の餌の再評価|予備Eが最大の25%未満で可食候補が色だけで全除外されたとき、餌を再評価します。|b
 herbivores.hungry_color_recovery_enabled|実験用：餌の再評価を回復まで継続|草食の色学習と低エネルギー時の再評価が有効なとき、予備Eが30%以上になるまで回復状態を維持します。|b

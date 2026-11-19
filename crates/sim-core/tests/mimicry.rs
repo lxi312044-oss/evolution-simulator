@@ -310,3 +310,29 @@ fn toxic_trait_and_plant_threshold_are_opt_in() {
     let s = serde_json::to_string(&config(None, 0.)).unwrap();
     assert!(!s.contains("herbivore_toxic") && !s.contains("plant_toxin_transfer"));
 }
+
+/// Issue #76 (2026-11-20): the standard is the 2026-11-19 standard plus the condition chosen
+/// after round 10 by the rule fixed in Issue #76 (`B_T01_D002_F40_X50_P20_R70_Y20_G400` in
+/// `examples/mimicry_goal.rs`). Every other value is unchanged.
+#[test]
+fn standard_is_the_20261119_standard_plus_the_issue76_choice() {
+    let parse = |text: &str| serde_json::from_str::<SimulationConfig>(text).unwrap();
+    let standard = parse(include_str!("../../../config/stage4-standard.json"));
+    let mut expected = parse(include_str!(
+        "../../../config/stage4-standard-20261119.json"
+    ));
+    let a = &mut expected.animal_toxin;
+    a.carnivore_damage_threshold = Some(0.01); // T01
+    a.herbivore_toxin_decay_per_tick = 0.002; // D002
+    a.herbivore_toxic_initial_fraction = Some(0.5); // X50
+    a.herbivore_toxic_mutation_probability = 0.02; // Y20
+    a.plant_toxin_transfer_threshold = 0.2; // P20
+    a.carnivore_learning_gain = Some(400.); // G400
+    expected.herbivores.reproduction_food_target = 40; // F40
+    expected.carnivores.feeding_resume_fraction = 0.7; // R70
+    assert_eq!(
+        serde_json::to_value(&standard).unwrap(),
+        serde_json::to_value(&expected).unwrap()
+    );
+    World::new(standard).unwrap();
+}
