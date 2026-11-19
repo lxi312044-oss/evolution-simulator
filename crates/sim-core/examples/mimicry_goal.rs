@@ -116,6 +116,9 @@ fn header() -> String {
             h.extend((0..8).map(|s| format!("{k}_{g}_{s}")));
         }
     }
+    for k in ["choice_first", "choice_skipped"] {
+        h.extend(G.map(|g| format!("{k}_{g}")));
+    }
     h.join(",")
 }
 
@@ -131,6 +134,8 @@ fn main() {
     let ticks: u64 = a[3].parse().unwrap();
     let every: u64 = a.get(4).map_or(500, |v| v.parse().unwrap());
     let mut w = World::new(c).unwrap();
+    // Issue #76 revised M1: choice-scene observation (observation only).
+    w.enable_mimicry_choice_observation();
     println!("{}", header());
     let f = |v: &serde_json::Value| v.as_f64().map_or(String::new(), |x| format!("{x:.5}"));
     loop {
@@ -192,6 +197,9 @@ fn main() {
                 for g in 0..3 {
                     row.extend((0..8).map(|s| d[k][g][s].to_string()));
                 }
+            }
+            for k in ["choice_first", "choice_skipped"] {
+                row.extend((0..3).map(|g| d[k][g].to_string()));
             }
             println!("{}", row.join(","));
         }

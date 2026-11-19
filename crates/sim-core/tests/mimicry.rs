@@ -167,3 +167,45 @@ fn body_color_mutation_is_opt_in_and_color_only_without_learning() {
     let s = serde_json::to_string(&config(None, true)).unwrap();
     assert!(!s.contains("body_color_mutation"));
 }
+
+/// Issue #76 revised M1: the choice-scene observation does not change the run, and without
+/// carnivore color learning no prey is ever passed over because of its color.
+#[test]
+fn choice_scene_observation_is_observation_only() {
+    let config = |learning: bool| {
+        let mut c: SimulationConfig =
+            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        c.herbivores.carnivore_offspring_probability = 0.02;
+        c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
+        c.animal_toxin.carnivore_damage_threshold = Some(0.01);
+        c.animal_toxin.carnivore_learning_gain = Some(100.);
+        c.animal_toxin.color_learning_enabled = learning;
+        c
+    };
+    let counts = |w: &World, key: &str| -> Vec<u64> {
+        let d = w.mimicry_diagnostics_value();
+        (0..3).map(|g| d[key][g].as_u64().unwrap()).collect()
+    };
+    let mut observed = World::new(config(true)).unwrap();
+    observed.enable_mimicry_choice_observation();
+    let mut plain = World::new(config(true)).unwrap();
+    let mut control = World::new(config(false)).unwrap();
+    control.enable_mimicry_choice_observation();
+    for _ in 0..30 {
+        for w in [&mut observed, &mut plain, &mut control] {
+            w.step(100).unwrap();
+        }
+        assert_eq!(observed.animals.items.len(), plain.animals.items.len());
+        assert_eq!(observed.carnivores.len(), plain.carnivores.len());
+        assert_eq!(format!("{:?}", observed.rng), format!("{:?}", plain.rng));
+        assert_eq!(observed.mimicry_json(), plain.mimicry_json());
+    }
+    assert_eq!(counts(&plain, "choice_first"), vec![0, 0, 0]);
+    assert_eq!(counts(&control, "choice_skipped"), vec![0, 0, 0]);
+    for (first, skipped) in counts(&observed, "choice_first")
+        .into_iter()
+        .zip(counts(&observed, "choice_skipped"))
+    {
+        assert!(skipped <= first);
+    }
+}

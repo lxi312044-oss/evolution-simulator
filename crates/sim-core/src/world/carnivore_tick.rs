@@ -203,6 +203,10 @@ impl World {
                     .carnivore_hunt_bouts
                     .get(&predator_id)
                     .is_some_and(|b| b.rest_left > 0);
+            if !satiated && !bout_resting {
+                // Issue #76 (revised M1): observation only, off unless enabled.
+                self.observe_mimicry_choice(i, reserve_e);
+            }
             for (j, h) in self.animals.items.iter().enumerate() {
                 if satiated || bout_resting {
                     break;

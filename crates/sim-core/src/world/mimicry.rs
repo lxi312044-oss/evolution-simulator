@@ -33,6 +33,13 @@ pub struct MimicryBook {
     pub(super) harmful_evictions: u64,
     /// New carnivore color-memory entries (one per newly experienced prey color).
     pub(super) memory_entries_created: u64,
+    /// Issue #76 (revised M1, opt-in observation): choice scenes, where a hunting carnivore
+    /// sees both a mimic and an other undefended herbivore. Per group of the nearest
+    /// herbivore: scenes, and scenes in which the carnivore passed it over because of color.
+    choice_observation: bool,
+    census_groups: std::collections::BTreeMap<crate::entity::EntityId, u8>,
+    choice_first: [u64; 3],
+    choice_skipped: [u64; 3],
 }
 
 impl MimicryBook {
@@ -108,12 +115,59 @@ impl World {
             return;
         }
         let defended = self.defended_colors();
-        for (i, g) in self.mimicry_groups(&defended).into_iter().enumerate() {
+        let groups = self.mimicry_groups(&defended);
+        for (i, &g) in groups.iter().enumerate() {
             self.mimicry.exposure[g] += super::species::CENSUS_TICKS;
             let s = self.herbivore_stratum(i);
             self.mimicry.strata_exposure[g][s] += super::species::CENSUS_TICKS;
         }
+        if self.mimicry.choice_observation {
+            self.mimicry.census_groups = groups
+                .iter()
+                .enumerate()
+                .map(|(i, &g)| (self.animals.items[i].id, g as u8))
+                .collect();
+        }
         self.mimicry.defended_colors = defended;
+    }
+
+    /// Issue #76 (revised M1): turn on the choice-scene observation. Observation only.
+    pub fn enable_mimicry_choice_observation(&mut self) {
+        self.mimicry.choice_observation = true;
+    }
+
+    /// Issue #76 (revised M1, observation only): called where carnivore `predator` chooses
+    /// its prey (not satiated, not resting), with the reserve used for that choice. If the
+    /// carnivore sees both a mimic and an other undefended herbivore (groups from the last
+    /// census), count the group of the nearest herbivore and whether its color is refused.
+    pub(super) fn observe_mimicry_choice(&mut self, predator: usize, reserve_e: f64) {
+        if !self.mimicry.choice_observation {
+            return;
+        }
+        let c = &self.carnivores[predator];
+        let (x, y, vision2, id) = (c.x, c.y, c.vision * c.vision, c.id);
+        let mut nearest: Option<(f32, usize, u8)> = None;
+        let mut seen = [false; 3];
+        for (j, h) in self.animals.items.iter().enumerate() {
+            let d = (h.x - x).powi(2) + (h.y - y).powi(2);
+            if d >= vision2 {
+                continue;
+            }
+            let Some(&g) = self.mimicry.census_groups.get(&h.id) else {
+                continue;
+            };
+            seen[usize::from(g)] = true;
+            if nearest.is_none_or(|(best, _, _)| d < best) {
+                nearest = Some((d, j, g));
+            }
+        }
+        let Some((_, j, g)) = nearest.filter(|_| seen[1] && seen[2]) else {
+            return;
+        };
+        let refused =
+            !self.carnivore_allows_color(id, self.animals.items[j].genes.body_color, reserve_e);
+        self.mimicry.choice_first[usize::from(g)] += 1;
+        self.mimicry.choice_skipped[usize::from(g)] += u64::from(refused);
     }
 
     /// Group of herbivore `prey` for an attack (uses the last census defended colors).
@@ -221,6 +275,8 @@ impl World {
             "carnivore_memory": self.carnivore_memory_summary(),
             "harmful_evictions": m.harmful_evictions,
             "memory_entries_created": m.memory_entries_created,
+            "choice_first": m.choice_first,
+            "choice_skipped": m.choice_skipped,
         })
     }
 
