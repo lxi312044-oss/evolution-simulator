@@ -231,6 +231,15 @@ impl World {
             .fold(0., f64::max)
     }
 
+    /// Read-only: mean toxin resistance over active types for a carnivore (display only).
+    pub(super) fn carnivore_resistance_mean(&self, id: EntityId) -> f32 {
+        let types = type_count(&self.config.toxin);
+        match self.animal_toxins.predators.get(&id) {
+            Some(p) => p.resistance[..types].iter().sum::<f32>() / types as f32,
+            None => self.config.toxin.initial_resistance as f32,
+        }
+    }
+
     /// Read-only counterpart of `herbivore_toxin_ability` for carnivores.
     pub(super) fn carnivore_toxin_ability(&self, id: EntityId) -> f64 {
         let types = type_count(&self.config.toxin);

@@ -778,7 +778,8 @@ impl World {
 
     /// Display-only genetic traits for sprite shapes (Issue #64), in the same order as
     /// `herbivore_color_snapshot` then `carnivore_snapshot`:
-    /// `[adult max HP (0 for carnivores), speed, strongest toxin ability, toxin resistance (-1 for carnivores)]`.
+    /// `[adult max HP (0 for carnivores), speed, strongest toxin ability, toxin resistance]`
+    /// (carnivores: mean resistance over active toxin types).
     pub fn animal_shape_snapshot(&self) -> Vec<[f32; 4]> {
         self.animals
             .items
@@ -791,11 +792,14 @@ impl World {
                     h.genes.toxin_resistance,
                 ]
             })
-            .chain(
-                self.carnivores
-                    .iter()
-                    .map(|c| [0., c.speed, self.carnivore_toxin_ability(c.id) as f32, -1.]),
-            )
+            .chain(self.carnivores.iter().map(|c| {
+                [
+                    0.,
+                    c.speed,
+                    self.carnivore_toxin_ability(c.id) as f32,
+                    self.carnivore_resistance_mean(c.id),
+                ]
+            }))
             .collect()
     }
 

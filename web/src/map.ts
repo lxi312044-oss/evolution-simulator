@@ -11,6 +11,7 @@ export class EcosystemMap {
   private selection?: Id;
   private removed = false;
   private hits: { id: Id; kind: Kind; x: number; y: number; radius: number }[] = [];
+  private detailOpen?: boolean;
   private drag?: { x: number; y: number; dx: number; dy: number; moved: boolean };
   private context: CanvasRenderingContext2D;
   private world?: { width: number; height: number };
@@ -139,10 +140,14 @@ export class EcosystemMap {
     ctx.stroke();
     this.hits = [];
     let cursor = 0, animal = 0;
+    const population: Record<Kind, number[][]> = { plant: [], herbivore: [], carnivore: [] };
+    let selectedTraits: number[] | undefined;
     for (const kind of ["plant", "herbivore", "carnivore"] as const) {
       for (const [x, y, r, state, red, green, blue] of groups[kind]) {
         const id: Id = [ids[cursor++], ids[cursor++]];
         const traits = kind === "plant" ? undefined : shapes[animal++];
+        if (traits) population[kind].push(traits);
+        if (this.selection && id[0] === this.selection[0] && id[1] === this.selection[1]) selectedTraits = traits;
         const px = x * sx + ox, py = y * sy + oy;
         const size = Math.max(kind === "plant" ? 8 : 17, r * Math.min(sx, sy) * 2);
         if (px < -size || py < -size || px > width + size || py > height + size) continue;
@@ -167,10 +172,10 @@ export class EcosystemMap {
       ctx.stroke();
       ctx.lineWidth = 1;
     }
-    this.show(data);
+    this.show(data, selectedTraits, population[data.kind as Kind] ?? []);
   }
 
-  private show(data: Record<string, unknown>) {
+  private show(data: Record<string, unknown>, traits?: number[], population: number[][] = []) {
     const fmt = (value: unknown): string => value == null ? "未取得"
       : typeof value === "number" ? Number(value.toFixed(4)).toString()
       : typeof value === "boolean" ? value ? "はい" : "いいえ"
@@ -209,23 +214,85 @@ export class EcosystemMap {
       }
       return dl;
     };
-    let detail = this.detail.querySelector("details");
-    const open = detail?.open ?? document.body.dataset.mode === "dev";
-    detail = document.createElement("details");
+    const play = document.body.dataset.mode !== "dev";
+    // Rebuilt every frame: keep the open state here and toggle on pointerdown so a click
+    // that spans two frames still opens it.
+    const open = this.detailOpen ?? !play;
+    const detail = document.createElement("details");
     detail.open = open;
     const summary = document.createElement("summary");
     summary.textContent = "詳しい状態";
-    const keys = Object.keys(labels).filter(k => !primary.includes(k) && (
-      k in data || ["position", "rgb", "parent", "birth_tick"].includes(k)
-      || kind !== "plant" && ["action", "reproduction"].includes(k)));
-    detail.append(summary, entries(keys));
-    if (kind !== "plant") {
-      const memory = document.createElement("p");
-      const values = data.memory as { rgb: number[]; risk_same_color: number }[] | null;
-      memory.textContent = "学習した色と同色の危険度: " + (values == null ? "未取得" : values.length
-        ? values.map(entry => fmt(entry.rgb) + " → " + fmt(entry.risk_same_color)).join("、") : "記憶なし");
-      detail.append(memory);
+    summary.onpointerdown = e => { if (e.button === 0) { this.detailOpen = !detail.open; detail.open = this.detailOpen; } };
+    summary.onclick = e => { e.preventDefault(); if (e.detail === 0) { this.detailOpen = !detail.open; detail.open = this.detailOpen; } };
+    if (play) {
+      detail.append(summary, traitList(kind, data, traits, population));
+    } else {
+      const keys = Object.keys(labels).filter(k => !primary.includes(k) && (
+        k in data || ["position", "rgb", "parent", "birth_tick"].includes(k)
+        || kind !== "plant" && ["action", "reproduction"].includes(k)));
+      detail.append(summary, entries(keys));
+      if (kind !== "plant") {
+        const memory = document.createElement("p");
+        const values = data.memory as { rgb: number[]; risk_same_color: number }[] | null;
+        memory.textContent = "学習した色と同色の危険度: " + (values == null ? "未取得" : values.length
+          ? values.map(entry => fmt(entry.rgb) + " → " + fmt(entry.risk_same_color)).join("、") : "記憶なし");
+        detail.append(memory);
+      }
     }
     this.detail.replaceChildren(title, entries(primary), detail);
   }
+}
+
+type Level = [string, string, string];
+const LEVELS: Record<string, Level> = {
+  strong: ["強い", "普通", "弱い"], fast: ["速い", "普通", "遅い"], big: ["大きい", "普通", "小さい"],
+};
+/** Relative to the living individuals of the same kind: upper third / middle / lower third. */
+function relative(value: number | undefined, column: number, population: number[][], words: Level): string {
+  if (value == null || !Number.isFinite(value)) return "不明";
+  const values = population.map(row => row[column]).filter(Number.isFinite).sort((a, b) => a - b);
+  if (values.length < 3) return words[1];
+  const low = values[Math.floor(values.length / 3)], high = values[Math.floor(values.length * 2 / 3)];
+  return value > high ? words[0] : value < low ? words[2] : words[1];
+}
+function swatch(rgb: number[]) {
+  const s = document.createElement("span");
+  s.className = "swatch";
+  s.style.backgroundColor = "rgb(" + rgb.map(v => Math.round(v * 255)).join(",") + ")";
+  return s;
+}
+
+/** Play mode: only the traits that matter for toxin, color and learning (mimicry). */
+function traitList(kind: Kind, data: Record<string, unknown>, traits: number[] | undefined,
+  population: number[][]): HTMLElement {
+  const dl = document.createElement("dl");
+  dl.className = "trait-list";
+  const add = (label: string, value: string | Node, hint?: string) => {
+    const dt = document.createElement("dt"), dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.append(value);
+    if (hint) dd.title = hint;
+    dl.append(dt, dd);
+  };
+  if (kind === "plant") {
+    add("毒", data.toxic ? "あり" : "なし");
+    return dl;
+  }
+  const others = kind === "herbivore" ? "草食" : "肉食";
+  add("毒をつくる力", relative(traits?.[2], 2, population, LEVELS.strong), `ほかの${others}と比べた遺伝子の強さ`);
+  const stock = (data.toxin_stock as number[] | null)?.reduce((a, b) => a + b, 0);
+  add("いま持っている毒", stock == null ? "不明" : stock >= 0.5 ? "多い" : stock >= 0.05 ? "少し" : "ない",
+    "食べた相手が受ける害は、この量で決まります");
+  add("毒への耐性", relative(traits?.[3], 3, population, LEVELS.strong), `ほかの${others}と比べた強さ`);
+  add("速さ", relative(traits?.[1], 1, population, LEVELS.fast), `ほかの${others}と比べた速さ`);
+  if (kind === "herbivore") add("体の大きさ", relative(traits?.[0], 0, population, LEVELS.big), "体力（最大HP）の遺伝子");
+  const memory = (data.memory as { rgb: number[]; harm: number }[] | null ?? [])
+    .filter(m => m.harm > 0).sort((a, b) => b.harm - a.harm).slice(0, 4);
+  const avoided = document.createElement("span");
+  avoided.className = "avoided-colors";
+  if (memory.length) avoided.append(...memory.map(m => swatch(m.rgb)));
+  else avoided.textContent = "まだない";
+  add(kind === "herbivore" ? "避けている植物の色" : "避けている獲物の色", avoided,
+    "毒で害を受けた経験から覚えた色（記憶は遺伝しません）");
+  return dl;
 }
