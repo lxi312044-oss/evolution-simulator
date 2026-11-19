@@ -1,7 +1,7 @@
 //! Issue #76: comparisons toward the Batesian-mimicry goal on the stage-4 standard config.
 //! Usage: mimicry_goal <arm> <seed> <ticks> [every]   (CSV to stdout, default every 500 ticks)
 //!        mimicry_goal <arm> config                    (effective config JSON to stdout)
-//! An arm is a list of tokens joined by `_` applied to config/stage4-standard.json:
+//! An arm is a list of tokens joined by `_` applied to config/stage4-standard-20261119.json:
 //!   std  no change          B    no change (plant toxicity mutation is already standard)
 //!   T03 / T01 / T00  carnivore damage threshold 0.03 / 0.01 / 0
 //!   D01 / D02 / D005 / D002  herbivore toxin decay per tick 0.01 / 0.02 / 0.005 / 0.002
@@ -18,7 +18,7 @@ use sim_core::{SimulationConfig, World};
 
 fn config_for(arm: &str) -> SimulationConfig {
     let mut c: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
     for token in arm.split('_') {
         let a = &mut c.animal_toxin;
         match token {

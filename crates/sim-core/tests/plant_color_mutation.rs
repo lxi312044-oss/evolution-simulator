@@ -1,7 +1,7 @@
 //! Issue #70: optional plant color mutation with inherited experimental colors.
 use sim_core::{SimulationConfig, World};
 
-const STANDARD: &str = include_str!("../../../config/stage4-standard.json");
+const STANDARD: &str = include_str!("../../../config/stage4-standard-20261119.json");
 const TRIAL: &str = include_str!("../../../config/stage4-standard-plant-color-mutation.json");
 
 fn colors(w: &World) -> std::collections::BTreeSet<u32> {

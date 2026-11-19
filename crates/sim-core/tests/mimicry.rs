@@ -4,7 +4,7 @@ use sim_core::{SimulationConfig, World};
 #[test]
 fn mimicry_indicators_count_every_herbivore_once() {
     let c: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
     let mut w = World::new(c).unwrap();
     for _ in 0..10 {
         w.step(100).unwrap();
@@ -28,7 +28,7 @@ fn mimicry_indicators_count_every_herbivore_once() {
 fn herbivore_toxin_decay_lowers_stock_and_keeps_balance() {
     let run = |decay: f64| {
         let mut c: SimulationConfig =
-            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+            serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
         c.animal_toxin.herbivore_toxin_decay_per_tick = decay;
         let mut w = World::new(c).unwrap();
         for _ in 0..10 {
@@ -44,7 +44,7 @@ fn herbivore_toxin_decay_lowers_stock_and_keeps_balance() {
     assert!(run(0.) > 0.9);
     assert!(run(0.02) < 0.5);
     let mut bad: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
     bad.animal_toxin.herbivore_toxin_decay_per_tick = 1.;
     assert!(World::new(bad).is_err());
 }
@@ -55,7 +55,7 @@ fn herbivore_toxin_decay_lowers_stock_and_keeps_balance() {
 fn mimicry_diagnostics_partition_counters_and_do_not_change_the_run() {
     let config = || {
         let mut c: SimulationConfig =
-            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+            serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
         c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
         c.animal_toxin.carnivore_damage_threshold = Some(0.03);
         c.herbivores.carnivore_offspring_probability = 0.02;
@@ -101,7 +101,7 @@ fn mimicry_diagnostics_partition_counters_and_do_not_change_the_run() {
 fn carnivore_learning_gain_is_opt_in() {
     let config = |gain: Option<f64>| {
         let mut c: SimulationConfig =
-            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+            serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
         c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
         c.animal_toxin.carnivore_damage_threshold = Some(0.03);
         c.herbivores.carnivore_offspring_probability = 0.02;
@@ -131,7 +131,7 @@ fn carnivore_learning_gain_is_opt_in() {
 fn body_color_mutation_is_opt_in_and_color_only_without_learning() {
     let config = |p: Option<f32>, learning: bool| {
         let mut c: SimulationConfig =
-            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+            serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
         c.herbivores.carnivore_offspring_probability = 0.02;
         c.animal_toxin.color_learning_enabled = learning;
         c.herbivores.body_color_mutation_probability = p;
@@ -174,7 +174,7 @@ fn body_color_mutation_is_opt_in_and_color_only_without_learning() {
 fn choice_scene_observation_is_observation_only() {
     let config = |learning: bool| {
         let mut c: SimulationConfig =
-            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+            serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
         c.herbivores.carnivore_offspring_probability = 0.02;
         c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
         c.animal_toxin.carnivore_damage_threshold = Some(0.01);
@@ -236,7 +236,7 @@ fn choice_scene_observation_is_observation_only() {
 fn toxic_trait_and_plant_threshold_are_opt_in() {
     let config = |fraction: Option<f64>, threshold: f64| {
         let mut c: SimulationConfig =
-            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+            serde_json::from_str(include_str!("../../../config/stage4-standard-20261119.json")).unwrap();
         c.herbivores.carnivore_offspring_probability = 0.02;
         c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
         c.animal_toxin.herbivore_toxic_initial_fraction = fraction;

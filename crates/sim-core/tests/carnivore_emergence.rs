@@ -137,11 +137,12 @@ fn species_observer_reports_ranking_and_focusable_events() {
     assert!(again.as_array().unwrap().is_empty());
 }
 
-/// The current standard (decided 2026-11-19) is the w_p002_b120 check config plus plant
-/// color mutation 0.20 / 0.25 (Issue #70) and plant toxicity mutation 0.005 (Issue #74).
+/// The 2026-11-19 standard (kept as `stage4-standard-20261119.json`) is the w_p002_b120 check
+/// config plus plant color mutation 0.20 / 0.25 (Issue #70) and plant toxicity mutation 0.005
+/// (Issue #74).
 #[test]
 fn standard_config_is_w_p002_b120_with_plant_color_mutation() {
-    let standard = include_str!("../../../config/stage4-standard.json");
+    let standard = include_str!("../../../config/stage4-standard-20261119.json");
     let check = include_str!("../../../config/stage4-emergence-check-40x40.json");
     let strip = |text: &str| {
         let mut v: serde_json::Value = serde_json::from_str(text).unwrap();
