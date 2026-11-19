@@ -55,6 +55,19 @@ fn herbivore_toxin_decay_lowers_stock_and_keeps_balance() {
     assert!(World::new(bad).is_err());
 }
 
+/// Issue #76 tests run in a quarter of the standard world (same cell size and densities) with
+/// a few carnivores from the start, so hunting begins at once and the debug build stays fast.
+fn quarter_world(mut c: SimulationConfig) -> SimulationConfig {
+    c.world.width = 1000.;
+    c.world.height = 1000.;
+    c.world.land_columns = 20;
+    c.world.land_rows = 20;
+    c.initial_population.plants = 300;
+    c.initial_population.herbivores = 80;
+    c.initial_population.carnivores = 5;
+    c
+}
+
 /// Issue #76 (observation only): the strata partition the attack and exposure counters,
 /// and observing does not change the run.
 #[test]
@@ -67,11 +80,11 @@ fn mimicry_diagnostics_partition_counters_and_do_not_change_the_run() {
         c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
         c.animal_toxin.carnivore_damage_threshold = Some(0.03);
         c.herbivores.carnivore_offspring_probability = 0.02;
-        c
+        quarter_world(c)
     };
     let mut observed = World::new(config()).unwrap();
     let mut plain = World::new(config()).unwrap();
-    for _ in 0..30 {
+    for _ in 0..10 {
         observed.step(100).unwrap();
         plain.step(100).unwrap();
         let _ = observed.mimicry_diagnostics_value();
@@ -116,11 +129,11 @@ fn carnivore_learning_gain_is_opt_in() {
         c.animal_toxin.carnivore_damage_threshold = Some(0.03);
         c.herbivores.carnivore_offspring_probability = 0.02;
         c.animal_toxin.carnivore_learning_gain = gain;
-        c
+        quarter_world(c)
     };
     let mut absent = World::new(config(None)).unwrap();
     let mut one = World::new(config(Some(1.))).unwrap();
-    for _ in 0..30 {
+    for _ in 0..10 {
         absent.step(100).unwrap();
         one.step(100).unwrap();
         assert_eq!(absent.animals.items.len(), one.animals.items.len());
@@ -147,7 +160,7 @@ fn body_color_mutation_is_opt_in_and_color_only_without_learning() {
         c.herbivores.carnivore_offspring_probability = 0.02;
         c.animal_toxin.color_learning_enabled = learning;
         c.herbivores.body_color_mutation_probability = p;
-        c
+        quarter_world(c)
     };
     let colors = |w: &World| -> Vec<[u32; 3]> {
         w.animals
@@ -160,7 +173,7 @@ fn body_color_mutation_is_opt_in_and_color_only_without_learning() {
     let mut same = World::new(config(Some(0.05), true)).unwrap();
     let mut plain = World::new(config(None, false)).unwrap();
     let mut varied = World::new(config(Some(0.5), false)).unwrap();
-    for _ in 0..20 {
+    for _ in 0..15 {
         for w in [&mut absent, &mut same, &mut plain, &mut varied] {
             w.step(100).unwrap();
         }
@@ -194,7 +207,7 @@ fn choice_scene_observation_is_observation_only() {
         c.animal_toxin.carnivore_damage_threshold = Some(0.01);
         c.animal_toxin.carnivore_learning_gain = Some(100.);
         c.animal_toxin.color_learning_enabled = learning;
-        c
+        quarter_world(c)
     };
     let counts = |w: &World, key: &str| -> Vec<u64> {
         let d = w.mimicry_diagnostics_value();
@@ -205,7 +218,7 @@ fn choice_scene_observation_is_observation_only() {
     let mut plain = World::new(config(true)).unwrap();
     let mut control = World::new(config(false)).unwrap();
     control.enable_mimicry_choice_observation();
-    for _ in 0..30 {
+    for _ in 0..10 {
         for w in [&mut observed, &mut plain, &mut control] {
             w.step(100).unwrap();
         }
@@ -257,10 +270,10 @@ fn toxic_trait_and_plant_threshold_are_opt_in() {
         c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
         c.animal_toxin.herbivore_toxic_initial_fraction = fraction;
         c.animal_toxin.plant_toxin_transfer_threshold = threshold;
-        c
+        quarter_world(c)
     };
     let mut w = World::new(config(Some(0.5), 100.)).unwrap();
-    for _ in 0..25 {
+    for _ in 0..10 {
         w.step(100).unwrap();
     }
     let d = w.mimicry_diagnostics_value();
