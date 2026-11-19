@@ -101,7 +101,9 @@ export function drawAnimalSprite(ctx:CanvasRenderingContext2D,species:SpeciesSpr
 /** Growth-stage plant sprite. Uses the visible RGB stored on the plant. */
 export function drawPlantSprite(ctx:CanvasRenderingContext2D,x:number,y:number,growth:number,size:number,bodyColor?:BodyRGB):void {
  const kind:SpeciesSprite=growth<0.33?'plant-seedling':growth<0.85?'plant-young':'plant-mature';
- const img=sprite(kind,bodyColor);
+ // Issue #70: with color mutation nearly every plant has its own color; cache sprites per
+ // quantized color (16 levels per channel) so thousands of plants share a few hundred images.
+ const img=sprite(kind,bodyColor&&quantize(bodyColor,15));
  ctx.save();ctx.imageSmoothingEnabled=false;
  const px=Math.round(size);ctx.drawImage(img,Math.round(x-px/2),Math.round(y-px/2),px,px);
  ctx.restore();
@@ -181,7 +183,8 @@ export function creaturePixels(kind: AnimalKind, shape: CreatureShape): string[]
 }
 
 const creatureCache = new Map<string, HTMLCanvasElement>();
-export function creatureSprite(kind: AnimalKind, bodyColor: BodyRGB, shape: CreatureShape): HTMLCanvasElement {
+export function creatureSprite(kind: AnimalKind, color: BodyRGB, shape: CreatureShape): HTMLCanvasElement {
+ const bodyColor = quantize(color, 31);
  const rgb = bodyColor.map(v => Math.max(0, Math.min(255, Math.round(v * 255))));
  const key = [kind, rgb.join(","), Math.round(shape.size * 3), Math.round(shape.speed * 2), shape.spikes, shape.shell ? 1 : 0].join(":");
  const cached = creatureCache.get(key);
@@ -205,4 +208,9 @@ export function drawCreature(ctx: CanvasRenderingContext2D, kind: AnimalKind, x:
  ctx.save(); ctx.imageSmoothingEnabled = false;
  ctx.drawImage(img, Math.round(x - pixels / 2), Math.round(y - pixels / 2), pixels, pixels);
  ctx.restore();
+}
+
+/** Display-only color rounding for sprite caching (exact colors stay in the inspector). */
+export function quantize(color: BodyRGB, levels: number): BodyRGB {
+ return color.map(v => Math.round(Math.max(0, Math.min(1, v)) * levels) / levels) as unknown as BodyRGB;
 }
