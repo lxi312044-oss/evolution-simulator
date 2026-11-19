@@ -74,7 +74,7 @@
     "reproduction_cooldown_ticks": 600,
     "reproduction_enabled": true,
     "reproduction_food_radius": 100.0,
-    "reproduction_food_target": 8,
+    "reproduction_food_target": 40,
     "reproduction_min_age": 400,
     "reproduction_min_energy_fraction": 0.8,
     "reproduction_min_hp_fraction": 0.699999988079071,
@@ -108,7 +108,7 @@
     "emergency_digestion_multiplier": 4.0,
     "emergency_reserve_energy": 2.0,
     "enabled": true,
-    "feeding_resume_fraction": 0.2,
+    "feeding_resume_fraction": 0.7,
     "feeding_stop_fraction": 0.9,
     "food_limited_reproduction_enabled": true,
     "hunting_forecast_ticks": 300,
@@ -176,8 +176,13 @@
     "resistance_mutation_scale": 0.1
   },
   "animal_toxin": {
-    "carnivore_damage_threshold": 0.5,
+    "carnivore_damage_threshold": 0.01,
+    "carnivore_learning_gain": 400.0,
     "color_learning_enabled": true,
-    "enabled": true
+    "enabled": true,
+    "herbivore_toxic_initial_fraction": 0.5,
+    "herbivore_toxic_mutation_probability": 0.02,
+    "herbivore_toxin_decay_per_tick": 0.002,
+    "plant_toxin_transfer_threshold": 0.2
   }
 }

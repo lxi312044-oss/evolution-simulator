@@ -203,6 +203,10 @@ impl World {
                     .carnivore_hunt_bouts
                     .get(&predator_id)
                     .is_some_and(|b| b.rest_left > 0);
+            if !satiated && !bout_resting {
+                // Issue #76 (revised M1): observation only, off unless enabled.
+                self.observe_mimicry_choice(i, reserve_e);
+            }
             for (j, h) in self.animals.items.iter().enumerate() {
                 if satiated || bout_resting {
                     break;
@@ -563,8 +567,8 @@ impl World {
                     } else {
                         self.carnivores[i].p42.attacks += 1;
                         self.carnivore_debug.hunt_attempts += 1;
-                        let mimicry_group = self.mimicry_attack_group(j);
-                        self.mimicry.count_attack(mimicry_group);
+                        let (mimicry_group, mimicry_stratum) = self.mimicry_attack_class(j);
+                        self.mimicry.count_attack(mimicry_group, mimicry_stratum);
                         if hunger_override {
                             self.carnivore_debug.hunting_hunger_override_attacks += 1;
                         }

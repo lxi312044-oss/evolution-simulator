@@ -58,6 +58,13 @@ pub(super) struct AnimalToxins {
     hunger_reapproach_opportunities: u64,
     threshold_exceedance_ticks: [u64; TYPES],
     trace: Option<CarnivoreToxinTrace>,
+    /// Issue #76 (opt-in): inherited toxic trait of herbivores born to a parent (founders are
+    /// drawn from the seed). Empty when the trait is off, so the audited state is unchanged.
+    #[cfg_attr(
+        feature = "state-audit",
+        serde(skip_serializing_if = "BTreeMap::is_empty")
+    )]
+    toxic_trait: BTreeMap<EntityId, bool>,
 }
 
 #[derive(Debug, Default)]
@@ -163,6 +170,7 @@ fn remove_fraction(stock: &mut f64, fraction: f64) -> f64 {
 
 impl AnimalToxins {
     pub(super) fn remove_herbivore(&mut self, animal: &Herbivore) {
+        self.toxic_trait.remove(&animal.id);
         let production = self.herbivores.remove(&animal.id);
         for (kind, discarded) in self.discarded.iter_mut().enumerate() {
             let residual = if kind == 0 {
@@ -185,6 +193,20 @@ impl AnimalToxins {
 }
 
 impl World {
+    /// Issue #76 (opt-in): whether herbivore `id` makes toxin. Always true when the trait is off.
+    /// Founders are drawn from a stateless stream; offspring inherit with rare flips.
+    pub(super) fn herbivore_is_toxic(&self, id: EntityId) -> bool {
+        match self.config.animal_toxin.herbivore_toxic_initial_fraction {
+            None => true,
+            Some(fraction) => self
+                .animal_toxins
+                .toxic_trait
+                .get(&id)
+                .copied()
+                .unwrap_or_else(|| trait_draw(self.config.seed, id, 0, 95) < fraction),
+        }
+    }
+
     pub(super) fn produce_herbivore_toxins(&mut self) -> Result<(), String> {
         let types = type_count(&self.config.toxin);
         let decay = self.config.animal_toxin.herbivore_toxin_decay_per_tick;
@@ -193,6 +215,7 @@ impl World {
             if animal.hp <= 0. || animal.age >= animal.max_age {
                 continue;
             }
+            let toxic = self.herbivore_is_toxic(animal.id);
             let production = self
                 .animal_toxins
                 .herbivores
@@ -209,7 +232,12 @@ impl World {
                 .resources
                 .energy_balance(animal.reserve)
                 .ok_or("missing animal reserve")?;
-            let units = production.generate(types, available);
+            // Issue #76 (opt-in): non-toxic herbivores make nothing and pay nothing.
+            let units = if toxic {
+                production.generate(types, available)
+            } else {
+                [0.; TYPES]
+            };
             let cost = (units.iter().sum::<f64>() * ENERGY_PER_UNIT).min(available);
             self.ledger
                 .dissipate_heat(&mut self.resources, animal.reserve, cost)
@@ -281,6 +309,20 @@ impl World {
 
     pub(super) fn inherit_herbivore_production(&mut self, parent: EntityId, child: EntityId) {
         let seed = self.config.seed;
+        if self
+            .config
+            .animal_toxin
+            .herbivore_toxic_initial_fraction
+            .is_some()
+        {
+            let flip = trait_draw(seed, child, 0, 97)
+                < self
+                    .config
+                    .animal_toxin
+                    .herbivore_toxic_mutation_probability;
+            let toxic = self.herbivore_is_toxic(parent) != flip;
+            self.animal_toxins.toxic_trait.insert(child, toxic);
+        }
         let states = &mut self.animal_toxins.herbivores;
         let production = states
             .entry(parent)
@@ -315,6 +357,12 @@ impl World {
             return;
         }
         let fraction = (eaten_n / body_n).clamp(0., 1.);
+        let plant_threshold = self.config.animal_toxin.plant_toxin_transfer_threshold;
+        // Issue #76 diagnosis (observation only): group of the prey for dose accounting.
+        let dose_group = self
+            .mimicry
+            .choice_observation
+            .then(|| self.mimicry_attack_group(prey_index));
         let prey = &mut self.animals.items[prey_index];
         let id = self.carnivores[predator_index].id;
         let t = &self.config.toxin;
@@ -333,7 +381,12 @@ impl World {
                 &mut prey.typed_load[kind]
             };
             let before = *stock;
-            let residual = remove_fraction(stock, fraction);
+            // Issue #76 (opt-in): a small plant-derived load stays in the herbivore.
+            let residual = if plant_threshold <= 0. || before >= plant_threshold {
+                remove_fraction(stock, fraction)
+            } else {
+                0.
+            };
             if residual > 0. {
                 if let Some(memory) = self.plant_color_learning.get_mut(&prey.id) {
                     memory.observe_damage(kind, before, *stock, 0.);
@@ -343,6 +396,10 @@ impl World {
                 .as_deref_mut()
                 .map_or(0., |p| remove_fraction(&mut p.stock[kind], fraction));
             let dose = produced + residual;
+            if let Some(g) = dose_group {
+                self.mimicry.dose_produced[g] += produced;
+                self.mimicry.dose_plant[g] += residual;
+            }
             let previous_load = predator.load[kind];
             predator.load[kind] += dose;
             if dose > 0. {
@@ -362,6 +419,10 @@ impl World {
                 }
             }
             if learning && dose > 0. {
+                // Issue #76 diagnosis (observation only): memory turnover.
+                let (created, evicts_harm) = predator.memory.ingest_effect(color);
+                self.mimicry.memory_entries_created += u64::from(created);
+                self.mimicry.harmful_evictions += u64::from(evicts_harm);
                 predator.memory.ingest(color, kind, dose);
             }
             book.transferred_produced[kind] += produced;
@@ -400,9 +461,22 @@ impl World {
             let trace_damage = step.damage > 0. && book.trace.is_some();
             let memory_before = trace_damage.then(|| predator.memory.harm_scores());
             if self.config.animal_toxin.color_learning_enabled {
-                predator
-                    .memory
-                    .observe_damage(kind, before, step.remaining_load, step.damage);
+                match self.config.animal_toxin.carnivore_learning_gain {
+                    None => predator.memory.observe_damage(
+                        kind,
+                        before,
+                        step.remaining_load,
+                        step.damage,
+                    ),
+                    // Issue #76 (opt-in): learn more strongly from the same poisoning.
+                    Some(gain) => predator.memory.observe_damage_with_gain(
+                        kind,
+                        before,
+                        step.remaining_load,
+                        step.damage,
+                        gain,
+                    ),
+                }
             }
             if let Some(memory_before) = memory_before {
                 let memory_after = predator.memory.harm_scores();
@@ -485,6 +559,61 @@ impl World {
                 .predators
                 .get(&id)
                 .is_none_or(|p| p.memory.allows(visible_color(color), reserve_e / 60.))
+    }
+
+    /// Issue #76 diagnosis (read-only): color-memory summary over living carnivores.
+    /// `avoids_own_harm_color` = the largest learned harm exceeds the current risk tolerance,
+    /// i.e. the carnivore would refuse at least the exact color it learned from.
+    pub(super) fn carnivore_memory_summary(&self) -> serde_json::Value {
+        let mut n = 0u64;
+        let (mut entries, mut harmful, mut max_harm, mut tolerance, mut hp, mut load) =
+            (0., 0., 0., 0., 0., 0.);
+        let mut avoiding = 0u64;
+        let types = type_count(&self.config.toxin);
+        for c in &self.carnivores {
+            let Some(p) = self.animal_toxins.predators.get(&c.id) else {
+                continue;
+            };
+            let scores = p.memory.harm_scores();
+            let top = scores.iter().map(|&(_, s)| s).fold(0., f64::max);
+            let reserve = self.resources.energy_balance(c.reserve).unwrap_or(0.);
+            let tol = super::plant_color_learning::risk_tolerance(reserve / 60.);
+            n += 1;
+            entries += p.memory.entry_count() as f64;
+            harmful += scores.len() as f64;
+            max_harm += top;
+            tolerance += tol;
+            hp += p.hp;
+            load += p.load[..types].iter().sum::<f64>();
+            avoiding += u64::from(top * 10. > tol);
+        }
+        let mean = |v: f64| (n > 0).then(|| v / n as f64);
+        serde_json::json!({
+            "carnivores_with_state": n,
+            "mean_entries": mean(entries),
+            "mean_harmful_entries": mean(harmful),
+            "mean_max_harm": mean(max_harm),
+            "mean_tolerance": mean(tolerance),
+            "mean_hp": mean(hp),
+            "mean_load": mean(load),
+            "avoids_own_harm_color": mean(avoiding as f64),
+        })
+    }
+
+    /// Issue #76 diagnosis (read-only): the risk a carnivore's color memory assigns to a color
+    /// (0 without learning or memory). Compared with the risk tolerance in prey choice.
+    pub(super) fn carnivore_color_risk(
+        &self,
+        id: EntityId,
+        color: crate::animals::color::BodyColor,
+    ) -> f64 {
+        if !self.config.animal_toxin.color_learning_enabled {
+            return 0.;
+        }
+        self.animal_toxins
+            .predators
+            .get(&id)
+            .map_or(0., |p| p.memory.color_risk(visible_color(color)))
     }
 
     /// A counterattack teaches the carnivore that this prey color is harmful.

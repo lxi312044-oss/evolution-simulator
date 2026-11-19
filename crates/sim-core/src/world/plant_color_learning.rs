@@ -57,6 +57,27 @@ impl PlantColorMemory {
         }
     }
 
+    /// Issue #76 (opt-in, carnivores): like `observe_damage`, but the harm written to memory
+    /// and its per-color upper limit are multiplied by `gain`.
+    pub(crate) fn observe_damage_with_gain(
+        &mut self,
+        toxin_type: usize,
+        before: f64,
+        after: f64,
+        damage: f32,
+        gain: f64,
+    ) {
+        if before <= 0. {
+            return;
+        }
+        for entry in &mut self.experiences {
+            let load = &mut entry.loads[toxin_type];
+            let fraction = (*load / before).clamp(0., 1.);
+            *load = fraction * after;
+            entry.damage = (entry.damage + f64::from(damage) * gain * fraction).min(0.1 * gain);
+        }
+    }
+
     /// Harm experienced directly from an encounter with this color (e.g. a counterattack),
     /// without a toxin load. Uses the same 0.1 cap as toxin damage.
     pub(crate) fn observe_injury(&mut self, color: u32, harm: f64) {
@@ -104,6 +125,33 @@ impl PlantColorMemory {
             .filter(|entry| entry.damage > 0.)
             .map(|entry| (entry.color, entry.damage))
             .collect()
+    }
+
+    /// Read-only (Issue #76 diagnosis): would `ingest(color, ..)` create a new entry, and
+    /// would that push out an entry carrying learned harm? Returns (new_entry, evicts_harm).
+    pub(super) fn ingest_effect(&self, color: u32) -> (bool, bool) {
+        let color = color & 0xffffff00;
+        if self.experiences.iter().any(|entry| entry.color == color) {
+            return (false, false);
+        }
+        let evicts = self.experiences.len() == Self::CAPACITY && self.experiences[0].damage > 0.;
+        (true, evicts)
+    }
+
+    /// Read-only (Issue #76 diagnosis): number of remembered colors.
+    pub(super) fn entry_count(&self) -> usize {
+        self.experiences.len()
+    }
+
+    /// Read-only (Issue #76 diagnosis): the largest learned risk x similarity for a color.
+    /// `allows(color, f)` is false exactly when this exceeds `risk_tolerance(f)`.
+    pub(super) fn color_risk(&self, color: u32) -> f64 {
+        self.experiences
+            .iter()
+            .map(|entry| {
+                entry.damage * 10. * (1. - color_distance(color, entry.color) / 0.25).max(0.)
+            })
+            .fold(0., f64::max)
     }
 
     pub(super) fn has_harm_for_color(&self, color: u32) -> bool {
@@ -213,6 +261,45 @@ mod tests {
         // risk = 10 * harm ~= 0.368 <= tolerance 1 - 0.75 * 0.8 = 0.4
         assert!(memory.allows(0xff0000ff, 0.8));
         assert!(!memory.allows(0xff0000ff, 1.));
+    }
+
+    #[test]
+    fn learning_gain_scales_harm_and_its_limit() {
+        let run = |gain: Option<f64>, damage: f32| {
+            let mut memory = PlantColorMemory::default();
+            memory.ingest(0xff0000ff, 0, 1.);
+            match gain {
+                None => memory.observe_damage(0, 1., 0.5, damage),
+                Some(g) => memory.observe_damage_with_gain(0, 1., 0.5, damage, g),
+            }
+            memory.harm_scores()[0].1
+        };
+        assert_eq!(run(None, 0.003).to_bits(), run(Some(1.), 0.003).to_bits());
+        assert!((run(Some(30.), 0.003) - 30. * run(None, 0.003)).abs() < 1e-12);
+        assert_eq!(run(None, 1.), 0.1);
+        assert_eq!(run(Some(30.), 1.), 3.);
+        let mut memory = PlantColorMemory::default();
+        memory.ingest(0xff0000ff, 0, 1.);
+        memory.observe_damage_with_gain(0, 1., 0.5, 0.003, 100.);
+        // risk = 10 x harm = 3 > tolerance even for an empty reserve
+        assert!(!memory.allows(0xff0000ff, 0.));
+    }
+
+    #[test]
+    fn color_risk_matches_the_choice_rule() {
+        let mut memory = PlantColorMemory::default();
+        memory.ingest(0xff0000ff, 0, 1.);
+        memory.observe_damage_with_gain(0, 1., 0.5, 0.003, 100.);
+        for color in [0xff000000_u32, 0xe0200000, 0xb0400000, 0x0000ff00] {
+            for fraction in [0., 0.3, 0.7, 1.] {
+                let refuse = memory.color_risk(color) > risk_tolerance(fraction);
+                assert_eq!(
+                    refuse,
+                    !memory.allows(color, fraction),
+                    "{color:x} {fraction}"
+                );
+            }
+        }
     }
 
     #[test]

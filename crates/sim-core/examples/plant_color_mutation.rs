@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 fn main() {
     let a: Vec<String> = std::env::args().collect();
-    let text = include_str!("../../../config/stage4-standard.json");
+    let text = include_str!("../../../config/stage4-standard-20261119.json");
     let mut c: SimulationConfig = serde_json::from_str(text).unwrap();
     let (p, s) = match a[1].as_str() {
         "control" => (0., 0.),

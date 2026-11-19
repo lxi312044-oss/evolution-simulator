@@ -29,6 +29,25 @@ pub struct AnimalToxinSettings {
     /// (0 = never). Keeping toxin then needs continuous synthesis.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub herbivore_toxin_decay_per_tick: f64,
+    /// Issue #76 (opt-in): multiplier on the harm a carnivore writes into its color memory
+    /// from toxin damage, and on the per-color upper limit of that harm. The HP damage itself
+    /// is unchanged. Absent = 1 (previous behavior).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carnivore_learning_gain: Option<f64>,
+    /// Issue #76 (opt-in): herbivores carry a heritable toxic / non-toxic trait. Founders are
+    /// toxic with this probability; non-toxic herbivores make no toxin and pay no synthesis
+    /// cost (their production ability is still inherited). Absent = every herbivore makes
+    /// toxin by its ability (previous behavior).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub herbivore_toxic_initial_fraction: Option<f64>,
+    /// Issue #76 (opt-in): probability that an offspring has the opposite toxic trait.
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub herbivore_toxic_mutation_probability: f64,
+    /// Issue #76 (opt-in): plant-derived toxin of a type moves from a bitten herbivore to the
+    /// carnivore only when the herbivore's load of that type is at least this much; below it
+    /// the toxin stays in the herbivore. 0 = always moves (previous behavior).
+    #[serde(default, skip_serializing_if = "is_zero_f64")]
+    pub plant_toxin_transfer_threshold: f64,
 }
 
 impl AnimalToxinSettings {
@@ -38,6 +57,10 @@ impl AnimalToxinSettings {
             && self.carnivore_damage_threshold.is_none()
             && self.carnivore_hp_damage_per_excess_unit.is_none()
             && self.herbivore_toxin_decay_per_tick == 0.
+            && self.carnivore_learning_gain.is_none()
+            && self.herbivore_toxic_initial_fraction.is_none()
+            && self.herbivore_toxic_mutation_probability == 0.
+            && self.plant_toxin_transfer_threshold == 0.
     }
 }
 
@@ -229,6 +252,14 @@ pub struct HerbivoreSettings {
     /// never shifts ecology RNG and does not depend on whether carnivores exist. Zero disables.
     #[serde(skip_serializing_if = "is_zero_f64")]
     pub carnivore_offspring_probability: f64,
+    /// Issue #76 (opt-in): body-color mutation probability per channel, separate from the
+    /// other genes. Absent = `mutation_probability` (previous behavior). Body color uses its
+    /// own stateless stream, so this never shifts ecology RNG.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_color_mutation_probability: Option<f32>,
+    /// Issue #76 (opt-in): body-color mutation scale. Absent = `mutation_scale`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body_color_mutation_scale: Option<f32>,
     pub initial_body_nutrients: f64,
     pub initial_reserve_nutrients: f64,
     pub initial_energy_fraction: f64,
@@ -482,6 +513,8 @@ impl Default for HerbivoreSettings {
             counterattack_retreat_ticks: 0,
             speed_mutation_enabled: true,
             carnivore_offspring_probability: 0.,
+            body_color_mutation_probability: None,
+            body_color_mutation_scale: None,
             reproduction_min_age: 400,
             reproduction_min_hp_fraction: 0.7,
             reproduction_min_energy_fraction: 0.8,
@@ -602,6 +635,35 @@ impl SimulationConfig {
             return Err(
                 "animal_toxin.herbivore_toxin_decay_per_tick は0以上1未満で指定してください".into(),
             );
+        }
+        if self
+            .animal_toxin
+            .carnivore_learning_gain
+            .is_some_and(|value| !value.is_finite() || value <= 0. || value > 10000.)
+        {
+            return Err(
+                "animal_toxin.carnivore_learning_gain は0より大きく10000以下で指定してください"
+                    .into(),
+            );
+        }
+        {
+            let a = &self.animal_toxin;
+            if a.herbivore_toxic_initial_fraction
+                .is_some_and(|v| !(0.0..=1.0).contains(&v))
+                || !(0.0..=1.0).contains(&a.herbivore_toxic_mutation_probability)
+                || (a.herbivore_toxic_mutation_probability > 0.
+                    && a.herbivore_toxic_initial_fraction.is_none())
+                || !a.plant_toxin_transfer_threshold.is_finite()
+                || a.plant_toxin_transfer_threshold < 0.
+            {
+                return Err(concat!(
+                    "草食の有毒・無毒の性質（animal_toxin.herbivore_toxic_initial_fraction と ",
+                    "herbivore_toxic_mutation_probability、0〜1。変異は初期の割合を指定したときだけ）、",
+                    "または植物由来の毒が肉食に移る下限（animal_toxin.plant_toxin_transfer_threshold、",
+                    "0以上）の値が正しくありません。"
+                )
+                .into());
+            }
         }
         if self
             .animal_toxin
@@ -832,6 +894,20 @@ impl SimulationConfig {
             || h.speed_min > h.speed_max
         {
             return Err("invalid herbivore settings".into());
+        }
+        if [
+            h.body_color_mutation_probability,
+            h.body_color_mutation_scale,
+        ]
+        .iter()
+        .flatten()
+        .any(|v| !(0.0..=1.0).contains(v))
+        {
+            return Err(concat!(
+                "草食の体色の突然変異（herbivores.body_color_mutation_probability と ",
+                "herbivores.body_color_mutation_scale）は0から1の範囲で指定してください。"
+            )
+            .into());
         }
         if [
             h.color_memory_safe_meal_relief,
