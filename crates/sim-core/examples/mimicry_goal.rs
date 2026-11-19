@@ -9,6 +9,7 @@
 //!   NL   carnivore color learning off (control)
 //!   G<n> carnivore learning gain n (e.g. G30), Issue #76 round 1
 //!   F<n> herbivore reproduction food target n plants (standard 8), Issue #76 round 3
+//!   C<n> herbivore body-color mutation probability n % per channel, Issue #76 round 4
 //! Example: B_T03_D01_H50_NL. Names from Issue #74 (std, B_T03_D01, ...) keep their meaning.
 use sim_core::{SimulationConfig, World};
 
@@ -32,6 +33,10 @@ fn config_for(arm: &str) -> SimulationConfig {
             }
             f if f.starts_with('F') && f[1..].parse::<u32>().is_ok() => {
                 c.herbivores.reproduction_food_target = f[1..].parse().unwrap()
+            }
+            m if m.starts_with('C') && m[1..].parse::<u32>().is_ok() => {
+                let percent: u32 = m[1..].parse().unwrap();
+                c.herbivores.body_color_mutation_probability = Some(percent as f32 / 100.)
             }
             other => panic!("unknown arm token {other}"),
         }
