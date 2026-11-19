@@ -404,9 +404,22 @@ impl World {
             let trace_damage = step.damage > 0. && book.trace.is_some();
             let memory_before = trace_damage.then(|| predator.memory.harm_scores());
             if self.config.animal_toxin.color_learning_enabled {
-                predator
-                    .memory
-                    .observe_damage(kind, before, step.remaining_load, step.damage);
+                match self.config.animal_toxin.carnivore_learning_gain {
+                    None => predator.memory.observe_damage(
+                        kind,
+                        before,
+                        step.remaining_load,
+                        step.damage,
+                    ),
+                    // Issue #76 (opt-in): learn more strongly from the same poisoning.
+                    Some(gain) => predator.memory.observe_damage_with_gain(
+                        kind,
+                        before,
+                        step.remaining_load,
+                        step.damage,
+                        gain,
+                    ),
+                }
             }
             if let Some(memory_before) = memory_before {
                 let memory_after = predator.memory.harm_scores();

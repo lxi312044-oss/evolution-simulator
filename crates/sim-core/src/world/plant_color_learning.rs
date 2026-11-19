@@ -57,6 +57,27 @@ impl PlantColorMemory {
         }
     }
 
+    /// Issue #76 (opt-in, carnivores): like `observe_damage`, but the harm written to memory
+    /// and its per-color upper limit are multiplied by `gain`.
+    pub(crate) fn observe_damage_with_gain(
+        &mut self,
+        toxin_type: usize,
+        before: f64,
+        after: f64,
+        damage: f32,
+        gain: f64,
+    ) {
+        if before <= 0. {
+            return;
+        }
+        for entry in &mut self.experiences {
+            let load = &mut entry.loads[toxin_type];
+            let fraction = (*load / before).clamp(0., 1.);
+            *load = fraction * after;
+            entry.damage = (entry.damage + f64::from(damage) * gain * fraction).min(0.1 * gain);
+        }
+    }
+
     /// Harm experienced directly from an encounter with this color (e.g. a counterattack),
     /// without a toxin load. Uses the same 0.1 cap as toxin damage.
     pub(crate) fn observe_injury(&mut self, color: u32, harm: f64) {
@@ -229,6 +250,28 @@ mod tests {
         // risk = 10 * harm ~= 0.368 <= tolerance 1 - 0.75 * 0.8 = 0.4
         assert!(memory.allows(0xff0000ff, 0.8));
         assert!(!memory.allows(0xff0000ff, 1.));
+    }
+
+    #[test]
+    fn learning_gain_scales_harm_and_its_limit() {
+        let run = |gain: Option<f64>, damage: f32| {
+            let mut memory = PlantColorMemory::default();
+            memory.ingest(0xff0000ff, 0, 1.);
+            match gain {
+                None => memory.observe_damage(0, 1., 0.5, damage),
+                Some(g) => memory.observe_damage_with_gain(0, 1., 0.5, damage, g),
+            }
+            memory.harm_scores()[0].1
+        };
+        assert_eq!(run(None, 0.003).to_bits(), run(Some(1.), 0.003).to_bits());
+        assert!((run(Some(30.), 0.003) - 30. * run(None, 0.003)).abs() < 1e-12);
+        assert_eq!(run(None, 1.), 0.1);
+        assert_eq!(run(Some(30.), 1.), 3.);
+        let mut memory = PlantColorMemory::default();
+        memory.ingest(0xff0000ff, 0, 1.);
+        memory.observe_damage_with_gain(0, 1., 0.5, 0.003, 100.);
+        // risk = 10 x harm = 3 > tolerance even for an empty reserve
+        assert!(!memory.allows(0xff0000ff, 0.));
     }
 
     #[test]

@@ -94,3 +94,33 @@ fn mimicry_diagnostics_partition_counters_and_do_not_change_the_run() {
         d["memory_entries_created"].as_u64().unwrap() >= d["harmful_evictions"].as_u64().unwrap()
     );
 }
+
+/// Issue #76 round 1: the carnivore learning gain is opt-in; gain 1 equals the absent value,
+/// and invalid gains are rejected.
+#[test]
+fn carnivore_learning_gain_is_opt_in() {
+    let config = |gain: Option<f64>| {
+        let mut c: SimulationConfig =
+            serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+        c.animal_toxin.herbivore_toxin_decay_per_tick = 0.01;
+        c.animal_toxin.carnivore_damage_threshold = Some(0.03);
+        c.herbivores.carnivore_offspring_probability = 0.02;
+        c.animal_toxin.carnivore_learning_gain = gain;
+        c
+    };
+    let mut absent = World::new(config(None)).unwrap();
+    let mut one = World::new(config(Some(1.))).unwrap();
+    for _ in 0..30 {
+        absent.step(100).unwrap();
+        one.step(100).unwrap();
+        assert_eq!(absent.animals.items.len(), one.animals.items.len());
+        assert_eq!(absent.carnivores.len(), one.carnivores.len());
+        assert_eq!(format!("{:?}", absent.rng), format!("{:?}", one.rng));
+    }
+    assert_eq!(absent.mimicry_json(), one.mimicry_json());
+    for bad in [0., -1., f64::NAN, 1e9] {
+        assert!(World::new(config(Some(bad))).is_err(), "gain {bad}");
+    }
+    let s = serde_json::to_string(&config(None)).unwrap();
+    assert!(!s.contains("carnivore_learning_gain"));
+}

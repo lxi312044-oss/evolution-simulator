@@ -29,6 +29,11 @@ pub struct AnimalToxinSettings {
     /// (0 = never). Keeping toxin then needs continuous synthesis.
     #[serde(default, skip_serializing_if = "is_zero_f64")]
     pub herbivore_toxin_decay_per_tick: f64,
+    /// Issue #76 (opt-in): multiplier on the harm a carnivore writes into its color memory
+    /// from toxin damage, and on the per-color upper limit of that harm. The HP damage itself
+    /// is unchanged. Absent = 1 (previous behavior).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub carnivore_learning_gain: Option<f64>,
 }
 
 impl AnimalToxinSettings {
@@ -38,6 +43,7 @@ impl AnimalToxinSettings {
             && self.carnivore_damage_threshold.is_none()
             && self.carnivore_hp_damage_per_excess_unit.is_none()
             && self.herbivore_toxin_decay_per_tick == 0.
+            && self.carnivore_learning_gain.is_none()
     }
 }
 
@@ -601,6 +607,16 @@ impl SimulationConfig {
         if !(0.0..1.0).contains(&self.animal_toxin.herbivore_toxin_decay_per_tick) {
             return Err(
                 "animal_toxin.herbivore_toxin_decay_per_tick は0以上1未満で指定してください".into(),
+            );
+        }
+        if self
+            .animal_toxin
+            .carnivore_learning_gain
+            .is_some_and(|value| !value.is_finite() || value <= 0. || value > 10000.)
+        {
+            return Err(
+                "animal_toxin.carnivore_learning_gain は0より大きく10000以下で指定してください"
+                    .into(),
             );
         }
         if self
