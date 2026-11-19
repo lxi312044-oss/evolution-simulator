@@ -36,10 +36,20 @@ pub struct MimicryBook {
     /// Issue #76 (revised M1, opt-in observation): choice scenes, where a hunting carnivore
     /// sees both a mimic and an other undefended herbivore. Per group of the nearest
     /// herbivore: scenes, and scenes in which the carnivore passed it over because of color.
-    choice_observation: bool,
+    pub(super) choice_observation: bool,
     census_groups: std::collections::BTreeMap<crate::entity::EntityId, u8>,
     choice_first: [u64; 3],
     choice_skipped: [u64; 3],
+    /// Issue #76 diagnosis (same scenes): sums of the carnivore's risk tolerance and of the
+    /// learned risk for the nearest herbivore's color; scenes with any learned risk; scenes
+    /// whose risk exceeds the tolerance of a fully fed carnivore.
+    choice_tolerance_sum: [f64; 3],
+    choice_risk_sum: [f64; 3],
+    choice_any_risk: [u64; 3],
+    choice_refused_if_fed: [u64; 3],
+    /// Issue #76 diagnosis: toxin moved to carnivores by prey group, own-made and plant-derived.
+    pub(super) dose_produced: [f64; 3],
+    pub(super) dose_plant: [f64; 3],
 }
 
 impl MimicryBook {
@@ -164,14 +174,23 @@ impl World {
         let Some((_, j, g)) = nearest.filter(|_| seen[1] && seen[2]) else {
             return;
         };
-        let refused =
-            !self.carnivore_allows_color(id, self.animals.items[j].genes.body_color, reserve_e);
-        self.mimicry.choice_first[usize::from(g)] += 1;
-        self.mimicry.choice_skipped[usize::from(g)] += u64::from(refused);
+        let color = self.animals.items[j].genes.body_color;
+        let refused = !self.carnivore_allows_color(id, color, reserve_e);
+        let tolerance = super::plant_color_learning::risk_tolerance(reserve_e / 60.);
+        let risk = self.carnivore_color_risk(id, color);
+        let g = usize::from(g);
+        let m = &mut self.mimicry;
+        m.choice_first[g] += 1;
+        m.choice_skipped[g] += u64::from(refused);
+        m.choice_tolerance_sum[g] += tolerance;
+        m.choice_risk_sum[g] += risk;
+        m.choice_any_risk[g] += u64::from(risk > 0.);
+        m.choice_refused_if_fed[g] +=
+            u64::from(risk > super::plant_color_learning::risk_tolerance(1.));
     }
 
     /// Group of herbivore `prey` for an attack (uses the last census defended colors).
-    fn mimicry_attack_group(&self, prey: usize) -> usize {
+    pub(super) fn mimicry_attack_group(&self, prey: usize) -> usize {
         let stock = self.herbivore_toxin_stock(self.animals.items[prey].id);
         group(
             stock,
@@ -277,6 +296,12 @@ impl World {
             "memory_entries_created": m.memory_entries_created,
             "choice_first": m.choice_first,
             "choice_skipped": m.choice_skipped,
+            "choice_tolerance_sum": m.choice_tolerance_sum,
+            "choice_risk_sum": m.choice_risk_sum,
+            "choice_any_risk": m.choice_any_risk,
+            "choice_refused_if_fed": m.choice_refused_if_fed,
+            "dose_produced": m.dose_produced,
+            "dose_plant": m.dose_plant,
         })
     }
 

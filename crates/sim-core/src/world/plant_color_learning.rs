@@ -143,6 +143,17 @@ impl PlantColorMemory {
         self.experiences.len()
     }
 
+    /// Read-only (Issue #76 diagnosis): the largest learned risk x similarity for a color.
+    /// `allows(color, f)` is false exactly when this exceeds `risk_tolerance(f)`.
+    pub(super) fn color_risk(&self, color: u32) -> f64 {
+        self.experiences
+            .iter()
+            .map(|entry| {
+                entry.damage * 10. * (1. - color_distance(color, entry.color) / 0.25).max(0.)
+            })
+            .fold(0., f64::max)
+    }
+
     pub(super) fn has_harm_for_color(&self, color: u32) -> bool {
         self.experiences
             .iter()
@@ -272,6 +283,23 @@ mod tests {
         memory.observe_damage_with_gain(0, 1., 0.5, 0.003, 100.);
         // risk = 10 x harm = 3 > tolerance even for an empty reserve
         assert!(!memory.allows(0xff0000ff, 0.));
+    }
+
+    #[test]
+    fn color_risk_matches_the_choice_rule() {
+        let mut memory = PlantColorMemory::default();
+        memory.ingest(0xff0000ff, 0, 1.);
+        memory.observe_damage_with_gain(0, 1., 0.5, 0.003, 100.);
+        for color in [0xff000000_u32, 0xe0200000, 0xb0400000, 0x0000ff00] {
+            for fraction in [0., 0.3, 0.7, 1.] {
+                let refuse = memory.color_risk(color) > risk_tolerance(fraction);
+                assert_eq!(
+                    refuse,
+                    !memory.allows(color, fraction),
+                    "{color:x} {fraction}"
+                );
+            }
+        }
     }
 
     #[test]

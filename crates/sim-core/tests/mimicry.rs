@@ -202,10 +202,30 @@ fn choice_scene_observation_is_observation_only() {
     }
     assert_eq!(counts(&plain, "choice_first"), vec![0, 0, 0]);
     assert_eq!(counts(&control, "choice_skipped"), vec![0, 0, 0]);
-    for (first, skipped) in counts(&observed, "choice_first")
-        .into_iter()
-        .zip(counts(&observed, "choice_skipped"))
-    {
-        assert!(skipped <= first);
+    assert_eq!(counts(&control, "choice_any_risk"), vec![0, 0, 0]);
+    let first = counts(&observed, "choice_first");
+    let skipped = counts(&observed, "choice_skipped");
+    let if_fed = counts(&observed, "choice_refused_if_fed");
+    let any = counts(&observed, "choice_any_risk");
+    for g in 0..3 {
+        // A fed carnivore tolerates the least risk, so it refuses at least as often.
+        assert!(skipped[g] <= if_fed[g] && if_fed[g] <= any[g] && any[g] <= first[g]);
+    }
+    // Dose accounting by prey group adds up to the toxin moved to carnivores.
+    let d = observed.mimicry_diagnostics_value();
+    let t: serde_json::Value =
+        serde_json::from_str(&observed.animal_toxin_snapshot_json()).unwrap();
+    for (by_group, total) in [
+        ("dose_produced", "transferred_produced"),
+        ("dose_plant", "transferred_residual"),
+    ] {
+        let a: f64 = (0..3).map(|g| d[by_group][g].as_f64().unwrap()).sum();
+        let b: f64 = t[total]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_f64().unwrap())
+            .sum();
+        assert!((a - b).abs() <= 1e-9 * b.max(1.), "{by_group} {a} vs {b}");
     }
 }

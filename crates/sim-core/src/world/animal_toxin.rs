@@ -315,6 +315,11 @@ impl World {
             return;
         }
         let fraction = (eaten_n / body_n).clamp(0., 1.);
+        // Issue #76 diagnosis (observation only): group of the prey for dose accounting.
+        let dose_group = self
+            .mimicry
+            .choice_observation
+            .then(|| self.mimicry_attack_group(prey_index));
         let prey = &mut self.animals.items[prey_index];
         let id = self.carnivores[predator_index].id;
         let t = &self.config.toxin;
@@ -343,6 +348,10 @@ impl World {
                 .as_deref_mut()
                 .map_or(0., |p| remove_fraction(&mut p.stock[kind], fraction));
             let dose = produced + residual;
+            if let Some(g) = dose_group {
+                self.mimicry.dose_produced[g] += produced;
+                self.mimicry.dose_plant[g] += residual;
+            }
             let previous_load = predator.load[kind];
             predator.load[kind] += dose;
             if dose > 0. {
@@ -541,6 +550,22 @@ impl World {
             "mean_load": mean(load),
             "avoids_own_harm_color": mean(avoiding as f64),
         })
+    }
+
+    /// Issue #76 diagnosis (read-only): the risk a carnivore's color memory assigns to a color
+    /// (0 without learning or memory). Compared with the risk tolerance in prey choice.
+    pub(super) fn carnivore_color_risk(
+        &self,
+        id: EntityId,
+        color: crate::animals::color::BodyColor,
+    ) -> f64 {
+        if !self.config.animal_toxin.color_learning_enabled {
+            return 0.;
+        }
+        self.animal_toxins
+            .predators
+            .get(&id)
+            .map_or(0., |p| p.memory.color_risk(visible_color(color)))
     }
 
     /// A counterattack teaches the carnivore that this prey color is harmful.

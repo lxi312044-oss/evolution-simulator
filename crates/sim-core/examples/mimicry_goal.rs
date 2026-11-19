@@ -68,6 +68,18 @@ const MEMORY: [&str; 8] = [
     "avoids_own_harm_color",
 ];
 
+/// Choice-scene and dose columns (Issue #76 revised M1 and diagnosis), appended at the end.
+const CHOICE: [&str; 8] = [
+    "choice_first",
+    "choice_skipped",
+    "choice_tolerance_sum",
+    "choice_risk_sum",
+    "choice_any_risk",
+    "choice_refused_if_fed",
+    "dose_produced",
+    "dose_plant",
+];
+
 fn header() -> String {
     let mut h: Vec<String> = [
         "arm",
@@ -116,7 +128,7 @@ fn header() -> String {
             h.extend((0..8).map(|s| format!("{k}_{g}_{s}")));
         }
     }
-    for k in ["choice_first", "choice_skipped"] {
+    for k in CHOICE {
         h.extend(G.map(|g| format!("{k}_{g}")));
     }
     h.join(",")
@@ -198,8 +210,11 @@ fn main() {
                     row.extend((0..8).map(|s| d[k][g][s].to_string()));
                 }
             }
-            for k in ["choice_first", "choice_skipped"] {
-                row.extend((0..3).map(|g| d[k][g].to_string()));
+            for k in CHOICE {
+                row.extend((0..3).map(|g| match d[k][g].as_u64() {
+                    Some(n) => n.to_string(),
+                    None => f(&d[k][g]),
+                }));
             }
             println!("{}", row.join(","));
         }
