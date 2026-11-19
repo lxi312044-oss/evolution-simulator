@@ -18,6 +18,8 @@
 //! Issue 11 carnivores born from herbivores (v_*, 40x40; no early stop on carnivore
 //! extinction because carnivores can arise again):
 //! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6985033351
+//! Tuning arms (w_*, 40x40):
+//! https://github.com/lxi312044-oss/evolution-simulator/issues/11#issuecomment-6998629192
 //!
 //! Usage:
 //!   cargo run --release -p sim-core --example stage4_counterattack -- \
@@ -140,7 +142,18 @@ const fn v_arm(name: &'static str, emergence: f64, basal: f64) -> Arm {
     a
 }
 
-const ARMS: [Arm; 34] = [
+const fn w_arm(name: &'static str, emergence: f64, basal: f64, defense: bool) -> Arm {
+    let mut a = if defense {
+        f40_arm(name, 2., 0., 300)
+    } else {
+        f40_arm(name, 0., 0., 0)
+    };
+    a.basal = basal;
+    a.emergence = emergence;
+    a
+}
+
+const ARMS: [Arm; 38] = [
     arm("d_ctrl", 0., true),
     arm("d_c2", 2., true),
     arm("d_c5", 5., true),
@@ -175,6 +188,10 @@ const ARMS: [Arm; 34] = [
     v_arm("v_p002", 0.002, 0.0072),
     v_arm("v_p01", 0.01, 0.0072),
     v_arm("v_p01_b120", 0.01, 0.0120),
+    w_arm("w_p004", 0.004, 0.0072, false),
+    w_arm("w_p002_b120", 0.002, 0.0120, false),
+    w_arm("w_p002_def", 0.002, 0.0072, true),
+    w_arm("w_p004_b120_def", 0.004, 0.0120, true),
 ];
 
 /// Defense counters and herbivore statistics, in this order.
