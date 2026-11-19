@@ -161,3 +161,43 @@ function empty(text: string) {
   li.textContent = text;
   return li;
 }
+
+interface Mimicry {
+  counts: Record<string, number>;
+  avoided_by_carnivores: Record<string, number | null>;
+  attacks_per_1000_individual_ticks: Record<string, number | null>;
+  mimic_share_of_undefended: number | null;
+}
+const GROUP_LABELS: [string, string][] = [["defended", "有毒"], ["mimic", "擬態型"], ["other", "その他の無毒"]];
+
+/** Issue #72: mimicry indicators table with a cautious one-line reading. */
+export function drawMimicry(root: HTMLElement, json: string) {
+  const m = JSON.parse(json) as Mimicry;
+  const pct = (v: number | null | undefined) => v == null ? "—" : (v * 100).toFixed(0) + "%";
+  const num = (v: number | null | undefined) => v == null ? "—" : v.toFixed(2);
+  const table = document.createElement("table");
+  table.className = "mimicry-table";
+  const head = table.insertRow();
+  for (const text of ["", "個体数", "肉食に避けられる", "襲われやすさ"]) {
+    const th = document.createElement("th"); th.textContent = text; head.append(th);
+  }
+  for (const [key, label] of GROUP_LABELS) {
+    const row = table.insertRow();
+    for (const text of [label, String(m.counts[key] ?? 0), pct(m.avoided_by_carnivores[key]),
+      num(m.attacks_per_1000_individual_ticks[key])]) row.insertCell().textContent = text;
+  }
+  const verdict = document.createElement("p");
+  verdict.className = "mimicry-verdict";
+  const am = m.avoided_by_carnivores.mimic, ao = m.avoided_by_carnivores.other;
+  const rm = m.attacks_per_1000_individual_ticks.mimic, ro = m.attacks_per_1000_individual_ticks.other;
+  verdict.textContent = am == null || ao == null || rm == null || ro == null
+    ? "比べるための個体がまだそろっていません。"
+    : am > ao && rm < ro ? "擬態型は、その他の無毒より避けられ、襲われにくくなっています（目安）。"
+    : am > ao ? "擬態型はその他の無毒より避けられていますが、襲われにくさの差はまだ見えません（目安）。"
+    : "擬態型が守られている様子はまだ見えません（目安）。";
+  const share = document.createElement("p");
+  share.className = "species-totals";
+  share.textContent = "無毒の草食のうち擬態型の割合：" + pct(m.mimic_share_of_undefended)
+    + "　／　襲われやすさ＝1000 個体Tickあたりの攻撃回数（累計）";
+  root.replaceChildren(table, verdict, share);
+}

@@ -37,7 +37,7 @@ import "./style.css";
 import { resizeField } from "./field";
 import { creatureShape, drawCreature } from "./sprites";
 import { EcosystemMap } from "./map";
-import { EcologyPanel } from "./ecology-panel";
+import { EcologyPanel, drawMimicry } from "./ecology-panel";
 import { describeExistingControls, editor } from "./settings";
 const el=(id:string)=>document.getElementById(id)!;
 const status=el("status");
@@ -51,6 +51,7 @@ const ecology = new EcologyPanel(el("species-ranking"), el("species-tabs"), el("
   (species, n) => JSON.parse(simulation.species_member_json(species, n)));
 const populationTrend: number[][] = [];
 let priorTick = -1;
+let mimicryBucket = -1;
 let frameStart = 0;
 let frameCount = 0;
 let renderMs = 0;
@@ -240,7 +241,7 @@ function installConfig(nextConfig:Config, condition=activeCondition){
  } catch (e) { next.free(); throw e; }
  playing=false; el("play").textContent="再生";
  previous?.free(); simulation=next; activeConfig=nextConfig; activeCondition=condition;
- latestLineageSample=null; lineageFinished=false; populationTrend.length=0; priorTick=-1; observedPresent=[false,false,false]; map.reset(); ecology.reset();
+ latestLineageSample=null; lineageFinished=false; populationTrend.length=0; priorTick=-1; mimicryBucket=-1; observedPresent=[false,false,false]; map.reset(); ecology.reset();
  if (dev) { resetLog(); settings.load(JSON.parse(simulation.effective_config_json())); }
  el("pending").textContent="編集中の設定は実行中の設定と一致しています";
  el("settings-error").textContent="";
@@ -308,6 +309,11 @@ function render(){
   if (tick !== priorTick) {
     priorTick = tick;
     ecology.updateSpecies(simulation.species_summary_json());
+    // Issue #72: mimicry indicators change at the 100-tick census; recompute only then.
+    if (Math.floor(tick / 100) !== mimicryBucket) {
+      mimicryBucket = Math.floor(tick / 100);
+      drawMimicry(el("mimicry"), simulation.mimicry_json());
+    }
     const counts = [simulation.plant_count(), simulation.herbivore_count(), simulation.carnivore_count()];
     counts.forEach((n, i) => { observedPresent[i] ||= n > 0; });
     el("extinction").textContent = counts.flatMap((n, i) => !n && observedPresent[i] ? [["植物","草食","肉食"][i] + "がいなくなりました"] : []).join("／");

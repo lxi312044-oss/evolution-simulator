@@ -529,6 +529,11 @@ impl Simulation {
         self.world.species_summary_json()
     }
 
+    /// Issue #72: mimicry indicators (herbivore groups, avoidance and attack rates).
+    pub fn mimicry_json(&self) -> String {
+        self.world.mimicry_json()
+    }
+
     /// Issue #64: display-only traits for creature sprites, herbivores then carnivores.
     pub fn animal_shape_snapshot_json(&self) -> String {
         serde_json::to_string(&self.world.animal_shape_snapshot()).unwrap_or_else(|_| "[]".into())

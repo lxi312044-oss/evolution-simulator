@@ -81,3 +81,7 @@ body[data-mode="play"] main,main{max-width:1800px}
 /* Play-mode trait summary */
 .trait-list{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13px;margin:6px 0 0}.trait-list dt{color:#abc6b9}.trait-list dd{margin:0;text-align:right}
 .avoided-colors .swatch{margin:0 0 0 4px}
+/* Issue #72: mimicry indicators */
+.mimicry-table{width:100%;border-collapse:collapse;font-size:12px}.mimicry-table th{color:#9eb4af;font-weight:400;text-align:right;padding:4px 2px}
+.mimicry-table td{padding:5px 2px;text-align:right;border-top:1px solid #25383c;font-variant-numeric:tabular-nums}.mimicry-table td:first-child,.mimicry-table th:first-child{text-align:left}
+.mimicry-verdict{font-size:13px;color:#f6d68a;margin:8px 0 0;line-height:1.5}
