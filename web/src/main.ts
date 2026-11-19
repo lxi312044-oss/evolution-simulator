@@ -497,7 +497,10 @@ async function main(){
   el("step500").onclick=()=>step(500);
   el("step1000").onclick=()=>step(1000);
   el("play").onclick=()=>{if(stopAt && Number(simulation.tick_count())>=stopAt)return; playing=!playing;el("play").textContent=playing?"一時停止":"再生";};
-  el("reset").onclick=()=>{try { installConfig(activeConfig); showConfigInControls(activeConfig); }
+  // Play mode: each reset starts a new world with a fresh seed (dev keeps the seed for comparisons).
+  el("reset").onclick=()=>{try {
+      const next = dev ? activeConfig : { ...structuredClone(activeConfig), seed: Math.floor(Math.random() * 2 ** 32) };
+      installConfig(next); showConfigInControls(next); }
     catch(e){status.textContent=String(e);}};
   el("apply").onclick=()=>resetWithSettings();
   if (dev) describeExistingControls();
