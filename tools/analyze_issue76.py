@@ -123,11 +123,20 @@ def judge(s, nl=None):
         nl_rate = 1 - nl["rate_mimic"] / nl["rate_other"] if nl["rate_other"] and nl["rate_mimic"] is not None else 0
         m1 = nl_avoid <= diff_avoid / 2 and nl_rate <= diff_rate / 2
     out["M1"] = bool(m1)
-    up = lambda x: (x["mimic_share_h2"] or 0) - (x["mimic_share_h1"] or 0)
-    closer = lambda x: (x["distance_h1"] or 0) - (x["distance_h2"] or 0)
-    m2 = up(s) > 0 or closer(s) > 0
+    def change(x, a, b):
+        # Missing halves (group absent or run ended) count as no change.
+        return x[b] - x[a] if x[a] is not None and x[b] is not None else None
+
+    up = change(s, "mimic_share_h1", "mimic_share_h2")
+    closer = change(s, "distance_h2", "distance_h1")
+    m2 = (up is not None and up > 0) or (closer is not None and closer > 0)
     if nl is not None:
-        m2 = m2 and (up(s) - up(nl) >= 0.05 or closer(s) - closer(nl) >= 0.01)
+        nl_up = change(nl, "mimic_share_h1", "mimic_share_h2") or 0
+        nl_closer = change(nl, "distance_h2", "distance_h1") or 0
+        m2 = m2 and (
+            (up is not None and up - nl_up >= 0.05)
+            or (closer is not None and closer - nl_closer >= 0.01)
+        )
     out["M2"] = bool(m2)
     return out
 
@@ -203,6 +212,29 @@ def seed_table(found):
                 + "/".join(fmt(s[f"rate_{g}"]) for g in G)
                 + f" | {fmt(s['mimic_share_h1'])}→{fmt(s['mimic_share_h2'])} | "
                 f"{fmt(s['distance_h1'], 3)}→{fmt(s['distance_h2'], 3)} |"
+            )
+    return "\n".join(lines)
+
+
+def components(found, controls):
+    """Per-seed values behind M1 and M2 for arms with a no-learning control."""
+    lines = [
+        "| 条件 | seed | 避け 擬態−他（学習なし） | 攻撃率 擬態/他（学習なし） | 擬態の割合 前半→後半（学習なし） | 距離 前半→後半（学習なし） | M1 | M2 |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for arm in sorted(controls):
+        nl_arm = controls[arm]
+        for sd in sorted(found.get(arm, {})):
+            s = summary(found[arm][sd])
+            nl = summary(found[nl_arm][sd]) if sd in found.get(nl_arm, {}) else None
+            f = judge(s, nl)
+            dav = lambda x: None if x["avoid_mimic"] is None or x["avoid_other"] is None else x["avoid_mimic"] - x["avoid_other"]
+            rr = lambda x: x["rate_mimic"] / x["rate_other"] if x["rate_other"] and x["rate_mimic"] is not None else None
+            lines.append(
+                f"| {arm} | {sd} | {fmt(dav(s))}（{fmt(dav(nl)) if nl else '—'}） | {fmt(rr(s))}（{fmt(rr(nl)) if nl else '—'}） | "
+                f"{fmt(s['mimic_share_h1'])}→{fmt(s['mimic_share_h2'])}（{fmt(nl['mimic_share_h1']) if nl else '—'}→{fmt(nl['mimic_share_h2']) if nl else '—'}） | "
+                f"{fmt(s['distance_h1'], 3)}→{fmt(s['distance_h2'], 3)}（{fmt(nl['distance_h1'], 3) if nl else '—'}→{fmt(nl['distance_h2'], 3) if nl else '—'}） | "
+                f"{fmt(f['M1'])} | {fmt(f['M2'])} |"
             )
     return "\n".join(lines)
 
@@ -335,6 +367,9 @@ def main():
     print(arm_table(found, controls))
     print()
     print(seed_table(found))
+    if controls:
+        print()
+        print(components(found, controls))
     if "--diag" in args:
         print()
         print(diag(found))

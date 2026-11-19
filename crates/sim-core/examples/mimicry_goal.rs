@@ -3,7 +3,7 @@
 //!        mimicry_goal <arm> config                    (effective config JSON to stdout)
 //! An arm is a list of tokens joined by `_` applied to config/stage4-standard.json:
 //!   std  no change          B    no change (plant toxicity mutation is already standard)
-//!   T03 / T01  carnivore damage threshold 0.03 / 0.01
+//!   T03 / T01 / T00  carnivore damage threshold 0.03 / 0.01 / 0
 //!   D01 / D02  herbivore toxin decay per tick 0.01 / 0.02
 //!   H10 / H50  carnivore HP damage per excess unit 0.1 / 0.5
 //!   NL   carnivore color learning off (control)
@@ -20,6 +20,7 @@ fn config_for(arm: &str) -> SimulationConfig {
             "std" | "B" => {}
             "T03" => a.carnivore_damage_threshold = Some(0.03),
             "T01" => a.carnivore_damage_threshold = Some(0.01),
+            "T00" => a.carnivore_damage_threshold = Some(0.),
             "D01" => a.herbivore_toxin_decay_per_tick = 0.01,
             "D02" => a.herbivore_toxin_decay_per_tick = 0.02,
             "H10" => a.carnivore_hp_damage_per_excess_unit = Some(0.1),
