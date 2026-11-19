@@ -1,7 +1,8 @@
 //! Issue #76: comparisons toward the Batesian-mimicry goal on the stage-4 standard config.
 //! Usage: mimicry_goal <arm> <seed> <ticks> [every]   (CSV to stdout, default every 500 ticks)
 //!        mimicry_goal <arm> config                    (effective config JSON to stdout)
-//! An arm is a list of tokens joined by `_` applied to config/stage4-standard-20261119.json:
+//! An arm is a list of tokens joined by `_` applied to config/stage4-standard-20261119.json
+//! (the 2026-11-19 standard, kept frozen so earlier results stay reproducible):
 //!   std  no change          B    no change (plant toxicity mutation is already standard)
 //!   T03 / T01 / T00  carnivore damage threshold 0.03 / 0.01 / 0
 //!   D01 / D02 / D005 / D002  herbivore toxin decay per tick 0.01 / 0.02 / 0.005 / 0.002
@@ -11,6 +12,7 @@
 //!   F<n> herbivore reproduction food target n plants (standard 8), Issue #76 round 3
 //!   C<n> herbivore body-color mutation probability n % per channel, Issue #76 round 4
 //!   X<n> herbivore toxic trait: founders toxic with n %, offspring flip with 0.5 %
+//!   Y<n> herbivore toxic-trait flip probability n/1000 per birth (after X; Y20 = 2 %)
 //!   P<n> plant-derived toxin moves to carnivores only from a load of n/100 per type
 //!   R<n> carnivores resume hunting at stomach fullness n % (standard 20)
 //! Example: B_T03_D01_H50_NL. Names from Issue #74 (std, B_T03_D01, ...) keep their meaning.
@@ -45,6 +47,10 @@ fn config_for(arm: &str) -> SimulationConfig {
                 let percent: u32 = x[1..].parse().unwrap();
                 a.herbivore_toxic_initial_fraction = Some(f64::from(percent) / 100.);
                 a.herbivore_toxic_mutation_probability = 0.005;
+            }
+            y if y.starts_with('Y') && y[1..].parse::<u32>().is_ok() => {
+                let tenths: u32 = y[1..].parse().unwrap();
+                a.herbivore_toxic_mutation_probability = f64::from(tenths) / 1000.;
             }
             p if p.starts_with('P') && p[1..].parse::<u32>().is_ok() => {
                 let percent: u32 = p[1..].parse().unwrap();
