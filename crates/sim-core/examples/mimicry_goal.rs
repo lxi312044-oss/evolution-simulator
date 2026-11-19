@@ -7,6 +7,7 @@
 //!   D01 / D02  herbivore toxin decay per tick 0.01 / 0.02
 //!   H10 / H50  carnivore HP damage per excess unit 0.1 / 0.5
 //!   NL   carnivore color learning off (control)
+//!   G<n> carnivore learning gain n (e.g. G30), Issue #76 round 1
 //! Example: B_T03_D01_H50_NL. Names from Issue #74 (std, B_T03_D01, ...) keep their meaning.
 use sim_core::{SimulationConfig, World};
 
@@ -24,6 +25,9 @@ fn config_for(arm: &str) -> SimulationConfig {
             "H10" => a.carnivore_hp_damage_per_excess_unit = Some(0.1),
             "H50" => a.carnivore_hp_damage_per_excess_unit = Some(0.5),
             "NL" => a.color_learning_enabled = false,
+            g if g.starts_with('G') && g[1..].parse::<f64>().is_ok() => {
+                a.carnivore_learning_gain = Some(g[1..].parse().unwrap())
+            }
             other => panic!("unknown arm token {other}"),
         }
     }
