@@ -42,6 +42,8 @@ pub struct World {
     pub species: super::SpeciesBook,
     /// Issue #72: mimicry indicators (observation only, not audited).
     pub mimicry: super::MimicryBook,
+    /// Issue #78 (opt-in): heritable diet values; empty unless `diet_gene` is set.
+    pub diet: super::DietBook,
     /// Opt-in counterattack retreat: carnivore -> (herbivore it will not target, ticks left).
     /// Opt-in hunting bouts (Issue 11), per carnivore.
     pub carnivore_hunt_bouts: std::collections::BTreeMap<crate::entity::EntityId, super::HuntBout>,
@@ -138,6 +140,7 @@ impl World {
             defense: super::DefenseCounters::default(),
             species: super::SpeciesBook::default(),
             mimicry: super::MimicryBook::default(),
+            diet: super::DietBook::default(),
             carnivore_retreats: std::collections::BTreeMap::new(),
             carnivore_hunt_bouts: std::collections::BTreeMap::new(),
             prey_trend_snapshot: super::PreyTrendSnapshot::default(),

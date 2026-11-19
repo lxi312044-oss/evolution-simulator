@@ -1006,6 +1006,8 @@ impl World {
                     parent.id,
                 );
                 let id = self.entities.spawn()?;
+                // Issue #78 (opt-in): the child's diet value (observation only in this stage).
+                let child_diet = self.diet_child_value(parent_id, true, id);
                 let body = self.resources.open(0., 0.).map_err(|e| format!("{e:?}"))?;
                 let child_reserve = self.resources.open(0., 0.).map_err(|e| format!("{e:?}"))?;
                 self.resources
@@ -1082,6 +1084,7 @@ impl World {
                     last_prey_ticks_left: 0,
                 });
                 self.species_carnivore_birth(self.carnivores.len() - 1, Some(i), None);
+                self.diet_record_birth(true, id, child_diet, true);
                 self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
                 let parent_bin = ambush_bin(parent_gene);
                 let child_bin = ambush_bin(child_gene);
@@ -1179,6 +1182,7 @@ impl World {
                 let a = self.carnivores.swap_remove(i);
                 self.carnivore_retreats.remove(&a.id);
                 self.carnivore_hunt_bouts.remove(&a.id);
+                self.diet.remove(a.id);
                 if self.config.animal_toxin.enabled {
                     let reason = if toxin_dead {
                         "toxin_hp_zero"

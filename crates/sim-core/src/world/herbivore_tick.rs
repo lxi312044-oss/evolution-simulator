@@ -960,6 +960,7 @@ impl World {
             }
             self.plant_color_learning.remove(&a.id);
             self.hungry_color_recovery.remove(&a.id);
+            self.diet.remove(a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
                     .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));
@@ -1430,6 +1431,8 @@ impl World {
             );
             self.animals.items[i].reproduction_cooldown = h.reproduction_cooldown_ticks;
             let id = self.entities.spawn()?;
+            // Issue #78 (opt-in): the child's diet value (observation only in this stage).
+            let child_diet = self.diet_child_value(parent_id, false, id);
             let child_max_age = ((max_age as f64) * (0.9 + 0.2 * self.rng.unit() as f64))
                 .round()
                 .max(1.) as u32;
@@ -1484,6 +1487,7 @@ impl World {
                     last_prey_ticks_left: 0,
                 });
                 self.species_carnivore_birth(self.carnivores.len() - 1, None, Some(i));
+                self.diet_record_birth(false, id, child_diet, true);
                 self.animals.items[i].successful_births += 1;
                 self.carnivore_births += 1;
                 self.defense.carnivores_born_from_herbivores += 1;
@@ -1523,6 +1527,7 @@ impl World {
                 target: None,
             });
             self.species_herbivore_birth(self.animals.items.len() - 1, Some(i));
+            self.diet_record_birth(false, id, child_diet, false);
             self.record_energy(
                 id,
                 "birth",

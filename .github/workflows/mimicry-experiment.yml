@@ -103,7 +103,7 @@ jobs:
           chmod +x "$exe"
           out="res/$BUILD"
           mkdir -p "$out"
-          if [ "$EXAMPLE" = mimicry_goal ]; then
+          if [ "$EXAMPLE" = mimicry_goal ] || [ "$EXAMPLE" = diet_goal ]; then
             "$exe" "$ARM" config > "$out/${ARM}.config.json"
             sha256sum "$out/${ARM}.config.json" | cut -d' ' -f1 > "$out/${ARM}.config_sha256"
           fi
