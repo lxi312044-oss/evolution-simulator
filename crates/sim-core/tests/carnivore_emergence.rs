@@ -74,3 +74,15 @@ fn zero_probability_matches_previous_behavior() {
     explicit.herbivores.carnivore_offspring_probability = 0.;
     assert_eq!(run(base), run(explicit));
 }
+
+/// The check-only Web config (Issue 11 tuning, not adopted as standard) must load and run.
+#[test]
+fn check_only_web_config_loads_and_runs() {
+    let text = include_str!("../../../config/stage4-emergence-check-40x40.json");
+    let c: SimulationConfig = serde_json::from_str(text).unwrap();
+    assert_eq!(c.initial_population.carnivores, 0);
+    assert!(c.herbivores.carnivore_offspring_probability > 0.);
+    let mut w = World::new(c).unwrap();
+    w.step(200).unwrap();
+    assert!(w.herbivore_count() > 0);
+}
