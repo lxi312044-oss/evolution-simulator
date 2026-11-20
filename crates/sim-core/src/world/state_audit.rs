@@ -33,6 +33,7 @@ impl World {
             defense: _,
             species: _,
             mimicry: _,
+            diet,
             carnivore_retreats,
             carnivore_hunt_bouts,
             prey_trend_snapshot,
@@ -130,6 +131,10 @@ impl World {
         // Opt-in hunting bouts (Issue 11); empty unless that option is used.
         if !carnivore_hunt_bouts.is_empty() {
             emit!(27, carnivore_hunt_bouts);
+        }
+        // Opt-in diet values (Issue #78); empty unless `diet_gene` is set.
+        if !diet.is_empty() {
+            emit!(28, diet);
         }
         bytes
     }

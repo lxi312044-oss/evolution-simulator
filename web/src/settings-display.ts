@@ -85,7 +85,14 @@ herbivores.counterattack_learning_enabled|実験用：反撃による肉食の�
 herbivores.counterattack_strength_threshold|実験用：反撃できる強さのしきい値|攻撃性×（体力÷60）がこの値以上の草食だけが反撃します。0で全員が反撃します。|n
 herbivores.counterattack_retreat_ticks|実験用：反撃を受けた肉食が手を引くTick数|反撃を受けた肉食は、このTick数のあいだその草食を狙いません。0で無効です。|n Tick
 herbivores.speed_mutation_enabled|実験用：草食の速さの突然変異|無効にすると、子の速さは親と同じになります（ほかの形質は変異します）。|b
-herbivores.carnivore_offspring_probability|実験用：草食から肉食が生まれる確率|草食が子を産むとき、この確率で子が肉食として生まれます（体の色は親から受け継ぎます）。初期の肉食を0頭にできます。0で無効です。|p
+herbivores.carnivore_offspring_probability|実験用：草食から肉食が生まれる確率|草食が子を産むとき、この確率で子が肉食として生まれます（体の色は親から受け継ぎます）。初期の肉食を0頭にできます。0で無効です。標準では食性の値で肉食が生まれるため0です（食性の値を効かせるときは0が必要）。|p
+diet_gene.effects|食性の値を効かせる|ONにすると、子の食性の値が0.5以上なら肉食、0.5未満なら草食として生まれ（肉食の親からも）、食べ物から得る量が値で変わります。OFFでは値は受け継がれるだけで何にも効きません。ONのときは「草食から肉食が生まれる確率」を0にしてください。|b
+diet_gene.initial_herbivore|最初の草食の食性の値|開始時の草食の値の中心です（0に近いほど草食向き）。0.5未満で指定します。|0以上0.5未満
+diet_gene.initial_carnivore|最初の肉食の食性の値|開始時に肉食がいる場合の値の中心です（1に近いほど肉食向き）。|0.5以上1以下
+diet_gene.initial_spread|最初の食性の値のばらつき|開始時の値は「中心±この幅」で一様に決まります（草食は0.5未満、肉食は0.5以上に収めます）。|0〜0.5
+diet_gene.mutation_probability|食性の値の変異確率|子の値が親から変わる確率です。|p
+diet_gene.mutation_scale|食性の値の変異の幅|値が変わるときの変化の大きさ（正規分布の標準偏差）です。大きいほど境目をまたぐ子が生まれやすくなります。|0〜1
+diet_gene.efficiency_exponent|食性の中間の不利さ（k）|草食は植物から（1−値）^k、肉食はかんで値^k の割合だけを得ます。kが大きいほど境目近くの個体が不利です。0なら不利はありません。|0〜10
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p

@@ -564,6 +564,10 @@ impl World {
                     let detritus = self.land.cells[cell].detritus;
                     let available = self.resources.nutrient_balance(pbody).unwrap_or(0.);
                     let stomach = self.animals.items[i].stomach;
+                    // Issue #78 (opt-in): the diet value scales plant gains; exactly 1 otherwise.
+                    let diet = self.diet_factor(self.animals.items[i].id, false);
+                    let absorption = h.feeding_nutrient_absorption * diet;
+                    let gain_fraction = h.feeding_energy_gain_fraction * diet;
                     let free_space = if h.satiety_enabled {
                         (h.stomach_capacity_n
                             - self.resources.nutrient_balance(stomach).unwrap_or(0.))
@@ -572,8 +576,8 @@ impl World {
                         f64::INFINITY
                     };
                     let eaten = available.min(h.feeding_nutrients_per_tick).min(
-                        if h.satiety_enabled && h.feeding_nutrient_absorption > 0. {
-                            free_space / h.feeding_nutrient_absorption
+                        if h.satiety_enabled && absorption > 0. {
+                            free_space / absorption
                         } else {
                             f64::INFINITY
                         },
@@ -635,7 +639,7 @@ impl World {
                     } else {
                         self.diagnostics.phase20_feeding_in_range_zero_n_ticks += 1;
                     }
-                    let absorbed = eaten * h.feeding_nutrient_absorption;
+                    let absorbed = eaten * absorption;
                     self.diagnostics.herbivore_absorbed_n += absorbed;
                     let waste = eaten - absorbed;
                     if absorbed > 0. {
@@ -659,10 +663,10 @@ impl World {
                     // Transfer chemical energy, do not manufacture it from consumed nutrients.
                     let desired = eaten * 2.;
                     let available_e = plant_e.min(desired);
-                    let gained = (available_e * h.feeding_energy_gain_fraction).min(capacity);
+                    let gained = (available_e * gain_fraction).min(capacity);
                     self.diagnostics.phase21_feeding_plant_energy_available += available_e;
                     self.diagnostics.phase21_feeding_energy_capacity_blocked +=
-                        (available_e * h.feeding_energy_gain_fraction - capacity).max(0.);
+                        (available_e * gain_fraction - capacity).max(0.);
                     self.diagnostics.herbivore_feeding_e += gained;
                     let feeding_before = self.resources.energy_balance(ares).unwrap_or(0.);
                     if gained > 0. {
@@ -692,6 +696,12 @@ impl World {
                         );
                     }
                     let dissipated = available_e - gained;
+                    if diet < 1. {
+                        self.diet_record_herbivore_loss(
+                            eaten * h.feeding_nutrient_absorption * (1. - diet),
+                            available_e * h.feeding_energy_gain_fraction * (1. - diet),
+                        );
+                    }
                     if dissipated > 0. {
                         self.ledger
                             .dissipate_heat(&mut self.resources, pres, dissipated)
@@ -960,6 +970,7 @@ impl World {
             }
             self.plant_color_learning.remove(&a.id);
             self.hungry_color_recovery.remove(&a.id);
+            self.diet.remove(a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
                     .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));
@@ -1430,20 +1441,31 @@ impl World {
             );
             self.animals.items[i].reproduction_cooldown = h.reproduction_cooldown_ticks;
             let id = self.entities.spawn()?;
+            // Issue #78 (opt-in): the child's diet value; with effects on it decides the body.
+            let child_diet = self.diet_child_value(parent_id, false, id);
+            let diet_effects = self.diet_effects();
             let child_max_age = ((max_age as f64) * (0.9 + 0.2 * self.rng.unit() as f64))
                 .round()
                 .max(1.) as u32;
             let exploration_heading = self.rng.unit() * std::f32::consts::TAU;
             // Opt-in: the offspring is born as a carnivore with the herbivore child's
-            // resources and inherited body color (Issue 11, simple version).
-            if self.config.carnivores.enabled
-                && crate::animals::carnivore::offspring_is_carnivore(
-                    h.carnivore_offspring_probability,
-                    self.config.seed,
-                    self.tick,
-                    id.index as u64,
-                )
-            {
+            // resources and inherited body color (Issue 11, simple version), or, with the diet
+            // value acting (Issue #78), when its value is at least 0.5.
+            let to_carnivore = match child_diet {
+                Some(value) if diet_effects => value >= 0.5,
+                _ => {
+                    self.config.carnivores.enabled
+                        && crate::animals::carnivore::offspring_is_carnivore(
+                            h.carnivore_offspring_probability,
+                            self.config.seed,
+                            self.tick,
+                            id.index as u64,
+                        )
+                }
+            };
+            if to_carnivore {
+                // Issue #78: carnivore genes the herbivore lineage carried, if any.
+                let carried = self.diet_dormant_carnivore(parent_id);
                 let c = &self.config.carnivores;
                 self.carnivores.push(crate::animals::carnivore::Carnivore {
                     id,
@@ -1459,23 +1481,30 @@ impl World {
                     body: child_body,
                     reserve: child_reserve,
                     color: child_genes.body_color,
-                    speed: if c.speed_evolution_enabled {
-                        crate::animals::carnivore::initial_speed(
-                            c.speed,
-                            c.initial_speed_spread,
-                            self.config.seed,
-                            id.index as u64,
-                        )
-                    } else {
-                        c.speed
+                    speed: match carried {
+                        Some(g) => g.speed,
+                        None if c.speed_evolution_enabled => {
+                            crate::animals::carnivore::initial_speed(
+                                c.speed,
+                                c.initial_speed_spread,
+                                self.config.seed,
+                                id.index as u64,
+                            )
+                        }
+                        None => c.speed,
                     },
                     vision: c.vision,
-                    ambush_gene: 0.15
-                        + 0.70
-                            * ((id.index as u64)
-                                .wrapping_mul(0x9e3779b97f4a7c15)
-                                .rotate_left(17) as u32 as f32
-                                / u32::MAX as f32),
+                    ambush_gene: match carried {
+                        Some(g) => g.ambush_gene,
+                        None => {
+                            0.15 + 0.70
+                                * ((id.index as u64)
+                                    .wrapping_mul(0x9e3779b97f4a7c15)
+                                    .rotate_left(17) as u32
+                                    as f32
+                                    / u32::MAX as f32)
+                        }
+                    },
                     p42: Default::default(),
                     parent_id: None,
                     search_heading: 0.,
@@ -1483,7 +1512,19 @@ impl World {
                     last_prey_heading: 0.,
                     last_prey_ticks_left: 0,
                 });
+                if diet_effects {
+                    // The child carries the herbivore genes it was born with, and the toxin
+                    // genes of both bodies are inherited as usual.
+                    self.diet_set_dormant_herbivore(id, child_genes);
+                    if self.config.animal_toxin.enabled {
+                        self.inherit_herbivore_production(parent_id, id);
+                        if self.has_predator_toxin(parent_id) {
+                            self.inherit_carnivore_toxin(parent_id, id);
+                        }
+                    }
+                }
                 self.species_carnivore_birth(self.carnivores.len() - 1, None, Some(i));
+                self.diet_record_birth(parent_id, false, id, child_diet, true);
                 self.animals.items[i].successful_births += 1;
                 self.carnivore_births += 1;
                 self.defense.carnivores_born_from_herbivores += 1;
@@ -1522,7 +1563,16 @@ impl World {
                 exploration_ticks: 30,
                 target: None,
             });
+            if diet_effects {
+                if let Some(carried) = self.diet_dormant_carnivore(parent_id) {
+                    self.diet_set_dormant_carnivore(id, carried);
+                }
+                if self.config.animal_toxin.enabled && self.has_predator_toxin(parent_id) {
+                    self.inherit_carnivore_toxin(parent_id, id);
+                }
+            }
             self.species_herbivore_birth(self.animals.items.len() - 1, Some(i));
+            self.diet_record_birth(parent_id, false, id, child_diet, false);
             self.record_energy(
                 id,
                 "birth",

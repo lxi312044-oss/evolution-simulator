@@ -45,7 +45,7 @@
   "herbivores": {
     "basal_energy_per_tick": 0.03,
     "body_n_repair_per_tick": 0.02,
-    "carnivore_offspring_probability": 0.002,
+    "carnivore_offspring_probability": 0.0,
     "color_learning_enabled": true,
     "color_memory_decay_per_tick": 0.0007,
     "digestion_n_per_tick": 0.05,
@@ -184,5 +184,14 @@
     "herbivore_toxic_mutation_probability": 0.02,
     "herbivore_toxin_decay_per_tick": 0.002,
     "plant_toxin_transfer_threshold": 0.2
+  },
+  "diet_gene": {
+    "effects": true,
+    "initial_herbivore": 0.2,
+    "initial_carnivore": 0.9,
+    "initial_spread": 0.1,
+    "mutation_probability": 0.1,
+    "mutation_scale": 0.15,
+    "efficiency_exponent": 0.5
   }
 }

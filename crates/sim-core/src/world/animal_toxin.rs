@@ -180,6 +180,8 @@ impl AnimalToxins {
             };
             *discarded += residual + production.as_ref().map_or(0., |p| p.stock[kind]);
         }
+        // Issue #78: carnivore toxin genes a herbivore carried (none without the diet value).
+        self.remove_carnivore(animal.id);
     }
 
     pub(super) fn remove_carnivore(&mut self, id: EntityId) {
@@ -187,6 +189,16 @@ impl AnimalToxins {
         if let Some(predator) = self.predators.remove(&id) {
             for (kind, discarded) in self.discarded.iter_mut().enumerate() {
                 *discarded += predator.production.stock[kind] + predator.load[kind];
+            }
+        }
+    }
+
+    /// Issue #78: herbivore toxin genes a carnivore carried (none without the diet value).
+    pub(super) fn remove_carried_herbivore_toxin(&mut self, id: EntityId) {
+        self.toxic_trait.remove(&id);
+        if let Some(production) = self.herbivores.remove(&id) {
+            for (discarded, stock) in self.discarded.iter_mut().zip(production.stock) {
+                *discarded += stock;
             }
         }
     }
@@ -329,6 +341,18 @@ impl World {
             .or_insert_with(|| Production::founder(seed, parent, 71))
             .offspring(seed, child, 73, &self.config.toxin);
         states.insert(child, production);
+    }
+
+    /// Issue #78: whether `id` has carnivore toxin state (a carnivore, or a herbivore carrying
+    /// carnivore toxin genes).
+    pub(super) fn has_predator_toxin(&self, id: EntityId) -> bool {
+        self.animal_toxins.predators.contains_key(&id)
+    }
+
+    /// Issue #78: whether `id` has herbivore toxin state (a herbivore, or a carnivore carrying
+    /// herbivore toxin genes).
+    pub(super) fn has_herbivore_toxin(&self, id: EntityId) -> bool {
+        self.animal_toxins.herbivores.contains_key(&id)
     }
 
     pub(super) fn inherit_carnivore_toxin(&mut self, parent: EntityId, child: EntityId) {

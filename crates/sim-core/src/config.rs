@@ -13,6 +13,48 @@ pub struct SimulationConfig {
     pub toxin: ToxinSettings,
     #[serde(skip_serializing_if = "AnimalToxinSettings::is_off")]
     pub animal_toxin: AnimalToxinSettings,
+    /// Issue #78 (opt-in): a heritable diet value on every animal. Absent = no diet value
+    /// (previous behavior).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub diet_gene: Option<DietGeneSettings>,
+}
+
+/// Issue #78: every animal carries a diet value from 0 (herbivore) to 1 (carnivore). Offspring
+/// inherit it with rare normal steps drawn from a stateless stream (no ecology RNG).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DietGeneSettings {
+    /// false: the value is inherited and observed but changes nothing (stage 0). true: an
+    /// offspring with a value below 0.5 is born a herbivore and at or above 0.5 a carnivore,
+    /// and feeding gains scale with the value (stage 1).
+    pub effects: bool,
+    /// Founder herbivores draw their value uniformly from this centre +/- `initial_spread`,
+    /// kept below 0.5.
+    pub initial_herbivore: f64,
+    /// Founder carnivores draw their value uniformly from this centre +/- `initial_spread`,
+    /// kept at or above 0.5.
+    pub initial_carnivore: f64,
+    pub initial_spread: f64,
+    /// Probability that an offspring's value moves, and the standard deviation of the move.
+    pub mutation_probability: f64,
+    pub mutation_scale: f64,
+    /// Feeding-gain exponent k: a herbivore gains x (1 - value)^k from plants, a carnivore
+    /// x value^k from bites.
+    pub efficiency_exponent: f64,
+}
+
+impl Default for DietGeneSettings {
+    fn default() -> Self {
+        Self {
+            effects: false,
+            initial_herbivore: 0.1,
+            initial_carnivore: 0.9,
+            initial_spread: 0.1,
+            mutation_probability: 0.1,
+            mutation_scale: 0.1,
+            efficiency_exponent: 1.,
+        }
+    }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -598,6 +640,7 @@ impl Default for SimulationConfig {
             carnivores: CarnivoreSettings::default(),
             toxin: ToxinSettings::default(),
             animal_toxin: AnimalToxinSettings::default(),
+            diet_gene: None,
         }
     }
 }
@@ -1074,11 +1117,38 @@ impl SimulationConfig {
             )
             .into());
         }
+        let diet_effects = self.diet_gene.as_ref().is_some_and(|d| d.effects);
         if c.enabled
             && self.initial_population.carnivores == 0
             && self.herbivores.carnivore_offspring_probability == 0.
+            && !diet_effects
         {
             return Err("enabled carnivores require nonzero initial population".into());
+        }
+        if let Some(d) = &self.diet_gene {
+            let unit = |x: f64| (0.0..=1.0).contains(&x);
+            if !(0.0..0.5).contains(&d.initial_herbivore)
+                || !(0.5..=1.0).contains(&d.initial_carnivore)
+                || !(0.0..=0.5).contains(&d.initial_spread)
+                || !unit(d.mutation_probability)
+                || !(0.0..=1.0).contains(&d.mutation_scale)
+                || !(0.0..=10.0).contains(&d.efficiency_exponent)
+            {
+                return Err(concat!(
+                    "食性の遺伝子（diet_gene）：最初の草食の値は0以上0.5未満、最初の肉食の値は",
+                    "0.5以上1以下、ばらつき・変異の幅は0〜0.5／0〜1、変異の確率は0〜1、",
+                    "効率の指数は0〜10で指定してください。"
+                )
+                .into());
+            }
+            if d.effects && (!c.enabled || self.herbivores.carnivore_offspring_probability != 0.) {
+                return Err(concat!(
+                    "食性の遺伝子を効かせる（diet_gene.effects）ときは、肉食を有効にし、",
+                    "草食から肉食が生まれる確率（herbivores.carnivore_offspring_probability）を",
+                    "0にしてください。"
+                )
+                .into());
+            }
         }
         Ok(())
     }
