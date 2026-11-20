@@ -97,6 +97,11 @@ herbivore_risk.hunger_weight|草食：空腹の重み|肉食の危険と空腹�
 herbivore_risk.flee_until_factor|草食：逃げ続ける距離|肉食を見た場所から、肉食に気づく距離のこの倍だけ離れるまで、危険として扱い続けます（受け入れなければ逃げ続けます）。|1〜10 倍
 herbivore_risk.memory_ticks|草食：危険な場所を覚えるTick数|肉食を見た場所を、見えなくなってからこのTick数だけ覚えています。記憶は学習で、遺伝しません。|整数 0〜100,000 Tick
 herbivore_risk.plant_danger_factor|草食：植物を危険とみなす範囲|覚えた場所から、肉食に気づく距離のこの倍以内の植物は、その危険を受け入れる場合だけ目標にします。0なら植物の選び方は変わりません。|0〜10 倍
+apex_predation.effects|肉食を狙う傾向を効かせる|ONにすると、肉食は見える範囲の別の種の肉食を「距離÷傾向」で草食と比べ、近いとみなせば狙います。同じ種は狙いません。OFFでは傾向は受け継がれるだけです。|b
+apex_predation.initial_max|最初の肉食を狙う傾向|開始時の動物の傾向は0〜この値で一様に決まります。草食も使わずに持ち運び、肉食の子に受け継ぎます。|0〜1
+apex_predation.mutation_probability|肉食を狙う傾向の変異確率|子の傾向が親から変わる確率です。|p
+apex_predation.mutation_scale|肉食を狙う傾向の変異の幅|傾向が変わるときの変化の大きさ（正規分布の標準偏差）です。|0〜1
+apex_predation.counter_energy|狙われた肉食の反撃の強さ|かみつくたびに、攻撃側は「この値×相手の蓄え÷（相手の蓄え＋自分の蓄え）」のエネルギーを失います。|0〜1000
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p

@@ -65,12 +65,16 @@ let interval = 100;
 let reference: {config: Config; condition: string} | undefined;
 const playNames: Record<string, string> = {
   "stage4-standard": "肉食は草食から生まれる（標準）",
+  "stage4-apex-a1": "試験：肉食も肉食を食べる（#82 A1）",
+  "stage4-apex-wide": "試験：肉食を狙う傾向を広げる（未検証）",
   [defaultWebPreset]: "無毒の緑から始まる世界",
   "standard-toxin": "通常毒",
   "stage4-fixed-candidate": "色を覚える捕食者",
   "stage4-fixed-baseline": "色のある草原",
 };
 const playNotes: Record<string, string> = {
+  "stage4-apex-a1": "標準に、肉食が別の種の肉食も狙う仕組み（Issue #82 の条件A1）を加えた試験用の設定です。肉食を狙う傾向は遺伝し、最初は0〜0.05と小さいので、肉食どうしの捕食はまれです。狙われた肉食は反撃します。",
+  "stage4-apex-wide": "A1の傾向の最初の値を0〜0.5に広げた試験用の設定です（未検証。次の案aの見た目の確認用）。肉食どうしの捕食が目に見えやすくなります。",
   [defaultWebPreset]: "最初の植物はすべて無毒の緑色です。種子から生まれる子では、毒性と色が独立に変異します。草食は食べた後の被毒経験から色を学習します。色だけで有毒株を正確に見分けられるとは限りません。",
   "standard-toxin": "植物・草食・肉食と資源の循環を観察します。",
   "stage4-fixed-candidate": "色を手掛かりに餌を選ぶ草食と、被毒経験を覚える肉食を観察します。",
@@ -115,6 +119,13 @@ phase19Configs["stage4-fixed-baseline"] = normalizeConfig(fixedBaseline);
 phase19Configs["stage4-fixed-candidate"] = normalizeConfig(fixedCandidate);
 phase19Configs["stage4-baseline"] = normalizeConfig(stage4Baseline);
 phase19Configs["stage4-standard"] = normalizeConfig(stage4Standard);
+// Issue #82 trial presets (branch only): the standard plus carnivores hunting carnivores.
+const apex = (initial_max: number) => normalizeConfig({
+  ...stage4Standard,
+  apex_predation: { effects: true, initial_max, mutation_probability: 0.1, mutation_scale: 0.05, counter_energy: 1.2 },
+});
+phase19Configs["stage4-apex-a1"] = apex(0.05);
+phase19Configs["stage4-apex-wide"] = apex(0.5);
 phase19Configs["stage4-hungry-recheck"] = normalizeConfig({
   ...stage4Baseline,
   herbivores: { ...stage4Baseline.herbivores, hungry_color_recheck_enabled: true },
