@@ -202,11 +202,12 @@ fn diet_effects_cross_both_ways() {
     }
 }
 
-/// Issue #78 (2026-11-20): the standard is the 2026-11-20 standard plus the condition that
-/// ranked first in stage 2 (`DE_H20_M15_K50` in `examples/diet_goal.rs`): carnivores are born
-/// from herbivores through the diet value instead of a fixed probability.
+/// The standard is the 2026-11-20 standard plus the condition that ranked first in Issue #78
+/// stage 2 (`DE_H20_M15_K50` in `examples/diet_goal.rs`: carnivores are born from herbivores
+/// through the diet value instead of a fixed probability) and the Issue #80 choice (`RK`:
+/// herbivores weigh carnivore danger against hunger with the default values).
 #[test]
-fn standard_is_the_20261120_standard_plus_the_issue78_choice() {
+fn standard_is_the_20261120_standard_plus_issue78_and_issue80() {
     let parse = |text: &str| serde_json::from_str::<SimulationConfig>(text).unwrap();
     let standard = parse(include_str!("../../../config/stage4-standard.json"));
     let mut expected = parse(include_str!(
@@ -220,9 +221,43 @@ fn standard_is_the_20261120_standard_plus_the_issue78_choice() {
         efficiency_exponent: 0.5,
         ..Default::default()
     });
+    expected.herbivore_risk = Some(sim_core::config::HerbivoreRiskSettings::default());
     assert_eq!(
         serde_json::to_value(&standard).unwrap(),
         serde_json::to_value(&expected).unwrap()
     );
     World::new(standard).unwrap();
+}
+
+/// Issue #80: the flee/pursue observation changes nothing and its counters are consistent.
+#[test]
+fn risk_observation_changes_nothing() {
+    let mut observed = World::new(quarter_standard()).unwrap();
+    observed.enable_risk_observation();
+    let mut plain = World::new(quarter_standard()).unwrap();
+    assert!(plain.risk_observation_json().is_null());
+    for _ in 0..10 {
+        observed.step(100).unwrap();
+        plain.step(100).unwrap();
+        assert_eq!(observed.animals.items.len(), plain.animals.items.len());
+        assert_eq!(observed.carnivores.len(), plain.carnivores.len());
+        assert_eq!(
+            observed.resources.total_energy().to_bits(),
+            plain.resources.total_energy().to_bits()
+        );
+        assert_eq!(format!("{:?}", observed.rng), format!("{:?}", plain.rng));
+    }
+    let r = observed.risk_observation_json();
+    let n = |k: &str| r[k].as_u64().unwrap();
+    assert!(n("herbivore_ticks") > 0);
+    assert!(n("switches") <= n("herbivore_ticks"));
+    assert!(
+        n("flee_ticks") > 0,
+        "the test needs carnivores near herbivores"
+    );
+    let danger: u64 = (0..3).map(|b| r["danger_ticks"][b].as_u64().unwrap()).sum();
+    let pursue: u64 = (0..3)
+        .map(|b| r["pursue_in_danger"][b].as_u64().unwrap())
+        .sum();
+    assert!(danger >= n("flee_ticks") && pursue <= danger);
 }

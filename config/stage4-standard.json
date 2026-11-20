@@ -193,5 +193,11 @@
     "mutation_probability": 0.1,
     "mutation_scale": 0.15,
     "efficiency_exponent": 0.5
+  },
+  "herbivore_risk": {
+    "hunger_weight": 1.0,
+    "flee_until_factor": 1.5,
+    "memory_ticks": 30,
+    "plant_danger_factor": 1.0
   }
 }

@@ -6,7 +6,7 @@ const groups: [string, string[], string][] = [
     "固定配色モードは相互排他です。通常の色継承・変異と実験配色は併用できません。"],
   ["毒・耐性", ["toxin", "animal_toxin"],
     "toxin.enabled は植物毒の作用と草食の被毒処理を切り替えます。植物の配色・継承と動物毒・耐性の設定は個別です。動物の生成上限・生成費と身体N割合に基づく移送はコード内固定です。"],
-  ["学習・判断", ["herbivores.color_learning", "herbivores.hungry_color", "animal_toxin.color_learning", "animal_toxin.carnivore_learning"],
+  ["学習・判断", ["herbivores.color_learning", "herbivores.hungry_color", "animal_toxin.color_learning", "animal_toxin.carnivore_learning", "herbivore_risk"],
     "記憶は最大30色、一般化距離0.25、空腹時の許容式はコード内固定です。時間経過による忘却は未実装です。"],
   ["摂食・繁殖", ["herbivores", "carnivores", "diet_gene"], ""],
 ];

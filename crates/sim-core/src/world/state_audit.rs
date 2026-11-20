@@ -34,6 +34,8 @@ impl World {
             species: _,
             mimicry: _,
             diet,
+            risk: _,
+            herbivore_danger,
             carnivore_retreats,
             carnivore_hunt_bouts,
             prey_trend_snapshot,
@@ -135,6 +137,10 @@ impl World {
         // Opt-in diet values (Issue #78); empty unless `diet_gene` is set.
         if !diet.is_empty() {
             emit!(28, diet);
+        }
+        // Opt-in danger memory (Issue #80); empty unless `herbivore_risk` is set.
+        if !herbivore_danger.is_empty() {
+            emit!(29, herbivore_danger);
         }
         bytes
     }
