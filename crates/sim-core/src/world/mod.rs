@@ -5,6 +5,7 @@ mod tick;
 pub use state::{SpontaneousGermination, World};
 
 mod animal_toxin;
+mod apex;
 mod behavior;
 mod carnivore_tick;
 mod diet;
@@ -15,6 +16,7 @@ mod herbivore_risk;
 mod mimicry;
 mod plant_color_learning;
 mod species;
+pub use apex::ApexBook;
 pub use diet::DietBook;
 pub use energy::EnergyTrace;
 pub use foraging::{ForagingTrace, ForagingWindow};

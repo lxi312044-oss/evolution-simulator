@@ -331,6 +331,7 @@ impl World {
         self.diet_set_dormant_carnivore(child.id, child.carnivore);
         self.species_herbivore_birth_from_carnivore(index, parent);
         self.diet_record_birth(parent_id, true, child.id, Some(child.value), false);
+        self.apex_record_birth(parent_id, child.id);
         self.births += 1;
         self.diagnostics.herbivore_births += 1;
     }

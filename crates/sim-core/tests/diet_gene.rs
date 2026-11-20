@@ -261,3 +261,35 @@ fn risk_observation_changes_nothing() {
         .sum();
     assert!(danger >= n("flee_ticks") && pursue <= danger);
 }
+
+/// Issue #82 stage 0: observing the tendency to hunt carnivores changes nothing.
+#[test]
+fn apex_observation_changes_nothing() {
+    let mut observed_config = quarter_standard();
+    observed_config.apex_predation = Some(sim_core::config::ApexPredationSettings::default());
+    let mut observed = World::new(observed_config).unwrap();
+    let mut plain = World::new(quarter_standard()).unwrap();
+    assert!(plain.apex_json().is_null());
+    for _ in 0..10 {
+        observed.step(100).unwrap();
+        plain.step(100).unwrap();
+        assert_eq!(observed.animals.items.len(), plain.animals.items.len());
+        assert_eq!(observed.carnivores.len(), plain.carnivores.len());
+        assert_eq!(
+            observed.resources.total_energy().to_bits(),
+            plain.resources.total_energy().to_bits()
+        );
+        assert_eq!(format!("{:?}", observed.rng), format!("{:?}", plain.rng));
+    }
+    let a = observed.apex_json();
+    assert_eq!(
+        a["carnivore"]["n"].as_u64(),
+        Some(observed.carnivores.len() as u64)
+    );
+    assert_eq!(a["bites"].as_u64(), Some(0));
+    let mean = a["herbivore"]["mean"].as_f64().unwrap();
+    assert!((0. ..=1.).contains(&mean));
+    assert!(!serde_json::to_string(&quarter_standard())
+        .unwrap()
+        .contains("apex_predation"));
+}

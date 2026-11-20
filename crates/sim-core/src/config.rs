@@ -21,6 +21,39 @@ pub struct SimulationConfig {
     /// previous flee rule.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub herbivore_risk: Option<HerbivoreRiskSettings>,
+    /// Issue #82 (opt-in): a heritable tendency of carnivores to hunt other carnivores.
+    /// Absent = carnivores hunt herbivores only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub apex_predation: Option<ApexPredationSettings>,
+}
+
+/// Issue #82: every animal carries a value from 0 to 1, inherited with rare normal steps drawn
+/// from a stateless stream. In carnivores it is the tendency to hunt other carnivores.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ApexPredationSettings {
+    /// false: the value is inherited and observed only. true: a carnivore compares other
+    /// carnivores (not of its own species) by distance / value with the nearest herbivore and
+    /// may bite them; the bitten carnivore fights back.
+    pub effects: bool,
+    /// Founders draw their value uniformly from 0 to this.
+    pub initial_max: f64,
+    pub mutation_probability: f64,
+    pub mutation_scale: f64,
+    /// Energy the attacker loses per bite at most, scaled by the prey's share of both reserves.
+    pub counter_energy: f64,
+}
+
+impl Default for ApexPredationSettings {
+    fn default() -> Self {
+        Self {
+            effects: false,
+            initial_max: 0.05,
+            mutation_probability: 0.1,
+            mutation_scale: 0.05,
+            counter_energy: 1.2,
+        }
+    }
 }
 
 /// Issue #80: a herbivore accepts a danger d (0 at the edge of the danger radius, 1 at the
@@ -673,6 +706,7 @@ impl Default for SimulationConfig {
             animal_toxin: AnimalToxinSettings::default(),
             diet_gene: None,
             herbivore_risk: None,
+            apex_predation: None,
         }
     }
 }
@@ -1156,6 +1190,19 @@ impl SimulationConfig {
             && !diet_effects
         {
             return Err("enabled carnivores require nonzero initial population".into());
+        }
+        if let Some(a) = &self.apex_predation {
+            if !(0.0..=1.0).contains(&a.initial_max)
+                || !(0.0..=1.0).contains(&a.mutation_probability)
+                || !(0.0..=1.0).contains(&a.mutation_scale)
+                || !(0.0..=1000.0).contains(&a.counter_energy)
+            {
+                return Err(concat!(
+                    "肉食を狙う傾向（apex_predation）：最初の値の上限・変異の確率・変異の幅は0〜1、",
+                    "反撃の強さは0〜1000で指定してください。"
+                )
+                .into());
+            }
         }
         if let Some(r) = &self.herbivore_risk {
             if !(0.0..=100.0).contains(&r.hunger_weight)

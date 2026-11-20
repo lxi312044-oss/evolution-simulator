@@ -1093,6 +1093,7 @@ impl World {
             self.diet.remove(a.id);
             self.risk.remove(a.id);
             self.herbivore_danger.remove(&a.id);
+            self.apex.remove(a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
                     .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));
@@ -1647,6 +1648,7 @@ impl World {
                 }
                 self.species_carnivore_birth(self.carnivores.len() - 1, None, Some(i));
                 self.diet_record_birth(parent_id, false, id, child_diet, true);
+                self.apex_record_birth(parent_id, id);
                 self.animals.items[i].successful_births += 1;
                 self.carnivore_births += 1;
                 self.defense.carnivores_born_from_herbivores += 1;
@@ -1695,6 +1697,7 @@ impl World {
             }
             self.species_herbivore_birth(self.animals.items.len() - 1, Some(i));
             self.diet_record_birth(parent_id, false, id, child_diet, false);
+            self.apex_record_birth(parent_id, id);
             self.record_energy(
                 id,
                 "birth",

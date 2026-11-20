@@ -36,6 +36,7 @@ impl World {
             diet,
             risk: _,
             herbivore_danger,
+            apex,
             carnivore_retreats,
             carnivore_hunt_bouts,
             prey_trend_snapshot,
@@ -141,6 +142,10 @@ impl World {
         // Opt-in danger memory (Issue #80); empty unless `herbivore_risk` is set.
         if !herbivore_danger.is_empty() {
             emit!(29, herbivore_danger);
+        }
+        // Opt-in tendency to hunt carnivores (Issue #82); empty unless `apex_predation` is set.
+        if !apex.is_empty() {
+            emit!(30, apex);
         }
         bytes
     }

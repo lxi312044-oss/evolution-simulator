@@ -1120,6 +1120,7 @@ impl World {
                     }
                     self.species_carnivore_birth(self.carnivores.len() - 1, Some(i), None);
                     self.diet_record_birth(parent_id, true, id, child_diet, true);
+                    self.apex_record_birth(parent_id, id);
                     self.carnivores[i].cooldown = c.reproduction_cooldown_ticks;
                     let parent_bin = ambush_bin(parent_gene);
                     let child_bin = ambush_bin(child_gene);
@@ -1219,6 +1220,7 @@ impl World {
                 self.carnivore_retreats.remove(&a.id);
                 self.carnivore_hunt_bouts.remove(&a.id);
                 self.diet.remove(a.id);
+                self.apex.remove(a.id);
                 if self.config.animal_toxin.enabled {
                     let reason = if toxin_dead {
                         "toxin_hp_zero"

@@ -16,9 +16,13 @@
 //!   U<n> hunger weight n/100              F<n> keep fleeing until n/100 detection radii
 //!   T<n> remember the danger for n Ticks  P<n> plant danger radius n/100 detection radii
 //! U, F, T and P add `herbivore_risk` with default values when RK did not come first.
+//! Issue #82 (tendency of carnivores to hunt carnivores):
+//!   AO   `apex_predation` observed only (default values)     AE  the tendency acts
+//!   C<n> counter energy n/100                                Y<n> mutation scale n/100
+//! C and Y add `apex_predation` (observed only) when no A token came first.
 //! A run that fails (for example a conservation check) prints the error to stderr and exits 2.
 use sim_core::{
-    config::{DietGeneSettings, HerbivoreRiskSettings},
+    config::{ApexPredationSettings, DietGeneSettings, HerbivoreRiskSettings},
     SimulationConfig, World,
 };
 
@@ -43,6 +47,26 @@ fn config_for(arm: &str) -> SimulationConfig {
                 c.herbivores.carnivore_offspring_probability = 0.;
             }
             "RK" => c.herbivore_risk = Some(HerbivoreRiskSettings::default()),
+            "AO" => c.apex_predation = Some(ApexPredationSettings::default()),
+            "AE" => {
+                c.apex_predation = Some(ApexPredationSettings {
+                    effects: true,
+                    ..c.apex_predation.take().unwrap_or_default()
+                })
+            }
+            t if t.len() > 1
+                && t[1..].bytes().all(|b| b.is_ascii_digit())
+                && matches!(&t[..1], "C" | "Y") =>
+            {
+                let a = c
+                    .apex_predation
+                    .get_or_insert_with(ApexPredationSettings::default);
+                if &t[..1] == "C" {
+                    a.counter_energy = percent(t);
+                } else {
+                    a.mutation_scale = percent(t);
+                }
+            }
             t if t.len() > 1
                 && t[1..].bytes().all(|b| b.is_ascii_digit())
                 && matches!(&t[..1], "U" | "F" | "T" | "P") =>
@@ -82,6 +106,8 @@ const LOST: [&str; 4] = [
     "carnivore_energy",
 ];
 const RESERVE_BINS: [&str; 3] = ["low", "mid", "high"];
+const APEX_SUMMARY: [&str; 4] = ["n", "mean", "max", "at_least_0_2"];
+const APEX_TOTALS: [&str; 4] = ["bites", "nutrients", "energy", "counter_energy"];
 const BIRTHS: [&str; 4] = [
     "herbivore_to_herbivore",
     "herbivore_to_carnivore",
@@ -121,6 +147,10 @@ fn header() -> String {
     for k in ["danger_ticks", "pursue_in_danger"] {
         h.extend(RESERVE_BINS.map(|b| format!("risk_{k}_{b}")));
     }
+    // Issue #82: tendency to hunt carnivores, and cumulative bites on carnivores.
+    h.extend(APEX_SUMMARY.map(|k| format!("apex_carnivore_{k}")));
+    h.push("apex_herbivore_mean".into());
+    h.extend(APEX_TOTALS.map(|k| format!("apex_{k}")));
     h.join(",")
 }
 
@@ -172,6 +202,10 @@ fn main() {
             for k in ["danger_ticks", "pursue_in_danger"] {
                 row.extend((0..3).map(|b| r[k][b].to_string()));
             }
+            let a = w.apex_json();
+            row.extend(APEX_SUMMARY.map(|k| f(&a["carnivore"][k])));
+            row.push(f(&a["herbivore"]["mean"]));
+            row.extend(APEX_TOTALS.map(|k| f(&a[k])));
             println!("{}", row.join(","));
         }
         if w.tick >= ticks {

@@ -48,6 +48,8 @@ pub struct World {
     pub risk: super::RiskBook,
     /// Issue #80 (opt-in): where each herbivore last saw a carnivore; empty unless
     /// `herbivore_risk` is set.
+    /// Issue #82 (opt-in): tendency to hunt carnivores; empty unless `apex_predation` is set.
+    pub apex: super::ApexBook,
     pub(super) herbivore_danger:
         std::collections::BTreeMap<crate::entity::EntityId, super::herbivore_risk::DangerMemory>,
     /// Opt-in counterattack retreat: carnivore -> (herbivore it will not target, ticks left).
@@ -149,6 +151,7 @@ impl World {
             diet: super::DietBook::default(),
             risk: super::RiskBook::default(),
             herbivore_danger: Default::default(),
+            apex: super::ApexBook::default(),
             carnivore_retreats: std::collections::BTreeMap::new(),
             carnivore_hunt_bouts: std::collections::BTreeMap::new(),
             prey_trend_snapshot: super::PreyTrendSnapshot::default(),
