@@ -34,6 +34,7 @@ impl World {
             species: _,
             mimicry: _,
             diet,
+            risk: _,
             carnivore_retreats,
             carnivore_hunt_bouts,
             prey_trend_snapshot,

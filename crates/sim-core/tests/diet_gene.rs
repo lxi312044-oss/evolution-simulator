@@ -226,3 +226,36 @@ fn standard_is_the_20261120_standard_plus_the_issue78_choice() {
     );
     World::new(standard).unwrap();
 }
+
+/// Issue #80: the flee/pursue observation changes nothing and its counters are consistent.
+#[test]
+fn risk_observation_changes_nothing() {
+    let mut observed = World::new(quarter_standard()).unwrap();
+    observed.enable_risk_observation();
+    let mut plain = World::new(quarter_standard()).unwrap();
+    assert!(plain.risk_observation_json().is_null());
+    for _ in 0..10 {
+        observed.step(100).unwrap();
+        plain.step(100).unwrap();
+        assert_eq!(observed.animals.items.len(), plain.animals.items.len());
+        assert_eq!(observed.carnivores.len(), plain.carnivores.len());
+        assert_eq!(
+            observed.resources.total_energy().to_bits(),
+            plain.resources.total_energy().to_bits()
+        );
+        assert_eq!(format!("{:?}", observed.rng), format!("{:?}", plain.rng));
+    }
+    let r = observed.risk_observation_json();
+    let n = |k: &str| r[k].as_u64().unwrap();
+    assert!(n("herbivore_ticks") > 0);
+    assert!(n("switches") <= n("herbivore_ticks"));
+    assert!(
+        n("flee_ticks") > 0,
+        "the test needs carnivores near herbivores"
+    );
+    let danger: u64 = (0..3).map(|b| r["danger_ticks"][b].as_u64().unwrap()).sum();
+    let pursue: u64 = (0..3)
+        .map(|b| r["pursue_in_danger"][b].as_u64().unwrap())
+        .sum();
+    assert!(danger >= n("flee_ticks") && pursue <= danger);
+}

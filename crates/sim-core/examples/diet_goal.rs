@@ -58,6 +58,7 @@ const LOST: [&str; 4] = [
     "carnivore_nutrients",
     "carnivore_energy",
 ];
+const RESERVE_BINS: [&str; 3] = ["low", "mid", "high"];
 const BIRTHS: [&str; 4] = [
     "herbivore_to_herbivore",
     "herbivore_to_carnivore",
@@ -92,6 +93,11 @@ fn header() -> String {
         h.extend(["n", "mean"].map(|s| format!("parent_{k}_{s}")));
         h.extend((0..10).map(|i| format!("parent_{k}_hist{i}")));
     }
+    // Issue #80 (cumulative): flee/pursue switches and pursuit in danger by reserve bin.
+    h.extend(["herbivore_ticks", "switches", "flee_ticks"].map(|k| format!("risk_{k}")));
+    for k in ["danger_ticks", "pursue_in_danger"] {
+        h.extend(RESERVE_BINS.map(|b| format!("risk_{k}_{b}")));
+    }
     h.join(",")
 }
 
@@ -107,6 +113,7 @@ fn main() {
     let ticks: u64 = a[3].parse().unwrap();
     let every: u64 = a.get(4).map_or(500, |v| v.parse().unwrap());
     let mut w = World::new(c).unwrap();
+    w.enable_risk_observation();
     println!("{}", header());
     let f = |v: &serde_json::Value| v.as_f64().map_or(String::new(), |x| format!("{x:.5}"));
     loop {
@@ -136,6 +143,11 @@ fn main() {
                 let p = &d["crossing_parents"][k];
                 row.extend([p["n"].to_string(), f(&p["mean"])]);
                 row.extend((0..10).map(|i| p["hist"][i].to_string()));
+            }
+            let r = w.risk_observation_json();
+            row.extend(["herbivore_ticks", "switches", "flee_ticks"].map(|k| r[k].to_string()));
+            for k in ["danger_ticks", "pursue_in_danger"] {
+                row.extend((0..3).map(|b| r[k][b].to_string()));
             }
             println!("{}", row.join(","));
         }

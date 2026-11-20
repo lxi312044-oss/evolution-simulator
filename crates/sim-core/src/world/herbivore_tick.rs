@@ -315,6 +315,15 @@ impl World {
                 self.animals.items[i].learned_fear =
                     (self.animals.items[i].learned_fear - 0.00002).max(-0.10);
             }
+            // Issue #80: flee/pursue observation (no-op unless enabled).
+            let risk_reserve_fraction = self.resources.energy_balance(reserve).unwrap_or(0.)
+                / (f64::from(hp_max) * h.max_energy_per_hp);
+            self.observe_risk_action(
+                self.animals.items[i].id,
+                action,
+                threat.is_some(),
+                risk_reserve_fraction,
+            );
             let (tx, ty, plant_id) = if action == Action::Flee {
                 let (d2, dx, dy) = threat.unwrap();
                 self.carnivore_debug.herbivore_predator_detected_ticks += 1;
@@ -971,6 +980,7 @@ impl World {
             self.plant_color_learning.remove(&a.id);
             self.hungry_color_recovery.remove(&a.id);
             self.diet.remove(a.id);
+            self.risk.remove(a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
                     .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));
