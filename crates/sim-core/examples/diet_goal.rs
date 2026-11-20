@@ -1,7 +1,8 @@
 //! Issue #78: comparisons for the heritable diet value on the current standard config.
 //! Usage: diet_goal <arm> <seed> <ticks> [every]   (CSV to stdout, default every 500 ticks)
 //!        diet_goal <arm> config                    (effective config JSON to stdout)
-//! An arm is a list of tokens joined by `_` applied to config/stage4-standard.json:
+//! An arm is a list of tokens joined by `_` applied to config/stage4-standard-20261120.json
+//! (the standard before the diet value; the current standard is its DE_H20_M15_K50):
 //!   std  no change (carnivores are born from herbivores with probability 0.002)
 //!   DO   diet value observed only (`diet_gene` with `effects` false, default values)
 //!   DE   diet value decides the body and the feeding gains (`effects` true; the fixed
@@ -14,8 +15,10 @@
 use sim_core::{config::DietGeneSettings, SimulationConfig, World};
 
 fn config_for(arm: &str) -> SimulationConfig {
-    let mut c: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+    let mut c: SimulationConfig = serde_json::from_str(include_str!(
+        "../../../config/stage4-standard-20261120.json"
+    ))
+    .unwrap();
     for token in arm.split('_') {
         let percent = |t: &str| -> f64 {
             let n: u32 = t[1..].parse().unwrap_or_else(|_| panic!("bad token {t}"));

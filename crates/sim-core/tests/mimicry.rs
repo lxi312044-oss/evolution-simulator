@@ -311,13 +311,17 @@ fn toxic_trait_and_plant_threshold_are_opt_in() {
     assert!(!s.contains("herbivore_toxic") && !s.contains("plant_toxin_transfer"));
 }
 
-/// Issue #76 (2026-11-20): the standard is the 2026-11-19 standard plus the condition chosen
-/// after round 10 by the rule fixed in Issue #76 (`B_T01_D002_F40_X50_P20_R70_Y20_G400` in
-/// `examples/mimicry_goal.rs`). Every other value is unchanged.
+/// Issue #76 (2026-11-20): the 2026-11-20 standard (kept as `stage4-standard-20261120.json`;
+/// the current standard adds the Issue #78 diet value to it) is the 2026-11-19 standard plus
+/// the condition chosen after round 10 by the rule fixed in Issue #76
+/// (`B_T01_D002_F40_X50_P20_R70_Y20_G400` in `examples/mimicry_goal.rs`). Every other value is
+/// unchanged.
 #[test]
-fn standard_is_the_20261119_standard_plus_the_issue76_choice() {
+fn standard_20261120_is_the_20261119_standard_plus_the_issue76_choice() {
     let parse = |text: &str| serde_json::from_str::<SimulationConfig>(text).unwrap();
-    let standard = parse(include_str!("../../../config/stage4-standard.json"));
+    let standard = parse(include_str!(
+        "../../../config/stage4-standard-20261120.json"
+    ));
     let mut expected = parse(include_str!(
         "../../../config/stage4-standard-20261119.json"
     ));

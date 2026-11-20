@@ -402,8 +402,10 @@ mod tests {
 
     /// A quarter of the current standard world with the diet value acting.
     fn acting(change: impl Fn(&mut SimulationConfig, &mut DietGeneSettings)) -> World {
-        let mut c: SimulationConfig =
-            serde_json::from_str(include_str!("../../../../config/stage4-standard.json")).unwrap();
+        let mut c: SimulationConfig = serde_json::from_str(include_str!(
+            "../../../../config/stage4-standard-20261120.json"
+        ))
+        .unwrap();
         c.world.width = 1000.;
         c.world.height = 1000.;
         c.world.land_columns = 20;

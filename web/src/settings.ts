@@ -8,7 +8,7 @@ const groups: [string, string[], string][] = [
     "toxin.enabled は植物毒の作用と草食の被毒処理を切り替えます。植物の配色・継承と動物毒・耐性の設定は個別です。動物の生成上限・生成費と身体N割合に基づく移送はコード内固定です。"],
   ["学習・判断", ["herbivores.color_learning", "herbivores.hungry_color", "animal_toxin.color_learning", "animal_toxin.carnivore_learning"],
     "記憶は最大30色、一般化距離0.25、空腹時の許容式はコード内固定です。時間経過による忘却は未実装です。"],
-  ["摂食・繁殖", ["herbivores", "carnivores"], ""],
+  ["摂食・繁殖", ["herbivores", "carnivores", "diet_gene"], ""],
 ];
 const optional = ["animal_toxin.carnivore_damage_threshold", "animal_toxin.carnivore_hp_damage_per_excess_unit",
   "animal_toxin.carnivore_learning_gain", "animal_toxin.herbivore_toxic_initial_fraction"];

@@ -1,11 +1,13 @@
 //! Issue #78: heritable diet value.
 use sim_core::{config::DietGeneSettings, SimulationConfig, World};
 
-/// A quarter of the current standard world (same cell size and densities) with a few
-/// carnivores from the start, so the test sees carnivore births and stays fast.
+/// A quarter of the 2026-11-20 standard world (same cell size and densities, no diet value)
+/// with a few carnivores from the start, so the test sees carnivore births and stays fast.
 fn quarter_standard() -> SimulationConfig {
-    let mut c: SimulationConfig =
-        serde_json::from_str(include_str!("../../../config/stage4-standard.json")).unwrap();
+    let mut c: SimulationConfig = serde_json::from_str(include_str!(
+        "../../../config/stage4-standard-20261120.json"
+    ))
+    .unwrap();
     c.world.width = 1000.;
     c.world.height = 1000.;
     c.world.land_columns = 20;
@@ -198,4 +200,29 @@ fn diet_effects_cross_both_ways() {
     for k in ["herbivore_energy", "carnivore_energy"] {
         assert!(d["lost"][k].as_f64().unwrap() > 0., "{k}");
     }
+}
+
+/// Issue #78 (2026-11-20): the standard is the 2026-11-20 standard plus the condition that
+/// ranked first in stage 2 (`DE_H20_M15_K50` in `examples/diet_goal.rs`): carnivores are born
+/// from herbivores through the diet value instead of a fixed probability.
+#[test]
+fn standard_is_the_20261120_standard_plus_the_issue78_choice() {
+    let parse = |text: &str| serde_json::from_str::<SimulationConfig>(text).unwrap();
+    let standard = parse(include_str!("../../../config/stage4-standard.json"));
+    let mut expected = parse(include_str!(
+        "../../../config/stage4-standard-20261120.json"
+    ));
+    expected.herbivores.carnivore_offspring_probability = 0.;
+    expected.diet_gene = Some(DietGeneSettings {
+        effects: true,
+        initial_herbivore: 0.2,
+        mutation_scale: 0.15,
+        efficiency_exponent: 0.5,
+        ..Default::default()
+    });
+    assert_eq!(
+        serde_json::to_value(&standard).unwrap(),
+        serde_json::to_value(&expected).unwrap()
+    );
+    World::new(standard).unwrap();
 }
