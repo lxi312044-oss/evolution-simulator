@@ -1,0 +1,106 @@
+{
+ "name": "apex-r1",
+ "check": true,
+ "builds": [
+  {
+   "id": "newprereq",
+   "sha": "",
+   "example": "mimicry_prereq"
+  },
+  {
+   "id": "newgoal",
+   "sha": "",
+   "example": "mimicry_goal"
+  },
+  {
+   "id": "s0diet",
+   "sha": "fdbdc0552ba0fbf05cadd2ab893c492d25a85e8a",
+   "example": "diet_goal"
+  },
+  {
+   "id": "diet",
+   "sha": "",
+   "example": "diet_goal"
+  }
+ ],
+ "runs": [
+  {
+   "build": "newprereq",
+   "arms": [
+    "std",
+    "B_T03_D01_H50"
+   ],
+   "seeds": [
+    90003,
+    90006
+   ],
+   "ticks": 30000
+  },
+  {
+   "build": "newgoal",
+   "arms": [
+    "std",
+    "B_T01_D002_F40_X50_P20_R70_Y20_G400"
+   ],
+   "seeds": [
+    90001,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  },
+  {
+   "build": "s0diet",
+   "arms": [
+    "DE_H20_M15_K50_RK_AO"
+   ],
+   "seeds": [
+    90001,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  },
+  {
+   "build": "diet",
+   "arms": [
+    "DE_H20_M15_K50_RK"
+   ],
+   "seeds": [
+    90001,
+    90006
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  },
+  {
+   "build": "diet",
+   "arms": [
+    "DE_H20_M15_K50_RK_AO",
+    "DE_H20_M15_K50_RK_AE",
+    "DE_H20_M15_K50_RK_AE_C60",
+    "DE_H20_M15_K50_RK_AE_Y10"
+   ],
+   "seeds": [
+    90001,
+    90002,
+    90003,
+    90004,
+    90005,
+    90006,
+    90007,
+    90008
+   ],
+   "ticks": 30000,
+   "extra": [
+    "500"
+   ]
+  }
+ ]
+}
