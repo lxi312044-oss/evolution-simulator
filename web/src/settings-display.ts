@@ -93,6 +93,10 @@ diet_gene.initial_spread|最初の食性の値のばらつき|開始時の値は
 diet_gene.mutation_probability|食性の値の変異確率|子の値が親から変わる確率です。|p
 diet_gene.mutation_scale|食性の値の変異の幅|値が変わるときの変化の大きさ（正規分布の標準偏差）です。大きいほど境目をまたぐ子が生まれやすくなります。|0〜1
 diet_gene.efficiency_exponent|食性の中間の不利さ（k）|草食は植物から（1−値）^k、肉食はかんで値^k の割合だけを得ます。kが大きいほど境目近くの個体が不利です。0なら不利はありません。|0〜10
+herbivore_risk.hunger_weight|草食：空腹の重み|肉食の危険と空腹を比べるときの空腹の重みです。「空腹の重み×空腹×(1−恐れ)」が「危険×恐れ」以上なら、その危険を受け入れて植物へ向かいます。恐れは遺伝する恐れと学習した恐れの和です。0なら空腹でも危険を受け入れません。|0〜100
+herbivore_risk.flee_until_factor|草食：逃げ続ける距離|肉食を見た場所から、肉食に気づく距離のこの倍だけ離れるまで、危険として扱い続けます（受け入れなければ逃げ続けます）。|1〜10 倍
+herbivore_risk.memory_ticks|草食：危険な場所を覚えるTick数|肉食を見た場所を、見えなくなってからこのTick数だけ覚えています。記憶は学習で、遺伝しません。|整数 0〜100,000 Tick
+herbivore_risk.plant_danger_factor|草食：植物を危険とみなす範囲|覚えた場所から、肉食に気づく距離のこの倍以内の植物は、その危険を受け入れる場合だけ目標にします。0なら植物の選び方は変わりません。|0〜10 倍
 herbivores.initial_body_nutrients|草食の初期身体栄養|初期草食の身体に配る栄養です。|n N
 herbivores.initial_reserve_nutrients|草食の初期予備栄養|初期草食の予備に配る栄養です。|n N
 herbivores.initial_energy_fraction|草食の初期エネルギー割合|予備E上限のうち、初期草食に配る割合です。|p

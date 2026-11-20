@@ -202,11 +202,12 @@ fn diet_effects_cross_both_ways() {
     }
 }
 
-/// Issue #78 (2026-11-20): the standard is the 2026-11-20 standard plus the condition that
-/// ranked first in stage 2 (`DE_H20_M15_K50` in `examples/diet_goal.rs`): carnivores are born
-/// from herbivores through the diet value instead of a fixed probability.
+/// The standard is the 2026-11-20 standard plus the condition that ranked first in Issue #78
+/// stage 2 (`DE_H20_M15_K50` in `examples/diet_goal.rs`: carnivores are born from herbivores
+/// through the diet value instead of a fixed probability) and the Issue #80 choice (`RK`:
+/// herbivores weigh carnivore danger against hunger with the default values).
 #[test]
-fn standard_is_the_20261120_standard_plus_the_issue78_choice() {
+fn standard_is_the_20261120_standard_plus_issue78_and_issue80() {
     let parse = |text: &str| serde_json::from_str::<SimulationConfig>(text).unwrap();
     let standard = parse(include_str!("../../../config/stage4-standard.json"));
     let mut expected = parse(include_str!(
@@ -220,6 +221,7 @@ fn standard_is_the_20261120_standard_plus_the_issue78_choice() {
         efficiency_exponent: 0.5,
         ..Default::default()
     });
+    expected.herbivore_risk = Some(sim_core::config::HerbivoreRiskSettings::default());
     assert_eq!(
         serde_json::to_value(&standard).unwrap(),
         serde_json::to_value(&expected).unwrap()
