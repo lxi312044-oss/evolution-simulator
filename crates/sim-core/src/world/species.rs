@@ -490,6 +490,12 @@ impl SpeciesBook {
         self.member.get(&id).copied()
     }
 
+    /// Test helper: put `id` in species `number`.
+    #[cfg(test)]
+    pub(super) fn set_member_for_test(&mut self, id: EntityId, number: u32) {
+        self.member.insert(id, number);
+    }
+
     pub fn name_of(&self, number: u32) -> Option<&str> {
         self.species.get(number as usize).map(|s| s.name.as_str())
     }

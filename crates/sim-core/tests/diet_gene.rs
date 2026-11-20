@@ -293,3 +293,31 @@ fn apex_observation_changes_nothing() {
         .unwrap()
         .contains("apex_predation"));
 }
+
+/// Issue #82 stage 1: with the tendency acting but every value 0 nothing changes; with high
+/// values carnivores may bite each other and every Tick's conservation check passes.
+#[test]
+fn apex_effects_with_zero_tendency_change_nothing() {
+    let with = |initial_max: f64| {
+        let mut c = quarter_standard();
+        c.apex_predation = Some(sim_core::config::ApexPredationSettings {
+            effects: true,
+            initial_max,
+            mutation_probability: 0.,
+            ..Default::default()
+        });
+        c
+    };
+    let mut zero = World::new(with(0.)).unwrap();
+    let mut plain = World::new(quarter_standard()).unwrap();
+    let mut high = World::new(with(1.)).unwrap();
+    for _ in 0..10 {
+        zero.step(100).unwrap();
+        plain.step(100).unwrap();
+        high.step(100).unwrap();
+        assert_eq!(zero.animals.items.len(), plain.animals.items.len());
+        assert_eq!(zero.carnivores.len(), plain.carnivores.len());
+        assert_eq!(format!("{:?}", zero.rng), format!("{:?}", plain.rng));
+    }
+    assert_eq!(zero.apex_json()["bites"].as_u64(), Some(0));
+}

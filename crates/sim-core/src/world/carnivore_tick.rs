@@ -229,6 +229,16 @@ impl World {
                 }
             }
 
+            // Issue #82 (opt-in): another carnivore, not of this species, may be hunted instead
+            // of the nearest herbivore when it is nearer at distance / tendency.
+            let apex_target = if !satiated && !bout_resting && self.apex_effects() {
+                self.apex_target(i, x, y, vision, dist, reserve_e)
+            } else {
+                None
+            };
+            if apex_target.is_some() {
+                nearest = None;
+            }
             let opportunity =
                 self.carnivore_opportunity_snapshot(i, nearest, satiated, hunger_override);
             let opportunity_n_before = self.carnivore_debug.hunt_nutrients;
@@ -350,7 +360,7 @@ impl World {
             // heading rather than sampling a fresh direction on every tick.
             // Phase 32: energy-aware exploration; chasing visible prey is unchanged.
             // Ambush uses deterministic rest/move windows; hybrid rests only when reserve E is low.
-            let resting_without_prey = if nearest.is_none() && !satiated {
+            let resting_without_prey = if nearest.is_none() && apex_target.is_none() && !satiated {
                 match c.movement_strategy {
                     4 => {
                         // Deterministic per-individual ambush schedule. No extra RNG draws.
@@ -399,6 +409,14 @@ impl World {
             } else {
                 speed
             };
+            // Issue #82: chase the carnivore chosen as prey.
+            let (angle, distance) = match apex_target {
+                Some(k) => {
+                    let (dx, dy) = (self.carnivores[k].x - x, self.carnivores[k].y - y);
+                    (dy.atan2(dx), (dx * dx + dy * dy).sqrt().min(distance))
+                }
+                None => (angle, distance),
+            };
             if self
                 .behavior_trace_window
                 .is_some_and(|(start, end)| (start..=end).contains(&self.tick))
@@ -424,7 +442,12 @@ impl World {
             let mut ny = (y + angle.sin() * distance).clamp(0., self.config.world.height);
             // Reflect the exploration direction at the world boundary rather than
             // repeatedly pushing into the wall. Recompute this tick's displacement.
-            if strategic_search && !satiated && nearest.is_none() && distance > 0. {
+            if strategic_search
+                && !satiated
+                && nearest.is_none()
+                && apex_target.is_none()
+                && distance > 0.
+            {
                 let wall_x = (angle.cos() > 0.
                     && x + angle.cos() * distance >= self.config.world.width)
                     || (angle.cos() < 0. && x + angle.cos() * distance <= 0.);
@@ -518,6 +541,9 @@ impl World {
             self.ledger
                 .dissipate_heat(&mut self.resources, reserve, burn)
                 .map_err(|e| format!("carnivore metabolism: {e:?}"))?;
+            if let Some(k) = apex_target {
+                self.apex_bite(i, k)?;
+            }
             let attacks_before = self.carnivore_debug.hunt_attempts;
             let mut attack_color_rejected = false;
             let attack_reserve_e = opportunity
