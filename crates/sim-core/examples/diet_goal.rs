@@ -11,8 +11,16 @@
 //!   Q<n> mutation probability n/100       H<n> founder herbivore value n/100
 //!   W<n> founder spread n/100
 //! K, M, Q, H and W add the diet value (observed only) when no D token came first.
+//! Issue #80 (herbivores weigh carnivore danger against hunger):
+//!   RK   `herbivore_risk` with its default values
+//!   U<n> hunger weight n/100              F<n> keep fleeing until n/100 detection radii
+//!   T<n> remember the danger for n Ticks  P<n> plant danger radius n/100 detection radii
+//! U, F, T and P add `herbivore_risk` with default values when RK did not come first.
 //! A run that fails (for example a conservation check) prints the error to stderr and exits 2.
-use sim_core::{config::DietGeneSettings, SimulationConfig, World};
+use sim_core::{
+    config::{DietGeneSettings, HerbivoreRiskSettings},
+    SimulationConfig, World,
+};
 
 fn config_for(arm: &str) -> SimulationConfig {
     let mut c: SimulationConfig = serde_json::from_str(include_str!(
@@ -33,6 +41,21 @@ fn config_for(arm: &str) -> SimulationConfig {
                     ..c.diet_gene.take().unwrap_or_default()
                 });
                 c.herbivores.carnivore_offspring_probability = 0.;
+            }
+            "RK" => c.herbivore_risk = Some(HerbivoreRiskSettings::default()),
+            t if t.len() > 1
+                && t[1..].bytes().all(|b| b.is_ascii_digit())
+                && matches!(&t[..1], "U" | "F" | "T" | "P") =>
+            {
+                let r = c
+                    .herbivore_risk
+                    .get_or_insert_with(HerbivoreRiskSettings::default);
+                match &t[..1] {
+                    "U" => r.hunger_weight = percent(t),
+                    "F" => r.flee_until_factor = percent(t),
+                    "T" => r.memory_ticks = t[1..].parse().unwrap(),
+                    _ => r.plant_danger_factor = percent(t),
+                }
             }
             t if t.len() > 1 && t[1..].bytes().all(|b| b.is_ascii_digit()) => {
                 let d = c.diet_gene.get_or_insert_with(DietGeneSettings::default);
