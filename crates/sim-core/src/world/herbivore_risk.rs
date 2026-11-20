@@ -2,8 +2,14 @@
 //!
 //! Observation (no behavior change): switches between fleeing and pursuing food from one Tick
 //! to the next, and Ticks in danger with the share spent pursuing food, by reserve fraction.
+//!
+//! Opt-in behavior (`herbivore_risk`): a herbivore remembers where it last saw a carnivore,
+//! keeps treating that place as danger until it is far enough away, avoids plants near it
+//! unless hunger outweighs its fear, and goes for food instead of fleeing when it accepts the
+//! danger where it stands. Fear is the inherited fear gene plus learned fear; nothing here
+//! draws random numbers or moves an animal for free.
 use super::{behavior::Action, World};
-use crate::entity::EntityId;
+use crate::{config::HerbivoreRiskSettings, entity::EntityId};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 
@@ -16,6 +22,30 @@ fn reserve_bin(fraction: f64) -> usize {
     } else {
         2
     }
+}
+
+/// Where a herbivore last saw a carnivore, and for how many more unseen Ticks it remembers it.
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "state-audit", derive(serde::Serialize))]
+pub(super) struct DangerMemory {
+    pub(super) x: f32,
+    pub(super) y: f32,
+    pub(super) ticks_left: u32,
+}
+
+/// Whether a herbivore with this hunger (0 full .. 1 empty) and fear (0..1) accepts danger
+/// `danger` (0 at the edge of the danger radius .. 1 at the carnivore).
+pub(super) fn accepts(r: &HerbivoreRiskSettings, hunger: f64, fear: f32, danger: f32) -> bool {
+    r.hunger_weight * hunger * f64::from(1. - fear) >= f64::from(danger) * f64::from(fear)
+}
+
+/// Danger of (x, y) from `point` within `radius`: 1 at the point, 0 at the radius and beyond.
+pub(super) fn danger_at(x: f32, y: f32, point: (f32, f32), radius: f32) -> f32 {
+    if radius <= 0. {
+        return 0.;
+    }
+    let (dx, dy) = (x - point.0, y - point.1);
+    (1. - (dx * dx + dy * dy).sqrt() / radius).clamp(0., 1.)
 }
 
 /// Observation only; not part of the state audit.
@@ -87,5 +117,36 @@ impl World {
             "danger_ticks": b.danger_ticks,
             "pursue_in_danger": b.pursue_in_danger,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hunger_and_fear_decide_the_accepted_danger() {
+        let r = HerbivoreRiskSettings::default();
+        // A full herbivore accepts no danger; a starving bold one accepts it all.
+        assert!(!accepts(&r, 0., 0.6, 0.01));
+        assert!(accepts(&r, 0., 0.6, 0.));
+        assert!(accepts(&r, 1., 0.4, 1.));
+        // The same hunger accepts less danger with more fear.
+        assert!(accepts(&r, 0.5, 0.45, 0.5));
+        assert!(!accepts(&r, 0.5, 0.85, 0.5));
+        // Hunger weight 0: hunger never outweighs fear.
+        let timid = HerbivoreRiskSettings {
+            hunger_weight: 0.,
+            ..Default::default()
+        };
+        assert!(!accepts(&timid, 1., 0.4, 0.1));
+    }
+
+    #[test]
+    fn danger_falls_to_zero_at_the_radius() {
+        assert_eq!(danger_at(0., 0., (0., 0.), 50.), 1.);
+        assert_eq!(danger_at(25., 0., (0., 0.), 50.), 0.5);
+        assert_eq!(danger_at(80., 0., (0., 0.), 50.), 0.);
+        assert_eq!(danger_at(0., 0., (0., 0.), 0.), 0.);
     }
 }

@@ -17,6 +17,37 @@ pub struct SimulationConfig {
     /// (previous behavior).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub diet_gene: Option<DietGeneSettings>,
+    /// Issue #80 (opt-in): herbivores weigh carnivore danger against hunger. Absent = the
+    /// previous flee rule.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub herbivore_risk: Option<HerbivoreRiskSettings>,
+}
+
+/// Issue #80: a herbivore accepts a danger d (0 at the edge of the danger radius, 1 at the
+/// carnivore) when `hunger_weight x hunger x (1 - fear) >= d x fear`, where hunger is
+/// 1 - reserve energy / reserve capacity and fear is the inherited fear gene plus learned fear.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct HerbivoreRiskSettings {
+    pub hunger_weight: f64,
+    /// A herbivore remembers where it last saw a carnivore for this many Ticks and keeps
+    /// treating it as danger until it is this many detection radii away.
+    pub flee_until_factor: f64,
+    pub memory_ticks: u32,
+    /// Plants within this many detection radii of the danger are targets only when their
+    /// danger is accepted.
+    pub plant_danger_factor: f64,
+}
+
+impl Default for HerbivoreRiskSettings {
+    fn default() -> Self {
+        Self {
+            hunger_weight: 1.,
+            flee_until_factor: 1.5,
+            memory_ticks: 30,
+            plant_danger_factor: 1.,
+        }
+    }
 }
 
 /// Issue #78: every animal carries a diet value from 0 (herbivore) to 1 (carnivore). Offspring
@@ -641,6 +672,7 @@ impl Default for SimulationConfig {
             toxin: ToxinSettings::default(),
             animal_toxin: AnimalToxinSettings::default(),
             diet_gene: None,
+            herbivore_risk: None,
         }
     }
 }
@@ -1124,6 +1156,19 @@ impl SimulationConfig {
             && !diet_effects
         {
             return Err("enabled carnivores require nonzero initial population".into());
+        }
+        if let Some(r) = &self.herbivore_risk {
+            if !(0.0..=100.0).contains(&r.hunger_weight)
+                || !(1.0..=10.0).contains(&r.flee_until_factor)
+                || r.memory_ticks > 100_000
+                || !(0.0..=10.0).contains(&r.plant_danger_factor)
+            {
+                return Err(concat!(
+                    "草食の危険の判断（herbivore_risk）：空腹の重みは0〜100、逃げ続ける距離は",
+                    "1〜10倍、記憶のTick数は100000以下、植物の危険の半径は0〜10倍で指定してください。"
+                )
+                .into());
+            }
         }
         if let Some(d) = &self.diet_gene {
             let unit = |x: f64| (0.0..=1.0).contains(&x);

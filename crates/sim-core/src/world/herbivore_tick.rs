@@ -284,19 +284,118 @@ impl World {
             } else {
                 None
             };
-            let action = Policy {
-                fear: (self.animals.items[i].genes.fear + self.animals.items[i].learned_fear)
-                    .clamp(0., 1.),
+            // Issue #80 (opt-in): weigh the danger of carnivores against hunger. The danger is
+            // where the herbivore last saw a carnivore (now, or remembered); it stays a danger
+            // until the herbivore is `flee_until_factor` detection radii away.
+            let fear = (self.animals.items[i].genes.fear + self.animals.items[i].learned_fear)
+                .clamp(0., 1.);
+            let risk = self.config.herbivore_risk.clone();
+            let mut danger_point = None;
+            let mut risk_threat = None;
+            let mut accepts_here = false;
+            if let Some(r) = &risk {
+                let id = self.animals.items[i].id;
+                if let Some((_, dx, dy)) = threat {
+                    self.herbivore_danger.insert(
+                        id,
+                        super::herbivore_risk::DangerMemory {
+                            x: x - dx,
+                            y: y - dy,
+                            ticks_left: r.memory_ticks,
+                        },
+                    );
+                } else {
+                    let expired = match self.herbivore_danger.get_mut(&id) {
+                        Some(m) if m.ticks_left > 0 => {
+                            m.ticks_left -= 1;
+                            false
+                        }
+                        Some(_) => true,
+                        None => false,
+                    };
+                    if expired {
+                        self.herbivore_danger.remove(&id);
+                    }
+                }
+                danger_point = self.herbivore_danger.get(&id).map(|m| (m.x, m.y));
+                if let Some(point) = danger_point {
+                    let capacity = f64::from(hp_max) * h.max_energy_per_hp;
+                    let hunger = (1.
+                        - self.resources.energy_balance(reserve).unwrap_or(0.) / capacity)
+                        .clamp(0., 1.);
+                    let flee_radius = h.predator_detection_radius * r.flee_until_factor as f32;
+                    let distance = ((x - point.0).powi(2) + (y - point.1).powi(2)).sqrt();
+                    if distance < flee_radius {
+                        risk_threat = Some((distance, flee_radius));
+                        accepts_here = super::herbivore_risk::accepts(
+                            r,
+                            hunger,
+                            fear,
+                            super::herbivore_risk::danger_at(x, y, point, flee_radius),
+                        );
+                    }
+                    // A plant near the danger is a target only when its danger is accepted;
+                    // otherwise look for the nearest allowed plant whose danger is accepted.
+                    let plant_radius = h.predator_detection_radius * r.plant_danger_factor as f32;
+                    let accepted = |j: usize| {
+                        let p = &self.plants.items[j];
+                        super::herbivore_risk::accepts(
+                            r,
+                            hunger,
+                            fear,
+                            super::herbivore_risk::danger_at(p.x, p.y, point, plant_radius),
+                        )
+                    };
+                    if target.is_some_and(|t| !accepted(t)) {
+                        let fraction = 1. - hunger;
+                        let allowed = |j: usize| {
+                            if hungry_color_recheck {
+                                self.resources
+                                    .nutrient_balance(self.plants.items[j].body)
+                                    .unwrap_or(0.)
+                                    > 0.
+                            } else if let Some(memory) = color_memory {
+                                memory.allows(self.plants.items[j].color, fraction)
+                            } else {
+                                true
+                            }
+                        };
+                        target = self
+                            .plant_grid
+                            .nearest_where(&self.plants, x, y, vision, |j| {
+                                accepted(j) && allowed(j)
+                            });
+                    }
+                }
+            }
+            let (threat_distance, detection_radius) = match (&risk, risk_threat) {
+                (None, _) => (
+                    threat.map(|(d2, _, _)| d2.sqrt()),
+                    h.predator_detection_radius,
+                ),
+                (Some(_), Some((distance, radius))) => (Some(distance), radius),
+                (Some(_), None) => (None, h.predator_detection_radius),
+            };
+            let mut action = Policy {
+                fear,
                 aggression: self.animals.items[i].genes.aggression,
-                detection_radius: h.predator_detection_radius,
+                detection_radius,
                 flee_threshold: 0.,
             }
             .choose(Perception {
-                threat_distance: threat.map(|(d2, _, _)| d2.sqrt()),
+                threat_distance,
                 food_visible: target.is_some(),
                 satiated: !may_feed,
                 energy_fraction: (reserve_e_before / 60.).clamp(0., 1.) as f32,
             });
+            // Issue #80: a herbivore that accepts the danger where it stands goes for its
+            // (accepted) food instead of fleeing or standing its ground.
+            if accepts_here
+                && target.is_some()
+                && matches!(action, Action::Flee | Action::StandGround)
+            {
+                action = Action::Pursue;
+            }
             if action == Action::Flee && target.is_some() {
                 self.carnivore_debug.herbivore_flee_with_plant_visible += 1;
             }
@@ -321,11 +420,23 @@ impl World {
             self.observe_risk_action(
                 self.animals.items[i].id,
                 action,
-                threat.is_some(),
+                if risk.is_some() {
+                    risk_threat.is_some()
+                } else {
+                    threat.is_some()
+                },
                 risk_reserve_fraction,
             );
             let (tx, ty, plant_id) = if action == Action::Flee {
-                let (d2, dx, dy) = threat.unwrap();
+                // Issue #80: with `herbivore_risk`, flee from the danger point (the carnivore
+                // seen now, or the remembered place).
+                let (d2, dx, dy) = match (risk.is_some(), danger_point) {
+                    (true, Some((px, py))) => {
+                        let (dx, dy) = (x - px, y - py);
+                        (dx * dx + dy * dy, dx, dy)
+                    }
+                    _ => threat.unwrap(),
+                };
                 self.carnivore_debug.herbivore_predator_detected_ticks += 1;
                 let norm = d2.sqrt().max(0.001);
                 let flee_speed = speed * h.predator_flee_speed_multiplier;
@@ -981,6 +1092,7 @@ impl World {
             self.hungry_color_recovery.remove(&a.id);
             self.diet.remove(a.id);
             self.risk.remove(a.id);
+            self.herbivore_danger.remove(&a.id);
             if self.herbivore_terminal_logging {
                 self.herbivore_terminal_events
                     .push(super::HerbivoreTerminalEvent::capture(self.tick, &a));
